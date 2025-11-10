@@ -12,20 +12,47 @@ A Python application for processing and consolidating financial transaction data
   - SoFi (Checking and Savings)
   - Wells Fargo (Checking and Savings)
 
+- **Flexible Configuration**: Configure via command-line arguments, environment variables, or config file
 - **Automated Processing**: Automatically detects and processes CSV files based on filename patterns
 - **Data Standardization**: Converts different bank CSV formats into a unified structure with consistent fields
 - **Duplicate Detection**: Generates unique IDs for each transaction to prevent duplicates
 - **Monthly Filtering**: Filter and export transactions by month and year
 - **Multiple Export Options**:
   - CSV files organized by year and month
-  - Direct export to Google Sheets with automated updates
+  - Direct export to Google Sheets with automated updates (optional)
 - **Comprehensive Logging**: Track processing status with detailed logging
+- **Built-in Tests**: Smoke tests to verify functionality
+
+## Quick Start
+
+```bash
+# Clone and install
+git clone https://github.com/mgc1194/expenses-app.git
+cd expenses-app
+make install
+
+# Run tests
+make test
+
+# Run the app (without Google Sheets)
+make run
+
+# Or run with default Python command
+python main.py --no-gsheet
+```
 
 ## Project Structure
 
 ```
 expenses-app/
-├── main.py                          # Main application entry point
+├── main.py                          # Main application entry point with CLI
+├── config.py                        # Configuration settings
+├── utils.py                         # Shared utility functions
+├── requirements.txt                 # Python dependencies
+├── test_smoke.py                    # Basic smoke tests
+├── Makefile                         # Common commands
+├── .env.example                     # Example environment configuration
+├── CONTRIBUTING.md                  # Contributing guidelines
 ├── data/                            # Directory for input CSV files
 │   └── README.txt
 ├── handlers/                        # Bank-specific handler modules
@@ -222,7 +249,26 @@ The application uses Python's logging module to provide detailed information abo
 - Errors encountered during processing
 - Export success/failure messages
 
-Log messages are output to the console during execution.
+Log messages are output to the console during execution. Use `--verbose` flag for more detailed output.
+
+## Testing
+
+Run the included smoke tests to verify the app is working correctly:
+
+```bash
+# Using Makefile
+make test
+
+# Or directly with Python
+python test_smoke.py
+```
+
+The smoke tests verify:
+- Configuration loading
+- Unique ID generation
+- CSV file validation
+- Transaction filtering by date
+- Empty directory handling
 
 ## Error Handling
 
@@ -237,19 +283,41 @@ Errors are logged but don't stop the processing of other files.
 
 ## Extending the App
 
-### Adding a New Bank
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions on:
+- Adding support for new banks
+- Setting up development environment
+- Code style guidelines
+- Pull request process
+
+### Quick Guide: Adding a New Bank
 
 1. Create a new module in a dedicated directory (e.g., `new_bank/`)
 2. Implement a `process(file_path)` function that returns a standardized DataFrame
 3. Create a handler in `handlers/new_bank_handler.py`
-4. Add the handler import and logic to `main.py`
-5. Update the file pattern detection in `read_files()`
+4. Update `config.py` to add file patterns
+5. Update `main.py` to import and use the handler
 
 ### Customizing Output
 
 - Modify `export_to_csv()` to change CSV output structure
 - Modify `export_to_gsheet()` to change Google Sheets formatting
 - Adjust date filtering logic in `filter_transactions_by_date()`
+
+## Development Commands
+
+The included Makefile provides convenient commands:
+
+```bash
+make help       # Show all available commands
+make install    # Install dependencies
+make test       # Run smoke tests
+make run        # Run app without Google Sheets
+make run-gsheet # Run app with Google Sheets
+make clean      # Clean up generated files
+make lint       # Check code style (requires pylint)
+make format     # Format code (requires black)
+```
+
 
 ## Security Notes
 
