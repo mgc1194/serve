@@ -163,12 +163,12 @@ def export_to_gsheet(df, spreadsheet_name, worksheet_name, credentials_file='exp
 
     # Drop unwanted columns
     df.sort_values(by=['Date'], inplace=True)
-    data = df.drop(columns=['ID', 'Label', 'Owner'], errors='ignore')
+    data = df.drop(columns=['ID', 'Label', 'Category'], errors='ignore')
 
     # Convert Pandas Timestamp objects to strings
     data = data.applymap(lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x)
     # Define the starting cell (row 4, column A)
-    start_row, start_col = 4, 1  # 'A4' is row 4, column 1 (A)
+    start_row, start_col = 2, 1  # 'A4' is row 4, column 1 (A)
 
     # Convert dataframe to list of lists
     data_values = data.values.tolist()
@@ -192,13 +192,9 @@ if __name__ == '__main__':
     all_data = read_files(source_path)
 
     if not all_data.empty:
-        for month in range(1, 13):
-            month_name = calendar.month_name[month]
-            filtered_data = filter_transactions_by_date(all_data, target_month=month, target_year=current_year)
-            logging.info(f'Total transactions for {calendar.month_name[month]} {current_year}: {len(filtered_data)}')
-            export_to_csv(filtered_data, output_path, target_month=month, target_year=current_year)
-            logging.info(f'Total transactions for {month_name} {current_year}: {len(filtered_data)}')
-            export_to_gsheet(filtered_data, 'Copy of Expenses 2025', month_name)
+        filtered_data = filter_transactions_by_date(all_data, target_year=current_year)
+        logging.info(f'Total transactions for {current_year}: {len(filtered_data)}')
+        export_to_csv(filtered_data, output_path, target_year=current_year)
+        export_to_gsheet(filtered_data, 'YTD Transactions', 'Transactions')
     else:
         logging.warning('No data to filter or export')
-

@@ -40,7 +40,7 @@ def __read_and_process(file_path):
             'Account': 'Quicksilver',
             'Amount': all_transactions['Amount'],
             'Label': None,  # Placeholder for 'Label' if needed
-            'Owner': None,  # Placeholder for 'Owner' if needed
+            'Category': None,  # Placeholder for 'Category' if needed
         })
 
         return clean_df
