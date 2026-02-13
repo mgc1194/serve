@@ -5,12 +5,7 @@ import logging
 import gspread
 from db import Database, DBConfig
 from google.oauth2.service_account import Credentials
-from handlers.capital_one_handler import process as co_handler
-from handlers.sofi_handler import process as sofi_handler
-from handlers.amex_handler import process as amex_handler
-from handlers.chase_handler import process as chase_handler
-from handlers.wells_fargo_handler import process as wf_handler
-from handlers.discover_handler import process as discover_handler
+from handlers.accounts import ACCOUNT_HANDLERS
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -20,58 +15,38 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapi
 creds = Credentials.from_service_account_file("expenses_credentials.json", scopes=SCOPES)
 client = gspread.authorize(creds)
 
+FILE_ACCOUNT_MAP = {
+    '360Checking':           'CO Checking',
+    '360PerformanceSavings': 'CO Savings',
+    'transaction_download':  'Quicksilver',
+    'SOFI-Checking':         'SoFi Checking',
+    'SOFI-Savings':          'SoFi Savings',
+    'WF-Checking':           'WF Checking',
+    'WF-Savings':            'WF Savings',
+    'activity':              'Delta Amex',
+    'Chase':                 'Chase',
+    'Discover':              'Discover',
+}
 
 def read_files(data_dir):
     all_transactions = []
-    co_files = {'360Checking', '360PerformanceSavings', 'transaction_download'}
-    sofi_files = {'SOFI-Checking', 'SOFI-Savings'}
-    wf_files = {'WF-Checking', 'WF-Savings'}
-    amex_files = {'activity'}
-    chase_files = {'Chase'}
-    discover_files = {'Discover'}
+
     for file in os.listdir(data_dir):
-        file_path = os.path.join(data_dir, file)
-        if file.lower().endswith('.csv'):
-            # Process Capital One transactions
-            if any(substring in file for substring in co_files):
-                try:
-                    all_transactions.append(co_handler(file_path))
-                except Exception as e:
-                    logging.error(f'Error processing {file}: {e}')
-            # Process SoFi transactions
-            elif any(substring in file for substring in sofi_files):
-                try:
-                    all_transactions.append(sofi_handler(file_path))
-                except Exception as e:
-                    logging.error(f'Error processing {file}: {e}')
-            # Process Wells Fargo transactions
-            elif any(substring in file for substring in wf_files):
-                try:
-                    all_transactions.append(wf_handler(file_path))
-                except Exception as e:
-                    logging.error(f'Error processing {file}: {e}')
-            # Process Chase transactions
-            elif any(substring in file for substring in chase_files):
-                try:
-                    all_transactions.append(chase_handler(file_path))
-                except Exception as e:
-                    logging.error(f'Error processing {file}: {e}')
-            # Process Discover transactions
-            elif any(substring in file for substring in discover_files):
-                try:
-                    all_transactions.append(discover_handler(file_path))
-                except Exception as e:
-                    logging.error(f'Error processing {file}: {e}')
-            # Process Amex transactions
-            elif any(substring in file for substring in amex_files):
-                try:
-                    all_transactions.append(amex_handler(file_path))
-                except Exception as e:
-                    logging.error(f'Error processing {file}: {e}')
-            else:
-                logging.error(f'Error reading {file}. Unrecognized file name')
-        else:
+        if not file.lower().endswith('.csv'):
             logging.error(f'Unsupported file format: {file}. Please provide a CSV file')
+            continue
+
+        file_path = os.path.join(data_dir, file)
+        account_key = next((key for substring, key in FILE_ACCOUNT_MAP.items() if substring in file), None)
+
+        if account_key is None:
+            logging.error(f'Error reading {file}. Unrecognized file name')
+            continue
+
+        handler = ACCOUNT_HANDLERS[account_key]
+        result = handler.process(file_path)
+        if result is not None:
+            all_transactions.append(result)
 
     if not all_transactions:
         logging.warning('No valid transactions found')
