@@ -3,6 +3,7 @@ import os
 import pandas as pd
 import logging
 import gspread
+from db import Database, DBConfig
 from google.oauth2.service_account import Credentials
 from handlers.capital_one_handler import process as co_handler
 from handlers.sofi_handler import process as sofi_handler
@@ -97,48 +98,6 @@ def filter_transactions_by_date(transactions_df, target_month=None, target_year=
     return transactions_df
 
 
-def export_monthly_csv(df, output_dir, target_month=None, target_year=None):
-    # Create directory for the month if it doesn't exist
-    month_name = calendar.month_name[target_month]
-    # month_dir = os.path.join(output_dir, month_name)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Define the file path
-    file_path = os.path.join(output_dir, f'transactions_{target_month:02d}.csv')
-    month_data = filter_transactions_by_date(df, target_month, target_year)
-    logging.info(f'Total transactions for {month_name}: {len(month_data)}')
-
-    # Save the DataFrame to CSV
-    month_data.to_csv(file_path, index=False)
-    logging.info(f'Successfully saved data to {file_path}')
-
-
-def export_to_csv(df, output_dir, target_month=None, target_year=None):
-    # Create directory for the year if it doesn't exist
-    if target_year:
-        year_dir = os.path.join(output_dir, str(target_year))
-        os.makedirs(year_dir, exist_ok=True)
-
-        # Create directory for the month within the year directory if it doesn't exist
-        if target_month:
-            month_name = calendar.month_name[target_month]
-            file_path = os.path.join(year_dir, f'transactions_{target_year}_{target_month:02d}.csv')
-        else:
-            file_path = os.path.join(year_dir, f'transactions_{target_year}.csv')
-    else:
-        # Only month is provided (without year)
-        if target_month:
-            os.makedirs(output_dir, exist_ok=True)
-            file_path = os.path.join(output_dir, f'transactions_{target_month:02d}.csv')
-        else:
-            file_path = os.path.join(output_dir, 'transactions.csv')
-
-    df.sort_values(by=['Account','Date'], inplace=True)
-    # Save the DataFrame to CSV
-    df.to_csv(file_path, index=False)
-    logging.info(f'Successfully saved data to {file_path}')
-
-
 def get_gspread_client(credentials_file='expenses_credentials.json'):
     """Authenticate and return a gspread client with proper scopes."""
     scopes = [
@@ -162,8 +121,8 @@ def export_to_gsheet(df, spreadsheet_name, worksheet_name, credentials_file='exp
         return
 
     # Drop unwanted columns
-    df.sort_values(by=['Date'], inplace=True)
-    data = df.drop(columns=['ID', 'Label', 'Category'], errors='ignore')
+    df.sort_values(by=['Date', 'Concept'], inplace=True)
+    data = df.drop(columns=['Label', 'Category'], errors='ignore')
 
     # Convert Pandas Timestamp objects to strings
     data = data.applymap(lambda x: x.isoformat() if isinstance(x, pd.Timestamp) else x)
@@ -185,16 +144,26 @@ def export_to_gsheet(df, spreadsheet_name, worksheet_name, credentials_file='exp
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    source_path = "./data"
-    output_path = "./output"
-    current_year = 2025
+    source_path = "./data/2026"
+    current_year = 2026
 
     all_data = read_files(source_path)
 
-    if not all_data.empty:
-        filtered_data = filter_transactions_by_date(all_data, target_year=current_year)
-        logging.info(f'Total transactions for {current_year}: {len(filtered_data)}')
-        export_to_csv(filtered_data, output_path, target_year=current_year)
-        export_to_gsheet(filtered_data, 'YTD Transactions', 'Transactions')
+    if all_data is None or all_data.empty:
+        logging.warning('No valid transactions found. Nothing to import or export.')
     else:
-        logging.warning('No data to filter or export')
+        with Database.connect() as db:
+            result = db.upsert_transactions(all_data)
+            logging.info(
+                f"Import complete — "
+                f"{result['inserted']} new, "
+                f"{result['skipped']} already existed, "
+                f"{result['total']} total processed."
+            )
+            year_data = db.query_transactions(year=current_year)
+
+        if year_data.empty:
+            logging.warning(f'No transactions found in database for {current_year}.')
+        else:
+            logging.info(f'Exporting {len(year_data)} transactions to Google Sheets.')
+            export_to_gsheet(year_data, f'{current_year} Budget', 'Transactions')
