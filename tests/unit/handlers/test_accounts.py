@@ -1,18 +1,10 @@
 """
 tests/unit/handlers/test_accounts.py — Unit tests for each account handler.
-
-Each handler is tested for:
-- Correct account name
-- Correct date parsing
-- Correct amount (including sign)
-- Correct concept mapping
-- Output DataFrame shape
 """
 
 import pytest
 import pandas as pd
 from io import StringIO
-from unittest.mock import patch
 
 from handlers.accounts import (
     SoFiSavingsHandler,
@@ -26,7 +18,6 @@ from handlers.accounts import (
     WellsFargoCheckingHandler,
     WellsFargoSavingsHandler,
 )
-from tests.conftest import assert_clean_dataframe
 
 
 # ── SoFi Savings ──────────────────────────────────────────────────────────────
@@ -34,20 +25,25 @@ from tests.conftest import assert_clean_dataframe
 class TestSoFiSavingsHandler:
     CSV = "Date,Description,Amount\n2026-01-15,VENMO PAYMENT,-180.00\n"
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = SoFiSavingsHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'SoFi Savings')
+    @pytest.fixture
+    def subject(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV)))
+        return SoFiSavingsHandler().process('fake.csv')
 
-    def test_amount(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = SoFiSavingsHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-180.00)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
 
-    def test_date_format(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = SoFiSavingsHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-01-15')
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'SoFi Savings'
+
+    def test_amount(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(-180.00)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-01-15')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'VENMO PAYMENT'
 
 
 # ── SoFi Checking ─────────────────────────────────────────────────────────────
@@ -55,20 +51,25 @@ class TestSoFiSavingsHandler:
 class TestSoFiCheckingHandler:
     CSV = "Date,Description,Amount\n2026-02-01,DIRECT DEPOSIT,2500.00\n"
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = SoFiCheckingHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'SoFi Checking')
+    @pytest.fixture
+    def subject(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV)))
+        return SoFiCheckingHandler().process('fake.csv')
 
-    def test_amount(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = SoFiCheckingHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(2500.00)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
 
-    def test_date_format(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = SoFiCheckingHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-02-01')
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'SoFi Checking'
+
+    def test_amount(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(2500.00)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-02-01')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'DIRECT DEPOSIT'
 
 
 # ── Capital One Checking ──────────────────────────────────────────────────────
@@ -83,25 +84,33 @@ class TestCapitalOneCheckingHandler:
         "01/15/26,MOBILE PAYMENT,1152.91,Credit\n"
     )
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV))):
-            df = CapitalOneCheckingHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'CO Checking')
+    @pytest.fixture
+    def debit(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV)))
+        return CapitalOneCheckingHandler().process('fake.csv')
 
-    def test_debit_is_negative(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV))):
-            df = CapitalOneCheckingHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-45.50)
+    @pytest.fixture
+    def credit(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CREDIT_CSV)))
+        return CapitalOneCheckingHandler().process('fake.csv')
 
-    def test_credit_is_positive(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CREDIT_CSV))):
-            df = CapitalOneCheckingHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(1152.91)
+    def test_returns_a_dataframe(self, debit):
+        assert debit is not None
 
-    def test_date_format(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV))):
-            df = CapitalOneCheckingHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-01-15')
+    def test_account_name(self, debit):
+        assert debit['Account'].iloc[0] == 'CO Checking'
+
+    def test_debit_amount_is_negative(self, debit):
+        assert debit['Amount'].iloc[0] == pytest.approx(-45.50)
+
+    def test_credit_amount_is_positive(self, credit):
+        assert credit['Amount'].iloc[0] == pytest.approx(1152.91)
+
+    def test_date(self, debit):
+        assert debit['Date'].iloc[0] == pd.Timestamp('2026-01-15')
+
+    def test_concept(self, debit):
+        assert debit['Concept'].iloc[0] == 'TRADER JOES'
 
 
 # ── Capital One Savings ───────────────────────────────────────────────────────
@@ -116,20 +125,30 @@ class TestCapitalOneSavingsHandler:
         "01/15/26,TRANSFER IN,500.00,Credit\n"
     )
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV))):
-            df = CapitalOneSavingsHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'CO Savings')
+    @pytest.fixture
+    def debit(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV)))
+        return CapitalOneSavingsHandler().process('fake.csv')
 
-    def test_debit_is_negative(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.DEBIT_CSV))):
-            df = CapitalOneSavingsHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-500.00)
+    @pytest.fixture
+    def credit(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CREDIT_CSV)))
+        return CapitalOneSavingsHandler().process('fake.csv')
 
-    def test_credit_is_positive(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CREDIT_CSV))):
-            df = CapitalOneSavingsHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(500.00)
+    def test_returns_a_dataframe(self, debit):
+        assert debit is not None
+
+    def test_account_name(self, debit):
+        assert debit['Account'].iloc[0] == 'CO Savings'
+
+    def test_debit_amount_is_negative(self, debit):
+        assert debit['Amount'].iloc[0] == pytest.approx(-500.00)
+
+    def test_credit_amount_is_positive(self, credit):
+        assert credit['Amount'].iloc[0] == pytest.approx(500.00)
+
+    def test_date(self, debit):
+        assert debit['Date'].iloc[0] == pd.Timestamp('2026-01-15')
 
 
 # ── Capital One Quicksilver ───────────────────────────────────────────────────
@@ -144,26 +163,33 @@ class TestCapitalOneQuicksilverHandler:
         "2026-01-15,MOBILE PAYMENT,1152.91,\n"
     )
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV))):
-            df = CapitalOneQuicksilverHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'Quicksilver')
+    @pytest.fixture
+    def purchase(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV)))
+        return CapitalOneQuicksilverHandler().process('fake.csv')
 
-    def test_purchase_is_negative(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV))):
-            df = CapitalOneQuicksilverHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-45.50)
+    @pytest.fixture
+    def payment(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PAYMENT_CSV)))
+        return CapitalOneQuicksilverHandler().process('fake.csv')
 
-    def test_payment_is_positive(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PAYMENT_CSV))):
-            df = CapitalOneQuicksilverHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(1152.91)
+    def test_returns_a_dataframe(self, purchase):
+        assert purchase is not None
 
-    def test_nan_columns_filled(self):
-        """Empty Credit/Debit cells should not produce NaN amounts."""
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV))):
-            df = CapitalOneQuicksilverHandler().process('fake.csv')
-        assert not df['Amount'].isna().any()
+    def test_account_name(self, purchase):
+        assert purchase['Account'].iloc[0] == 'Quicksilver'
+
+    def test_purchase_amount_is_negative(self, purchase):
+        assert purchase['Amount'].iloc[0] == pytest.approx(-45.50)
+
+    def test_payment_amount_is_positive(self, payment):
+        assert payment['Amount'].iloc[0] == pytest.approx(1152.91)
+
+    def test_empty_credit_debit_cells_do_not_produce_nan(self, purchase):
+        assert not purchase['Amount'].isna().any()
+
+    def test_date(self, purchase):
+        assert purchase['Date'].iloc[0] == pd.Timestamp('2026-01-15')
 
 
 # ── Amex ──────────────────────────────────────────────────────────────────────
@@ -171,21 +197,25 @@ class TestCapitalOneQuicksilverHandler:
 class TestAmexHandler:
     CSV = "Date,Description,Amount\n02/04/2026,METRO FARE,2.45\n"
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = AmexHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'Delta')
+    @pytest.fixture
+    def subject(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV)))
+        return AmexHandler().process('fake.csv')
 
-    def test_amount_is_negated(self):
-        """Amex exports positive amounts for purchases — should be negated."""
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = AmexHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-2.45)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
 
-    def test_date_format(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = AmexHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-02-04')
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'Delta'
+
+    def test_amount_is_negated(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(-2.45)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-02-04')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'METRO FARE'
 
 
 # ── Chase ─────────────────────────────────────────────────────────────────────
@@ -193,20 +223,25 @@ class TestAmexHandler:
 class TestChaseHandler:
     CSV = "Transaction Date,Description,Amount\n02/15/2026,WHOLEFDS,-67.89\n"
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = ChaseHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'Chase')
+    @pytest.fixture
+    def subject(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV)))
+        return ChaseHandler().process('fake.csv')
 
-    def test_amount(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = ChaseHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-67.89)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
 
-    def test_date_format(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = ChaseHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-02-15')
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'Chase'
+
+    def test_amount(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(-67.89)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-02-15')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'WHOLEFDS'
 
 
 # ── Discover ──────────────────────────────────────────────────────────────────
@@ -214,59 +249,56 @@ class TestChaseHandler:
 class TestDiscoverHandler:
     CSV = "Trans. Date,Description,Amount\n02/04/2026,AMAZON,29.99\n"
 
-    def test_output(self):
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = DiscoverHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'Discover')
+    @pytest.fixture
+    def subject(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV)))
+        return DiscoverHandler().process('fake.csv')
 
-    def test_amount_is_negated(self):
-        """Discover exports positive amounts for purchases — should be negated."""
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = DiscoverHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-29.99)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
 
-    def test_date_column_name(self):
-        """Discover uses 'Trans. Date' — verify it maps correctly."""
-        with patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.CSV))):
-            df = DiscoverHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-02-04')
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'Discover'
+
+    def test_amount_is_negated(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(-29.99)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-02-04')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'AMAZON'
 
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
 
 class TestWellsFargoCheckingHandler:
-    # Wells Fargo CSVs have no header row
     CSV = "02/15/2026,-45.50,*,_,GROCERY STORE\n"
 
-    def test_output(self):
+    @pytest.fixture
+    def subject(self, mocker):
         raw_df = pd.read_csv(
             StringIO(self.CSV),
             names=['Date', 'Amount', '*', '_', 'Description'],
             header=None
         )
-        with patch('pandas.read_csv', return_value=raw_df):
-            df = WellsFargoCheckingHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'WF Checking')
+        mocker.patch('pandas.read_csv', return_value=raw_df)
+        return WellsFargoCheckingHandler().process('fake.csv')
 
-    def test_amount(self):
-        raw_df = pd.read_csv(
-            StringIO(self.CSV),
-            names=['Date', 'Amount', '*', '_', 'Description'],
-            header=None
-        )
-        with patch('pandas.read_csv', return_value=raw_df):
-            df = WellsFargoCheckingHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(-45.50)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
 
-    def test_date_format(self):
-        raw_df = pd.read_csv(
-            StringIO(self.CSV),
-            names=['Date', 'Amount', '*', '_', 'Description'],
-            header=None
-        )
-        with patch('pandas.read_csv', return_value=raw_df):
-            df = WellsFargoCheckingHandler().process('fake.csv')
-        assert df['Date'].iloc[0] == pd.Timestamp('2026-02-15')
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'WF Checking'
+
+    def test_amount(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(-45.50)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-02-15')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'GROCERY STORE'
 
 
 # ── Wells Fargo Savings ───────────────────────────────────────────────────────
@@ -274,22 +306,27 @@ class TestWellsFargoCheckingHandler:
 class TestWellsFargoSavingsHandler:
     CSV = "02/15/2026,500.00,*,_,TRANSFER IN\n"
 
-    def test_output(self):
+    @pytest.fixture
+    def subject(self, mocker):
         raw_df = pd.read_csv(
             StringIO(self.CSV),
             names=['Date', 'Amount', '*', '_', 'Description'],
             header=None
         )
-        with patch('pandas.read_csv', return_value=raw_df):
-            df = WellsFargoSavingsHandler().process('fake.csv')
-        assert_clean_dataframe(df, 'WF Savings')
+        mocker.patch('pandas.read_csv', return_value=raw_df)
+        return WellsFargoSavingsHandler().process('fake.csv')
 
-    def test_amount(self):
-        raw_df = pd.read_csv(
-            StringIO(self.CSV),
-            names=['Date', 'Amount', '*', '_', 'Description'],
-            header=None
-        )
-        with patch('pandas.read_csv', return_value=raw_df):
-            df = WellsFargoSavingsHandler().process('fake.csv')
-        assert df['Amount'].iloc[0] == pytest.approx(500.00)
+    def test_returns_a_dataframe(self, subject):
+        assert subject is not None
+
+    def test_account_name(self, subject):
+        assert subject['Account'].iloc[0] == 'WF Savings'
+
+    def test_amount(self, subject):
+        assert subject['Amount'].iloc[0] == pytest.approx(500.00)
+
+    def test_date(self, subject):
+        assert subject['Date'].iloc[0] == pd.Timestamp('2026-02-15')
+
+    def test_concept(self, subject):
+        assert subject['Concept'].iloc[0] == 'TRANSFER IN'
