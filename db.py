@@ -239,7 +239,7 @@ class Database:
         Lowercases column names and fills in None for optional columns.
         """
         df = df.copy()
-        df.columns = df.columns.str.lower()
+        df.columns = df.columns.str.lower().str.replace(' ', '_')
 
         for optional_col in ('label', 'category', 'additional_labels'):
             if optional_col not in df.columns:
