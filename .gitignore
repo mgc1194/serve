@@ -76,9 +76,11 @@ venv.bak/
 .idea/
 
 
-
 # PyPI configuration file
 .pypirc
 
-
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
 
