@@ -130,7 +130,9 @@ export DB_PASSWORD=your_password  # MySQL password (required)
 Edit `main.py` to configure:
 - `source_path`: Directory containing input CSV files (default: `./data/2026`)
 - `current_year`: Year to process (default: `2026`)
-- Spreadsheet name in the `export_to_gsheet()` call (line 145)
+- In the `export_to_gsheet()` function call (line 145):
+  - First parameter: Spreadsheet name (e.g., `'2026 Budget'`)
+  - Second parameter: Worksheet name (e.g., `'Transactions'`)
 
 ## Usage
 
