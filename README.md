@@ -130,7 +130,7 @@ export DB_PASSWORD=your_password  # MySQL password (required)
 Edit `main.py` to configure:
 - `source_path`: Directory containing input CSV files (default: `./data/2026`)
 - `current_year`: Year to process (default: `2026`)
-- In the `export_to_gsheet()` function call (line 145):
+- In the `export_to_gsheet()` function call in the main execution block:
   - First parameter: Spreadsheet name (e.g., `'2026 Budget'`)
   - Second parameter: Worksheet name (e.g., `'Transactions'`)
 
@@ -167,8 +167,8 @@ The app recognizes files based on these naming patterns:
 **Discover:**
 - Files containing `Discover`
 
-**American Express (Delta):**
-- Files containing `activity`
+**American Express:**
+- Delta co-branded cards: Files containing `activity`
 
 ### Step 2: Run the Application
 
@@ -218,7 +218,7 @@ All transactions are standardized to the following format in the database:
 
 ### Transaction Amount Handling
 
-- **Credit Cards** (Amex/Delta, Discover): Amounts are negated (purchases are negative)
+- **Credit Cards** (Amex Delta, Discover): Amounts are negated (purchases are negative)
 - **Bank Accounts**: Debits are negative, credits are positive
 - **Capital One Accounts**: Uses transaction type column to determine sign (Credit/Debit)
 - **Quicksilver**: Calculates amount from separate Credit and Debit columns
@@ -257,15 +257,15 @@ Errors are logged but don't stop the processing of other files.
 
 1. Open `handlers/accounts.py`
 2. Create a new handler class that inherits from `BaseHandler`:
-   ```python
-   class NewBankHandler(BaseHandler):
-       account = 'New Bank Name'           # Display name
-       date_format = '%Y-%m-%d'            # Date format in CSV
-       col_date = 'Date'                   # Date column name
-       col_concept = 'Description'         # Description column name
-       col_amount = 'Amount'               # Amount column name
-       negate_amount = False               # Set True for credit cards
-   ```
+
+       class NewBankHandler(BaseHandler):
+           account = 'New Bank Name'           # Display name
+           date_format = '%Y-%m-%d'            # Date format in CSV
+           col_date = 'Date'                   # Date column name
+           col_concept = 'Description'         # Description column name
+           col_amount = 'Amount'               # Amount column name
+           negate_amount = False               # Set True for credit cards
+
 3. Add the handler to `ACCOUNT_HANDLERS` registry at the bottom of `accounts.py`
 4. Update `FILE_ACCOUNT_MAP` in `main.py` to map filename patterns to the account key
 5. Test with a sample CSV file
@@ -280,17 +280,16 @@ For banks with complex CSV formats:
 ### Customizing Database Queries
 
 The `Database.query_transactions()` method supports filtering:
-```python
-with Database.connect() as db:
-    # Query specific month
-    jan_data = db.query_transactions(year=2026, month=1)
-    
-    # Query specific account
-    chase_data = db.query_transactions(account='Chase')
-    
-    # Combine filters
-    chase_jan = db.query_transactions(year=2026, month=1, account='Chase')
-```
+
+    with Database.connect() as db:
+        # Query specific month
+        jan_data = db.query_transactions(year=2026, month=1)
+        
+        # Query specific account
+        chase_data = db.query_transactions(account='Chase')
+        
+        # Combine filters
+        chase_jan = db.query_transactions(year=2026, month=1, account='Chase')
 
 ## Security Notes
 
