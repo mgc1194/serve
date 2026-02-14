@@ -38,7 +38,8 @@ Example — subclass with custom amount logic (e.g. Capital One):
         col_concept = 'Transaction Description'
         col_amount  = 'Amount'  # Populated by _apply_amount_logic
 
-        def _apply_amount_logic(self, df):
+        @staticmethod
+        def _apply_amount_logic(df):
             df['Amount'] = df.apply(
                 lambda row: row['Transaction Amount']
                 if row['Transaction Type'] == 'Credit'
