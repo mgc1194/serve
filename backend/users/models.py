@@ -29,9 +29,21 @@ class CustomUser(AbstractUser):
         related_name='users',
         blank=True,
     )
+    groups = models.ManyToManyField(
+        'auth.Group',
+        related_name='custom_users',
+        blank=True,
+    )
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        related_name='custom_users',
+        blank=True,
+    )
 
     def __str__(self):
-        return self.email
+        if self.email:
+            return f'{self.username} ({self.email})'
+        return self.username
 
     class Meta:
         db_table = 'users'
