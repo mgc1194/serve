@@ -30,11 +30,11 @@ class AccountType(models.Model):
     Maps to a handler in ACCOUNT_HANDLERS via handler_key.
     Each bank can offer multiple account types, each with a unique handler.
     """
-    name        = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
     handler_key = models.CharField(max_length=255, unique=True)
-    bank        = models.ForeignKey(Bank, on_delete=models.PROTECT, related_name='account_types')
-    created_at  = models.DateTimeField(auto_now_add=True)
-    updated_at  = models.DateTimeField(auto_now=True)
+    bank = models.ForeignKey(Bank, on_delete=models.PROTECT, related_name='account_types')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def clean(self):
         try:
@@ -55,6 +55,7 @@ class AccountType(models.Model):
         db_table = 'account_types'
         unique_together = [['bank', 'name']]
 
+
 class Account(models.Model):
     """
     Represents a specific account belonging to a household.
@@ -62,11 +63,11 @@ class Account(models.Model):
     (e.g. "Mario's 360 Savings" and "Partner's 360 Savings").
     The handler is resolved through account_type.handler_key.
     """
-    name         = models.CharField(max_length=255)
+    name = models.CharField(max_length=255)
     account_type = models.ForeignKey(AccountType, on_delete=models.PROTECT, related_name='accounts')
-    household    = models.ForeignKey(Household, on_delete=models.PROTECT, related_name='accounts')
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+    household = models.ForeignKey(Household, on_delete=models.PROTECT, related_name='accounts')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def handler_key(self):
