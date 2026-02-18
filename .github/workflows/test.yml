@@ -9,6 +9,20 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
 
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_budget
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v6
 
@@ -22,3 +36,39 @@ jobs:
 
       - name: Run unit tests
         run: pytest tests/unit/ -v
+
+      - name: Set up test database
+        env:
+          MYSQL_PWD: root
+        run: |
+          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS test_budget;"
+          mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS 'budget'@'%' IDENTIFIED BY 'test_password';"
+          mysql -h 127.0.0.1 -u root -e "GRANT ALL PRIVILEGES ON test_budget.* TO 'budget'@'%';"
+          mysql -h 127.0.0.1 -u root -e "GRANT CREATE ON *.* TO 'budget'@'%';"
+          mysql -h 127.0.0.1 -u root -e "FLUSH PRIVILEGES;"
+
+      - name: Run Django migrations
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
+          DJANGO_DEBUG: False
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: test_budget
+          DB_USER: budget
+          DB_PASSWORD: test_password
+        run: python manage.py migrate --noinput
+
+      - name: Run Django model tests
+        working-directory: backend
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings
+          DJANGO_SECRET_KEY: test-secret-key-for-ci
+          DJANGO_DEBUG: False
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: test_budget
+          DB_USER: root
+          DB_PASSWORD: root
+        run: pytest -v
