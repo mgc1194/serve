@@ -28,47 +28,47 @@ api = NinjaAPI(urls_namespace='transactions')
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class AccountTypeSchema(Schema):
-    id:   int
+    id: int
     name: str
     handler_key: str
 
 
 class AccountSchema(Schema):
-    id:           int
-    name:         str
-    handler_key:  str
+    id: int
+    name: str
+    handler_key: str
     account_type: str
-    bank_id:      int
-    bank_name:    str
+    bank_id: int
+    bank_name: str
 
 
 class BankSchema(Schema):
-    id:            int
-    name:          str
+    id: int
+    name: str
     account_types: List[AccountTypeSchema]
 
 
 class FileImportResult(Schema):
-    filename:  str
-    inserted:  int
-    skipped:   int
-    total:     int
-    error:     Optional[str] = None
+    filename: str
+    inserted: int
+    skipped: int
+    total: int
+    error: Optional[str] = None
 
 
 class DetectResponse(Schema):
-    filename:    str
+    filename: str
     handler_key: Optional[str]
-    detected:    bool
+    detected: bool
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @api.post('/transactions/import', response=FileImportResult)
 def import_transactions(
-    request,
-    account_id: int,
-    file:       UploadedFile = File(...),
+        request,
+        account_id: int,
+        file: UploadedFile = File(...),
 ):
     """
     Import a single CSV file into the database.
@@ -90,8 +90,8 @@ def import_transactions(
 
     try:
         content = file.read()
-        buffer  = io.BytesIO(content)
-        df      = handler.process(buffer)
+        buffer = io.BytesIO(content)
+        df = handler.process(buffer)
 
         if df is None or df.empty:
             return FileImportResult(
@@ -128,12 +128,12 @@ def list_accounts(request, household_id: int):
 
     return [
         {
-            'id':           acc.id,
-            'name':         acc.name,
-            'handler_key':  acc.handler_key,
+            'id': acc.id,
+            'name': acc.name,
+            'handler_key': acc.handler_key,
             'account_type': acc.account_type.name,
-            'bank_id':      acc.account_type.bank.id,
-            'bank_name':    acc.account_type.bank.name,
+            'bank_id': acc.account_type.bank.id,
+            'bank_name': acc.account_type.bank.name,
         }
         for acc in accounts
     ]
@@ -149,12 +149,12 @@ def list_banks(request):
 
     return [
         {
-            'id':            bank.id,
-            'name':          bank.name,
+            'id': bank.id,
+            'name': bank.name,
             'account_types': [
                 {
-                    'id':          at.id,
-                    'name':        at.name,
+                    'id': at.id,
+                    'name': at.name,
                     'handler_key': at.handler_key,
                 }
                 for at in bank.account_types.all()

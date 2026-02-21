@@ -12,28 +12,28 @@ from handlers.base import BaseHandler
 # ── Minimal concrete handlers for testing ─────────────────────────────────────
 
 class SimpleHandler(BaseHandler):
-    account     = 'Test Account'
+    account = 'Test Account'
     date_format = '%Y-%m-%d'
-    col_date    = 'Date'
+    col_date = 'Date'
     col_concept = 'Description'
-    col_amount  = 'Amount'
+    col_amount = 'Amount'
 
 
 class NegatingHandler(BaseHandler):
-    account       = 'Negating Account'
-    date_format   = '%Y-%m-%d'
-    col_date      = 'Date'
-    col_concept   = 'Description'
-    col_amount    = 'Amount'
+    account = 'Negating Account'
+    date_format = '%Y-%m-%d'
+    col_date = 'Date'
+    col_concept = 'Description'
+    col_amount = 'Amount'
     negate_amount = True
 
 
 # ── Test data ─────────────────────────────────────────────────────────────────
 
-SIMPLE_CSV    = "Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n"
+SIMPLE_CSV = "Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n"
 MULTI_ROW_CSV = "Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n2026-01-16,METRO FARE,-2.45\n"
-EMPTY_CSV     = "Date,Description,Amount\n"
-BAD_CSV       = "Date,WrongColumn,Amount\n2026-01-15,TRADER JOES,-45.50\n"
+EMPTY_CSV = "Date,Description,Amount\n"
+BAD_CSV = "Date,WrongColumn,Amount\n2026-01-15,TRADER JOES,-45.50\n"
 
 
 # ── ID generation ─────────────────────────────────────────────────────────────
@@ -60,8 +60,8 @@ class TestGenerateId:
 
     def test_uses_all_raw_columns_including_dropped_ones(self):
         """Balance column disambiguates otherwise identical Roth IRA contributions."""
-        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'ROTH IRA', 'Amount': '500.00', 'Balance': '10000.00'})
-        row2 = pd.Series({'Date': '2026-01-15', 'Description': 'ROTH IRA', 'Amount': '500.00', 'Balance': '10500.00'})
+        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'Expense', 'Amount': '500.00', 'Balance': '10000.00'})
+        row2 = pd.Series({'Date': '2026-01-15', 'Description': 'Expense', 'Amount': '500.00', 'Balance': '10500.00'})
         assert BaseHandler._generate_id(row1) != BaseHandler._generate_id(row2)
 
 
