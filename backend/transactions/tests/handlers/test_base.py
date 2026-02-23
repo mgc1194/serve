@@ -59,9 +59,9 @@ class TestGenerateId:
         assert BaseHandler._generate_id(row1) != BaseHandler._generate_id(row2)
 
     def test_uses_all_raw_columns_including_dropped_ones(self):
-        """Balance column disambiguates otherwise identical Roth IRA contributions."""
-        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'ROTH IRA', 'Amount': '500.00', 'Balance': '10000.00'})
-        row2 = pd.Series({'Date': '2026-01-15', 'Description': 'ROTH IRA', 'Amount': '500.00', 'Balance': '10500.00'})
+        """Balance column disambiguates otherwise identical expenses."""
+        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'Expense', 'Amount': '500.00', 'Balance': '10000.00'})
+        row2 = pd.Series({'Date': '2026-01-15', 'Description': 'Expense', 'Amount': '500.00', 'Balance': '10500.00'})
         assert BaseHandler._generate_id(row1) != BaseHandler._generate_id(row2)
 
 

@@ -148,6 +148,6 @@ class BaseHandler:
     def _generate_id(row: pd.Series) -> str:
         """MD5 hash of all raw CSV columns — intentionally uses raw data
         so that fields like 'current balance' disambiguate otherwise
-        identical rows (e.g. two Roth IRA contributions same date/amount)."""
+        identical rows (e.g. two expenses same date/amount)."""
         unique_string = '_'.join(row.astype(str))
         return hashlib.md5(unique_string.encode()).hexdigest()

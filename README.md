@@ -1,59 +1,86 @@
-# Expenses App
+# SERVE
 
-A Python application for processing and consolidating financial transaction data from multiple banks and credit cards into a unified MySQL database. The app automatically reads CSV files from various financial institutions, standardizes the data, stores it in a MySQL database with duplicate prevention, and exports it to Google Sheets for easy expense tracking and analysis.
+Spending, Earnings, & Resources View Engine
+A Django-based web application for processing and consolidating financial transaction data from multiple banks and credit cards. The app provides a REST API for uploading CSV files, automatically detects bank formats, and stores transactions in a MySQL database with duplicate prevention.
 
 ## Features
 
-- **Multi-Bank Support**: Process transactions from 6 different financial institutions:
-  - Capital One (Checking, Savings, Quicksilver Credit Card)
-  - Chase (Credit Card)
-  - American Express (Credit Card - Delta)
-  - Discover (Credit Card)
-  - SoFi (Checking and Savings)
-  - Wells Fargo (Checking and Savings)
+- **Multi-Bank Support**: Process transactions from multiple financial institutions:
+  - Capital One
+  - Chase
+  - American Express
+  - Discover
+  - SoFi
+  - Wells Fargo
 
-- **MySQL Database Storage**: All transactions are stored in a MySQL 8.0 database with proper indexing
-- **Automated Processing**: Automatically detects and processes CSV files based on filename patterns
-- **Data Standardization**: Converts different bank CSV formats into a unified structure with consistent fields
-- **Duplicate Detection**: Generates unique MD5-based IDs for each transaction to prevent duplicates on re-import
-- **Label Preservation**: Manually assigned labels, categories, and additional labels are never overwritten on re-import
-- **Database Querying**: Query transactions by year, month, or account with efficient indexed lookups
-- **Google Sheets Export**: Export database transactions directly to Google Sheets with automated updates
-- **Comprehensive Logging**: Track processing status with detailed logging
+- **Django Backend**: REST API built with Django Ninja for fast, type-safe endpoints
+- **MySQL Database Storage**: All transactions stored with proper indexing and relationships
+- **Multi-Household Support**: Multiple users can share access to the same financial data
+- **Account Type System**: Banks, account types, and user accounts are modeled as separate entities
+- **Automated CSV Processing**: Upload CSVs via API, automatic bank detection from filename
+- **Duplicate Prevention**: MD5-based transaction IDs prevent duplicate imports
+- **Label Preservation**: Manually assigned labels, categories, and tags are never overwritten
+- **Comprehensive Testing**: Full test coverage with pytest for handlers, models, and API
 
-## Project Structure
+## Architecture
 
-```
-expenses-app/
-├── main.py                          # Main application entry point
-├── db.py                            # Database layer for MySQL connection and operations
-├── migration.sql                    # Database schema initialization script
-├── data/                            # Directory for input CSV files (organize by year)
-│   └── 2026/                       # Year-specific subfolder
-├── handlers/                        # Bank-specific handler modules
-│   ├── __init__.py
-│   ├── base.py                     # Base handler class with common logic
-│   └── accounts.py                 # All account-specific handlers and registry
-└── .gitignore                      # Excludes credentials, data, and build artifacts
-```
+The project is organized as a Django monorepo with the following structure:
+
+**Backend directory** contains the Django application:
+- `manage.py` - Django management script
+- `config/` - Django settings and URL configuration
+  - `settings.py` - Application settings
+  - `urls.py` - URL routing
+- `users/` - User and household management
+  - `models.py` - CustomUser and Household models
+  - `tests/` - User model tests
+- `transactions/` - Core transaction functionality
+  - `models.py` - Bank, AccountType, Account, and Transaction models
+  - `api.py` - REST API endpoints using Django Ninja
+  - `utils.py` - Filename detection and bulk upsert utilities
+  - `handlers/` - Bank-specific CSV parsing logic
+    - `base.py` - Base handler class
+    - `accounts.py` - All bank-specific handlers
+  - `tests/` - Comprehensive test suite
+    - `test_models.py` - Model tests
+    - `test_api.py` - API endpoint tests
+    - `test_utils.py` - Utility function tests
+    - `handlers/` - Handler tests
+
+**Frontend directory** is reserved for the React application (coming soon)
+
+**Requirements directory** contains Python dependencies:
+- `base.txt` - Production dependencies
+- `dev.txt` - Development and testing dependencies
 
 ## Prerequisites
 
-- Python 3.7 or higher
+- Python 3.12 or higher
 - MySQL 8.0 or higher
-- Google Cloud Service Account credentials (for Google Sheets integration)
+- pip and virtualenv
 
 ## Installation
 
 ### 1. Clone the repository
+
+Command to clone the repository:
 ```bash
-git clone https://github.com/mgc1194/expenses-app.git
-cd expenses-app
+git clone https://github.com/mgc1194/serve.git
+cd serve
 ```
 
-### 2. Install MySQL
+### 2. Set up Python virtual environment
 
-**On Ubuntu/Debian:**
+Commands to create and activate a virtual environment:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements/dev.txt
+```
+
+### 3. Install and configure MySQL
+
+On Ubuntu or Debian systems:
 ```bash
 sudo apt update
 sudo apt install mysql-server
@@ -61,277 +88,306 @@ sudo systemctl start mysql
 sudo systemctl enable mysql
 ```
 
-**On macOS (using Homebrew):**
+On macOS using Homebrew:
 ```bash
 brew install mysql
 brew services start mysql
 ```
 
-**On Windows:**
-- Download MySQL 8.0 installer from [MySQL Downloads](https://dev.mysql.com/downloads/mysql/)
-- Run the installer and follow the setup wizard
-- Make note of your root password during installation
+### 4. Create database and user
 
-### 3. Create and configure the database
-
+Connect to MySQL as root:
 ```bash
-# Log into MySQL as root
 mysql -u root -p
-
-# Run the migration script to create the database and table
-source migration.sql
-
-# Or, alternatively:
-mysql -u root -p < migration.sql
 ```
 
-This will create:
-- A database named `budget` (configured in migration.sql)
-- A `transactions` table with proper schema and indexes
-- Indexes on date, category, and label columns for efficient querying
-
-### 4. Install Python dependencies
-```bash
-pip install pandas gspread google-auth mysql-connector-python
+Run these SQL commands to create the database and user:
+```sql
+CREATE DATABASE serve CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'serve'@'localhost' IDENTIFIED BY 'your_password';
+GRANT ALL PRIVILEGES ON serve.* TO 'serve'@'localhost';
+GRANT ALL PRIVILEGES ON test_serve.* TO 'serve'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
 ```
 
-### 5. Set up Google Sheets API credentials
-   - Create a Google Cloud Project
-   - Enable Google Sheets API and Google Drive API
-   - Create a Service Account and download the credentials JSON file
-   - Rename the credentials file to `expenses_credentials.json` and place it in the project root
-   - Share your Google Sheet with the service account email address
+### 5. Configure environment variables
 
-## Configuration
-
-### Database Configuration
-
-The application reads database connection settings from environment variables. You can set these in your shell or create a `.env` file:
+Create a file named ".env" in the project root with the following content:
 
 ```bash
-# Database connection settings (defaults shown)
-export DB_HOST=127.0.0.1          # MySQL host
-export DB_PORT=3306               # MySQL port
-export DB_NAME=budget             # Database name (must match migration.sql)
-export DB_USER=root               # MySQL username
-export DB_PASSWORD=your_password  # MySQL password (required)
+# Django configuration
+DJANGO_SECRET_KEY=your-secret-key-here
+DJANGO_DEBUG=True
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Database configuration
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=serve
+DB_USER=serve
+DB_PASSWORD=your_password
 ```
 
-**Important:** Never commit your database password to version control. The `.gitignore` file excludes `.env` files.
+Generate a Django secret key with this command:
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
 
-### Google Sheets Setup
+### 6. Run migrations
 
-1. Create a Google Sheet for your expenses (e.g., "2026 Budget")
-2. Create a worksheet named "Transactions" (or your preferred name)
-3. Share the sheet with your service account email (found in `expenses_credentials.json`)
+Apply database migrations:
+```bash
+cd backend
+python manage.py migrate
+```
 
-### Modify Script Settings
+### 7. Create a superuser
 
-Edit `main.py` to configure:
-- `source_path`: Directory containing input CSV files (default: `./data/2026`)
-- `current_year`: Year to process (default: `2026`)
-- In the `export_to_gsheet()` function call in the main execution block:
-  - First parameter: Spreadsheet name (e.g., `'2026 Budget'`)
-  - Second parameter: Worksheet name (e.g., `'Transactions'`)
+Create an admin account:
+```bash
+python manage.py createsuperuser
+```
+
+### 8. Run the development server
+
+Start the Django development server:
+```bash
+python manage.py runserver
+```
+
+The API will be available at: http://127.0.0.1:8000/api/
+
+## API Documentation
+
+Django Ninja provides auto-generated interactive API documentation:
+
+- **Swagger UI**: `http://127.0.0.1:8000/api/docs`
+- **Django Admin**: `http://127.0.0.1:8000/admin/`
+
+### Available Endpoints
+
+**GET /api/banks**
+- List all banks with their account types
+- Used to populate account selection dropdowns
+
+**GET /api/accounts?household_id={id}**
+- List all accounts for a household
+- Returns account name, type, bank, and handler key
+
+**GET /api/accounts/detect?filename={filename}**
+- Detect account type from CSV filename
+- Returns suggested handler key for confirmation
+
+**POST /api/transactions/import?account_id={id}**
+- Upload and import a CSV file
+- Multipart form data with `file` field
+- Returns counts: inserted, skipped, total, errors
+
+## Data Model
+
+### Core Entities
+
+**Household** — Group of users sharing financial data
+- Multiple users can belong to multiple households
+
+**Bank** — Financial institution (Capital One, SoFi, etc.)
+- Has multiple account types
+
+**AccountType** — Product offered by a bank (e.g., "360 Performance Savings")
+- Links to specific CSV handler via `handler_key`
+
+**Account** — User's specific account instance (e.g., "Mario's SoFi Savings")
+- Belongs to one household and one account type
+- User-assigned name to distinguish multiple accounts of same type
+
+**Transaction** — Individual financial transaction
+- MD5-based ID for duplicate detection
+- Links to account (and through it, to household)
+- Labels/categories preserved on re-import
 
 ## Usage
 
-### Step 1: Prepare Your Data
+### 1. Set up your data via Django Admin
 
-Organize CSV files from your banks in the `./data` directory by year. For example:
-```
-data/
-└── 2026/
-    ├── 360Checking_January.csv
-    ├── transaction_download.csv
-    ├── SOFI-Checking.csv
-    └── ...
-```
+Visit `http://127.0.0.1:8000/admin/` and create:
 
-The app recognizes files based on these naming patterns:
+1. **Household** (e.g., "Smith Family")
+2. **Banks** (e.g., "SoFi", "Capital One")
+3. **AccountTypes** for each bank:
+   - Name: "SoFi Savings"
+   - Handler key: "SoFi Savings" (must match handler in `accounts.py`)
+   - Bank: SoFi
+4. **Accounts** for your household:
+   - Name: "Mario's SoFi Savings" (user-friendly name)
+   - Account type: SoFi Savings
+   - Household: Smith Family
 
-**Capital One:**
-- Checking: Files containing `360Checking`
-- Savings: Files containing `360PerformanceSavings`
-- Quicksilver Credit Card: Files containing `transaction_download`
+### 2. Import transactions via API
 
-**SoFi:**
-- Files containing `SOFI-Checking` or `SOFI-Savings`
-
-**Wells Fargo:**
-- Files containing `WF-Checking` or `WF-Savings`
-
-**Chase:**
-- Files containing `Chase`
-
-**Discover:**
-- Files containing `Discover`
-
-**American Express:**
-- Delta co-branded cards: Files containing `activity`
-
-### Step 2: Run the Application
+Use the Swagger UI at `/api/docs` or curl:
 
 ```bash
-# Set database password if not already in environment
-export DB_PASSWORD=your_mysql_password
-
-# Run the application
-python main.py
+curl -X POST \
+  'http://127.0.0.1:8000/api/transactions/import?account_id=1' \
+  -F 'file=@SOFI-Savings-2026-01-15.csv'
 ```
 
-The application will:
-1. Read all CSV files from the configured source directory
-2. Process and standardize transactions from each bank
-3. Insert new transactions into the MySQL database (duplicates are automatically skipped)
-4. Query transactions for the current year from the database
-5. Export data to Google Sheets
+Response:
+```json
+{
+  "filename": "SOFI-Savings-2026-01-15.csv",
+  "inserted": 45,
+  "skipped": 8,
+  "total": 53,
+  "error": null
+}
+```
 
-## Output Format
+### 3. Query transactions via Django Admin or ORM
 
-All transactions are standardized to the following format in the database:
+```python
+from transactions.models import Transaction
 
-| Field | Description |
-|-------|-------------|
-| id | Unique identifier (MD5 hash) for duplicate detection - PRIMARY KEY |
-| date | Transaction date (DATE format) |
-| concept | Transaction description/merchant (TEXT) |
-| account | Source account name (e.g., "Chase", "CO Checking") |
-| amount | Transaction amount (DECIMAL 12,2 - negative for expenses, positive for income) |
-| label | Optional categorization field (manually assigned, never overwritten) |
-| category | Optional category field (manually assigned, never overwritten) |
-| additional_labels | Optional comma-separated tags (manually assigned, never overwritten) |
-| imported_at | Timestamp of when the transaction was first imported (auto-generated) |
+# All transactions for an account
+transactions = Transaction.objects.filter(account_id=1)
 
-## How It Works
+# Transactions for a household
+transactions = Transaction.objects.filter(
+    account__household_id=1
+).select_related('account')
 
-### Processing Pipeline
+# Filter by date range
+from datetime import date
+jan_transactions = Transaction.objects.filter(
+    account__household_id=1,
+    date__gte=date(2026, 1, 1),
+    date__lt=date(2026, 2, 1)
+)
+```
 
-1. **File Detection**: The main script scans the configured data directory for CSV files
-2. **Handler Routing**: Based on filename patterns, files are routed to appropriate handlers from the registry
-3. **Bank-Specific Processing**: Each handler (subclass of `BaseHandler`) parses its unique CSV format
-4. **Data Standardization**: All transactions are converted to a unified DataFrame structure
-5. **ID Generation**: Unique IDs are generated using MD5 hashing of all raw CSV columns
-6. **Database Upsert**: Transactions are inserted into MySQL using `INSERT IGNORE` (duplicates are automatically skipped)
-7. **Query**: Transactions are queried from the database by year/month/account
-8. **Export**: Data is exported to Google Sheets
+## Testing
 
-### Transaction Amount Handling
+The project has comprehensive test coverage:
 
-- **Credit Cards** (Amex Delta, Discover): Amounts are negated (purchases are negative)
-- **Bank Accounts**: Debits are negative, credits are positive
-- **Capital One Accounts**: Uses transaction type column to determine sign (Credit/Debit)
-- **Quicksilver**: Calculates amount from separate Credit and Debit columns
+```bash
+# Run all tests
+cd backend
+python -m pytest -v
 
-### Label Preservation
+# Run specific test modules
+python -m pytest transactions/tests/test_api.py -v
+python -m pytest transactions/tests/test_models.py -v
+python -m pytest transactions/tests/handlers/ -v
 
-The database schema is designed to preserve manual classifications:
-- `label`, `category`, and `additional_labels` are optional columns
-- On re-import, the `INSERT IGNORE` strategy skips any transaction whose ID already exists
-- This means manually assigned labels are never overwritten, even if you re-import the same CSV files
+# With coverage report
+python -m pytest --cov=transactions --cov-report=html
+```
 
-## Logging
+Tests cover:
+- ✅ Handler CSV parsing logic (all supported accounts)
+- ✅ Django models (relationships, constraints, validation)
+- ✅ API endpoints (success, errors, edge cases)
+- ✅ Utility functions (detection, bulk upsert)
 
-The application uses Python's logging module to provide detailed information about:
-- Files being processed
-- Number of transactions found per month
-- Errors encountered during processing
-- Export success/failure messages
+## CSV File Naming Patterns
 
-Log messages are output to the console during execution.
+The app detects account types from these filename patterns:
 
-## Error Handling
+| Bank | Account Type | Filename Pattern |
+|------|-------------|------------------|
+| Capital One | Checking | `360Checking` |
+| Capital One | Savings | `360PerformanceSavings` |
+| Capital One | Quicksilver | `transaction_download` |
+| SoFi | Checking | `SOFI-Checking` |
+| SoFi | Savings | `SOFI-Savings` |
+| Wells Fargo | Checking | `WF-Checking` |
+| Wells Fargo | Savings | `WF-Savings` |
+| Chase | Credit Card | `Chase` |
+| Discover | Credit Card | `Discover` |
+| Amex | Delta | `activity` |
 
-The application includes comprehensive error handling for:
-- File not found errors
-- CSV parsing errors
-- Empty data files
-- Unrecognized file formats
-- Google Sheets API errors
+## Adding a New Bank
 
-Errors are logged but don't stop the processing of other files.
+1. **Create the handler** in `backend/transactions/handlers/accounts.py`:
 
-## Extending the App
+```python
+class NewBankHandler(BaseHandler):
+    account       = 'New Bank'
+    date_format   = '%Y-%m-%d'
+    col_date      = 'Date'
+    col_concept   = 'Description'
+    col_amount    = 'Amount'
+    negate_amount = False  # Set True for credit cards
+```
 
-### Adding a New Bank
+2. **Add to handler registry**:
 
-1. Open `handlers/accounts.py`
-2. Create a new handler class that inherits from `BaseHandler`:
+```python
+ACCOUNT_HANDLERS = {
+    # ... existing handlers ...
+    'New Bank Checking': NewBankHandler(),
+}
+```
 
-       class NewBankHandler(BaseHandler):
-           account = 'New Bank Name'       # Display name
-           date_format = '%Y-%m-%d'        # Date format in CSV
-           col_date = 'Date'               # Date column name
-           col_concept = 'Description'     # Description column name
-           col_amount = 'Amount'           # Amount column name
-           negate_amount = False           # Set True for credit cards
+3. **Add to filename detection** in `backend/transactions/utils.py`:
 
-3. Add the handler to `ACCOUNT_HANDLERS` registry at the bottom of `accounts.py`
-4. Update `FILE_ACCOUNT_MAP` in `main.py` to map filename patterns to the account key
-5. Test with a sample CSV file
+```python
+FILE_DETECTION_MAP = {
+    # ... existing patterns ...
+    'NewBank': 'New Bank Checking',
+}
+```
 
-### Advanced Handler Customization
+4. **Create Bank and AccountType** via Django admin
 
-For banks with complex CSV formats:
-- Override `_apply_amount_logic()` for custom amount calculation (see Capital One examples)
-- Set `csv_names` and `csv_header=None` for headerless CSVs (see Wells Fargo examples)
-- Adjust `encoding` if the CSV uses non-standard encoding
+5. **Write tests** in `backend/transactions/tests/handlers/test_accounts.py`
 
-### Customizing Database Queries
+## Security
 
-The `Database.query_transactions()` method supports filtering:
-
-    with Database.connect() as db:
-        # Query specific month
-        jan_data = db.query_transactions(year=2026, month=1)
-        
-        # Query specific account
-        chase_data = db.query_transactions(account='Chase')
-        
-        # Combine filters
-        chase_jan = db.query_transactions(year=2026, month=1, account='Chase')
-
-## Security Notes
-
-- **Never commit** `expenses_credentials.json` to version control
-- **Never commit** your MySQL password or `.env` files to version control
-- The `.gitignore` file is configured to exclude credentials, environment files, and data files
-- CSV files in the `./data` directory are automatically excluded from version control
-- Store database credentials in environment variables, not in code
-- Use strong passwords for your MySQL database
-- Consider setting up a dedicated MySQL user with limited privileges for this application
+- ✅ All database queries use Django ORM (SQL injection protected)
+- ✅ File uploads processed in-memory only (not saved to disk)
+- ✅ Environment variables for secrets (never committed)
+- ⚠️ **No built-in authentication/authorization in this repo yet**
+- This backend must be treated as **development/local-only** in its default configuration.
+- **Do not** expose the Django app or its `/api/...` endpoints directly to the public internet or any untrusted network without adding server-side auth.
+- For any non-local or production use, you **must**:
+- - Enable server-side authentication (e.g., Django auth with session or token-based login, or an OAuth/OpenID Connect integration), and
+- - Enforce per-endpoint authorization, tying `household_id` / `account_id` etc. to `request.user` and checking access before returning or mutating data.
+- Any reverse-proxy/front-end checks should be treated as additional layers, **not** a replacement for backend access control.
+- ⚠️ No file size limits (should add before production)
+- ⚠️ No rate limiting (should add before production)
 
 ## Troubleshooting
 
-**Issue**: "Could not connect to database" errors
-- **Solution**: Verify MySQL is running: `sudo systemctl status mysql` (Linux) or `brew services list` (macOS)
-- **Solution**: Check your database credentials in environment variables
-- **Solution**: Ensure the database exists: `mysql -u root -p -e "SHOW DATABASES;"`
-- **Solution**: Verify the database name matches `DB_NAME` environment variable (default: `budget`)
+**Database connection errors**
+```bash
+# Check MySQL is running
+sudo systemctl status mysql  # Linux
+brew services list           # macOS
 
-**Issue**: "File not found" errors
-- **Solution**: Ensure CSV files are in the configured data directory with correct naming patterns
-- **Solution**: Check that `source_path` in `main.py` points to the correct directory
+# Test connection (will prompt for password)
+mysql -u serve -p serve
+```
 
-**Issue**: Google Sheets authentication errors
-- **Solution**: Verify `expenses_credentials.json` is present and the service account has access to the sheet
-- **Solution**: Ensure the service account email has "Editor" permissions on the Google Sheet
+**Migration errors**
+```bash
+# Run from repository root
+# Reset migrations (development only)
+python backend/manage.py migrate transactions zero
+rm backend/transactions/migrations/0001_initial.py
+python backend/manage.py makemigrations
+python backend/manage.py migrate
+```
 
-**Issue**: No transactions processed
-- **Solution**: Check that CSV filenames match the expected patterns listed above
-- **Solution**: Review log output for specific file processing errors
+**Test failures**
+```bash
+# Clear bytecode cache
+find backend -type d -name __pycache__ -exec rm -rf {} +
 
-**Issue**: Date parsing errors
-- **Solution**: Verify the date format in your CSV matches the format expected by each bank's handler
-- **Solution**: Check the `date_format` attribute in the corresponding handler class
-
-**Issue**: Duplicate transactions keep getting imported
-- **Solution**: This shouldn't happen - check that the ID generation is working correctly
-- **Solution**: Verify the `id` column is the PRIMARY KEY in your database schema
-
-**Issue**: Labels/categories are being overwritten on re-import
-- **Solution**: This shouldn't happen with `INSERT IGNORE` - check that you're not manually deleting and re-inserting transactions
-- **Solution**: Verify the migration.sql schema was applied correctly
+# Run tests with verbose output
+python -m pytest -vv --tb=short
+```
 
 ## License
 
@@ -339,4 +395,4 @@ This project is provided as-is for personal use.
 
 ## Contributing
 
-This is a personal expense tracking tool. Feel free to fork and modify for your own use.
+Feel free to fork and modify for your own use. PRs welcome for bug fixes and improvements.
