@@ -5,13 +5,13 @@ A Django-based web application for processing and consolidating financial transa
 
 ## Features
 
-- **Multi-Bank Support**: Process transactions from 10 different financial institutions:
-  - Capital One (Checking, Savings, Quicksilver Credit Card)
-  - Chase (Credit Card)
-  - American Express (Credit Card - Delta)
-  - Discover (Credit Card)
-  - SoFi (Checking and Savings)
-  - Wells Fargo (Checking and Savings)
+- **Multi-Bank Support**: Process transactions from multiple financial institutions:
+  - Capital One
+  - Chase
+  - American Express
+  - Discover
+  - SoFi
+  - Wells Fargo
 
 - **Django Backend**: REST API built with Django Ninja for fast, type-safe endpoints
 - **MySQL Database Storage**: All transactions stored with proper indexing and relationships
@@ -106,7 +106,7 @@ Run these SQL commands to create the database and user:
 CREATE DATABASE serve CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'serve'@'localhost' IDENTIFIED BY 'your_password';
 GRANT ALL PRIVILEGES ON serve.* TO 'serve'@'localhost';
-GRANT CREATE, DROP ON *.* TO 'serve'@'localhost';
+GRANT ALL PRIVILEGES ON test_serve.* TO 'serve'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
@@ -285,7 +285,7 @@ python -m pytest --cov=transactions --cov-report=html
 ```
 
 Tests cover:
-- ✅ Handler CSV parsing logic (all 10 banks)
+- ✅ Handler CSV parsing logic (all supported accounts)
 - ✅ Django models (relationships, constraints, validation)
 - ✅ API endpoints (success, errors, edge cases)
 - ✅ Utility functions (detection, bulk upsert)
@@ -348,7 +348,13 @@ FILE_DETECTION_MAP = {
 - ✅ All database queries use Django ORM (SQL injection protected)
 - ✅ File uploads processed in-memory only (not saved to disk)
 - ✅ Environment variables for secrets (never committed)
-- ⚠️ **No authentication yet** — API endpoints are open (auth coming in frontend PR)
+- ⚠️ **No built-in authentication/authorization in this repo yet**
+- This backend must be treated as **development/local-only** in its default configuration.
+- **Do not** expose the Django app or its `/api/...` endpoints directly to the public internet or any untrusted network without adding server-side auth.
+- For any non-local or production use, you **must**:
+- - Enable server-side authentication (e.g., Django auth with session or token-based login, or an OAuth/OpenID Connect integration), and
+- - Enforce per-endpoint authorization, tying `household_id` / `account_id` etc. to `request.user` and checking access before returning or mutating data.
+- Any reverse-proxy/front-end checks should be treated as additional layers, **not** a replacement for backend access control.
 - ⚠️ No file size limits (should add before production)
 - ⚠️ No rate limiting (should add before production)
 
@@ -366,11 +372,12 @@ mysql -u serve -p serve
 
 **Migration errors**
 ```bash
+# Run from repository root
 # Reset migrations (development only)
-python manage.py migrate transactions zero
+python backend/manage.py migrate transactions zero
 rm backend/transactions/migrations/0001_initial.py
-python manage.py makemigrations
-python manage.py migrate
+python backend/manage.py makemigrations
+python backend/manage.py migrate
 ```
 
 **Test failures**

@@ -66,9 +66,9 @@ class DetectResponse(Schema):
 
 @api.post('/transactions/import', response=FileImportResult)
 def import_transactions(
-        request,
-        account_id: int,
-        file: UploadedFile = File(...),
+    request,
+    account_id: int,
+    file: UploadedFile = File(...),
 ):
     """
     Import a single CSV file into the database.
