@@ -1,5 +1,5 @@
 """
-handlers/base.py — Base class for all account transaction handlers.
+transactions/handlers/base.py — Base class for all account transaction handlers.
 
 To add a new account handler, subclass BaseHandler and declare the
 class-level attributes. Override `_apply_amount_logic` only if the
@@ -8,7 +8,7 @@ account needs custom amount calculation before the DataFrame is built
 
 Example — minimal subclass:
 
-    from handlers.base import BaseHandler
+    from transactions.handlers.base import BaseHandler
 
     class SoFiSavingsHandler(BaseHandler):
         account     = 'SoFi Savings'
@@ -148,7 +148,7 @@ class BaseHandler:
     @staticmethod
     def _generate_id(row: pd.Series) -> str:
         """MD5 hash of all raw CSV columns — intentionally uses raw data
-        so that fields like 'current balance' disambiguate otherwise
-        identical rows (e.g. two Roth IRA contributions same date/amount)."""
+        so that fields like 'current balance' or 'transaction id' disambiguate otherwise
+        identical rows (e.g. two transactions with the same date and amount)."""
         unique_string = '_'.join(row.astype(str))
         return hashlib.md5(unique_string.encode()).hexdigest()
