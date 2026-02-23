@@ -24,33 +24,34 @@ A Django-based web application for processing and consolidating financial transa
 
 ## Architecture
 
-```
-serve/
-├── backend/                         # Django backend
-│   ├── manage.py
-│   ├── config/                      # Django settings
-│   │   ├── settings.py
-│   │   └── urls.py
-│   ├── users/                       # User and household management
-│   │   ├── models.py               # CustomUser, Household
-│   │   └── tests/
-│   └── transactions/                # Core transaction app
-│       ├── models.py               # Bank, AccountType, Account, Transaction
-│       ├── api.py                  # REST API endpoints (Django Ninja)
-│       ├── utils.py                # Filename detection, upsert logic
-│       ├── handlers/               # Bank-specific CSV parsers
-│       │   ├── base.py
-│       │   └── accounts.py
-│       └── tests/                  # Comprehensive test suite
-│           ├── test_models.py
-│           ├── test_api.py
-│           ├── test_utils.py
-│           └── handlers/
-├── frontend/                        # React frontend (coming soon)
-└── requirements/
-    ├── base.txt                    # Production dependencies
-    └── dev.txt                     # Development + testing dependencies
-```
+The project is organized as a Django monorepo with the following structure:
+
+**Backend directory** contains the Django application:
+- `manage.py` - Django management script
+- `config/` - Django settings and URL configuration
+  - `settings.py` - Application settings
+  - `urls.py` - URL routing
+- `users/` - User and household management
+  - `models.py` - CustomUser and Household models
+  - `tests/` - User model tests
+- `transactions/` - Core transaction functionality
+  - `models.py` - Bank, AccountType, Account, and Transaction models
+  - `api.py` - REST API endpoints using Django Ninja
+  - `utils.py` - Filename detection and bulk upsert utilities
+  - `handlers/` - Bank-specific CSV parsing logic
+    - `base.py` - Base handler class
+    - `accounts.py` - All bank-specific handlers
+  - `tests/` - Comprehensive test suite
+    - `test_models.py` - Model tests
+    - `test_api.py` - API endpoint tests
+    - `test_utils.py` - Utility function tests
+    - `handlers/` - Handler tests
+
+**Frontend directory** is reserved for the React application (coming soon)
+
+**Requirements directory** contains Python dependencies:
+- `base.txt` - Production dependencies
+- `dev.txt` - Development and testing dependencies
 
 ## Prerequisites
 
@@ -61,12 +62,16 @@ serve/
 ## Installation
 
 ### 1. Clone the repository
+
+Command to clone the repository:
 ```bash
 git clone https://github.com/mgc1194/serve.git
 cd serve
 ```
 
 ### 2. Set up Python virtual environment
+
+Commands to create and activate a virtual environment:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
@@ -75,7 +80,7 @@ pip install -r requirements/dev.txt
 
 ### 3. Install and configure MySQL
 
-**On Ubuntu/Debian:**
+On Ubuntu or Debian systems:
 ```bash
 sudo apt update
 sudo apt install mysql-server
@@ -83,37 +88,40 @@ sudo systemctl start mysql
 sudo systemctl enable mysql
 ```
 
-**On macOS (using Homebrew):**
+On macOS using Homebrew:
 ```bash
 brew install mysql
 brew services start mysql
 ```
 
 ### 4. Create database and user
+
+Connect to MySQL as root:
 ```bash
 mysql -u root -p
 ```
 
+Run these SQL commands to create the database and user:
 ```sql
 CREATE DATABASE serve CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'serve'@'localhost' IDENTIFIED BY 'your_password';
 GRANT ALL PRIVILEGES ON serve.* TO 'serve'@'localhost';
-GRANT CREATE ON *.* TO 'serve'@'localhost';  -- For test database
+GRANT CREATE, DROP ON *.* TO 'serve'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
 ### 5. Configure environment variables
 
-Create a `.env` file in the project root:
+Create a file named ".env" in the project root with the following content:
 
 ```bash
-# Django
+# Django configuration
 DJANGO_SECRET_KEY=your-secret-key-here
 DJANGO_DEBUG=True
 DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
 
-# Database
+# Database configuration
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_NAME=serve
@@ -121,28 +129,34 @@ DB_USER=serve
 DB_PASSWORD=your_password
 ```
 
-Generate a Django secret key:
+Generate a Django secret key with this command:
 ```bash
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
 ### 6. Run migrations
+
+Apply database migrations:
 ```bash
 cd backend
 python manage.py migrate
 ```
 
 ### 7. Create a superuser
+
+Create an admin account:
 ```bash
 python manage.py createsuperuser
 ```
 
 ### 8. Run the development server
+
+Start the Django development server:
 ```bash
 python manage.py runserver
 ```
 
-The API will be available at `http://127.0.0.1:8000/api/`
+The API will be available at: http://127.0.0.1:8000/api/
 
 ## API Documentation
 
@@ -346,7 +360,7 @@ FILE_DETECTION_MAP = {
 sudo systemctl status mysql  # Linux
 brew services list           # macOS
 
-# Test connection
+# Test connection (will prompt for password)
 mysql -u serve -p serve
 ```
 
