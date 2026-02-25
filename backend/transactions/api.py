@@ -1,3 +1,13 @@
+"""
+transactions/api.py — Django Ninja API endpoints.
+
+Endpoints:
+    POST /api/transactions/import  — upload and import a single CSV file
+    GET  /api/accounts             — list accounts for a household
+    GET  /api/banks                — list banks with their account types
+    GET  /api/accounts/detect      — detect account type from filename
+"""
+
 import io
 import logging
 from typing import List, Optional
