@@ -103,11 +103,11 @@ class TestAccountType:
                 bank=bank,
             )
 
-    def test_cannot_be_deleted_with_accounts(self):
-        account_type = AccountType.objects.get(handler_key="sofi-savings")
-        if hasattr(account_type, "account_set") and account_type.account_set.exists():
-            with pytest.raises(ProtectedError):
-                account_type.delete()
+    def test_cannot_be_deleted_with_accounts(self, account_type, account):
+        # Ensure there is at least one account linked to this account type
+        assert account.account_type == account_type
+        with pytest.raises(ProtectedError):
+            account_type.delete()
 
 
 # ── Account ───────────────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ class TestAccount:
             account_type=account_type,
             household=household,
         )
-        assert Account.objects.filter(household=household).count() >= 2
+        assert Account.objects.filter(household=household).count() == 2
 
     def test_cannot_be_deleted_with_transactions(self, transaction):
         with pytest.raises(ProtectedError):
