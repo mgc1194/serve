@@ -1,3 +1,23 @@
+"""
+transactions/utils.py — Transaction import utilities and domain-level business logic.
+
+This module contains non-model business logic used during transaction
+imports, including:
+
+- inferring an account type from uploaded CSV filenames
+- inserting (upserting) transactions while preserving user-managed fields
+
+Account type detection relies on canonical handler keys defined in
+transactions.constants.HandlerKeys. These keys are system-defined,
+seeded via data migrations, and resolved at runtime through the account
+handler registry.
+
+This module intentionally does not contain parsing logic or persistence
+rules beyond transaction insertion; CSV parsing and normalization are
+handled by account handlers, while referential integrity is enforced at
+the model layer.
+"""
+
 import logging
 from typing import Optional
 

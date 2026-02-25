@@ -2,6 +2,7 @@
 transactions/models.py — Bank, AccountType, Account, and Transaction models.
 """
 
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -12,7 +13,8 @@ from users.models import Household
 class Bank(models.Model):
     """
     Represents a financial institution.
-    handler_key maps to a key in ACCOUNT_HANDLERS in handlers/accounts.py.
+    Suported banks are sytem determined. Adding, edditing or removing
+    institutions should be performed through migrations.
     """
     name = models.CharField(max_length=255, unique=True)
     logo = models.ImageField(upload_to='banks/', blank=True, null=True)
@@ -21,10 +23,6 @@ class Bank(models.Model):
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        self.updated_at = timezone.now()
-        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'banks'
@@ -67,12 +65,9 @@ class AccountType(models.Model):
         return f'{self.bank.name} — {self.name}'
 
     def get_handler(self):
-        from transactions.handlers import ACCOUNT_HANDLERS
+        """Returns the handler associated with the selected account type."""
+        from transactions.handlers.accounts import ACCOUNT_HANDLERS
         return ACCOUNT_HANDLERS[self.handler_key]
-
-    def save(self, *args, **kwargs):
-        self.updated_at = timezone.now()
-        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'account_types'
