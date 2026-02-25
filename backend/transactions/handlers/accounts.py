@@ -130,14 +130,14 @@ class WellsFargoSavingsHandler(BaseHandler):
 # Values are handler instances — one per supported account type.
 
 ACCOUNT_HANDLERS = {
-    'SoFi Savings': SoFiSavingsHandler(),
-    'SoFi Checking': SoFiCheckingHandler(),
-    'CO Checking': CapitalOneCheckingHandler(),
-    'CO Savings': CapitalOneSavingsHandler(),
-    'Quicksilver': CapitalOneQuicksilverHandler(),
-    'Delta': AmexHandler(),
-    'Chase': ChaseHandler(),
-    'Discover': DiscoverHandler(),
-    'WF Checking': WellsFargoCheckingHandler(),
-    'WF Savings': WellsFargoSavingsHandler(),
+    'sofi-savings': SoFiSavingsHandler(),
+    'sofi-checking': SoFiCheckingHandler(),
+    'co-checking': CapitalOneCheckingHandler(),
+    'co-savings': CapitalOneSavingsHandler(),
+    'co-quicksilver': CapitalOneQuicksilverHandler(),
+    'amex-delta': AmexHandler(),
+    'chase': ChaseHandler(),
+    'discover': DiscoverHandler(),
+    'wf-checking': WellsFargoCheckingHandler(),
+    'wf-savings': WellsFargoSavingsHandler(),
 }

@@ -34,17 +34,15 @@ def household():
 
 
 @pytest.fixture
-def bank():
-    return Bank.objects.create(name='Test Bank')
+def bank(db):
+    # Use seeded bank for system-defined data
+    return Bank.objects.get(name="SoFi")
 
 
 @pytest.fixture
-def account_type(bank):
-    return AccountType.objects.create(
-        name='Test Savings',
-        handler_key='SoFi Savings',
-        bank=bank,
-    )
+def account_type(db):
+    # Use seeded account type for system-defined data
+    return AccountType.objects.get(handler_key="sofi-savings")
 
 
 @pytest.fixture
@@ -103,9 +101,9 @@ class TestListAccounts:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_orders_by_bank_name_then_account_name(self, client, household, bank):
-        at1 = AccountType.objects.create(name='Checking', handler_key='SoFi Checking', bank=bank)
-        at2 = AccountType.objects.create(name='Savings', handler_key='SoFi Savings', bank=bank)
+    def test_orders_by_bank_name_then_account_name(self, client, household):
+        at1 = AccountType.objects.get(handler_key='sofi-checking')
+        at2 = AccountType.objects.get(handler_key='sofi-savings')
         Account.objects.create(name='B Account', account_type=at1, household=household)
         Account.objects.create(name='A Account', account_type=at2, household=household)
 
@@ -123,14 +121,13 @@ class TestListBanks:
     def test_returns_all_banks(self, client, bank):
         response = client.get('/banks')
         assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]['name'] == 'Test Bank'
 
-    def test_returns_empty_when_no_banks(self, client):
-        response = client.get('/banks')
-        assert response.status_code == 200
-        assert response.json() == []
+        data = response.json()
+        # Check that all seeded banks are returned
+        returned_names = {b['name'] for b in data}
+        expected_names = {b.name for b in Bank.objects.all()}
+        assert returned_names == expected_names
+        assert len(data) == Bank.objects.count()
 
 
 # ── GET /api/accounts/detect ──────────────────────────────────────────────────
@@ -142,7 +139,7 @@ class TestDetectAccount:
         response = client.get('/accounts/detect?filename=SOFI-Savings.csv')
         assert response.status_code == 200
         data = response.json()
-        assert data['handler_key'] == 'SoFi Savings'
+        assert data['handler_key'] == 'sofi-savings'
         assert data['detected'] is True
 
     def test_returns_null_for_unknown_filename(self, client):
@@ -205,7 +202,7 @@ class TestImportTransactions:
         # Mock handler returns empty DataFrame
         mock_handler = Mock()
         mock_handler.process.return_value = pd.DataFrame()
-        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'SoFi Savings': mock_handler})
+        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'sofi-savings': mock_handler})
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',
@@ -221,7 +218,7 @@ class TestImportTransactions:
         # Mock handler raises exception
         mock_handler = Mock()
         mock_handler.process.side_effect = Exception('Handler error')
-        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'SoFi Savings': mock_handler})
+        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'sofi-savings': mock_handler})
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',

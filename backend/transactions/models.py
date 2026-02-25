@@ -1,9 +1,10 @@
 """
-transactions/models.py — Bank, Account, and Transaction models.
+transactions/models.py — Bank, AccountType, Account, and Transaction models.
 """
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from users.models import Household
 
 
@@ -14,11 +15,15 @@ class Bank(models.Model):
     """
     name = models.CharField(max_length=255, unique=True)
     logo = models.ImageField(upload_to='banks/', blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    updated_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        self.updated_at = timezone.now()
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'banks'
@@ -33,8 +38,8 @@ class AccountType(models.Model):
     name = models.CharField(max_length=255)
     handler_key = models.CharField(max_length=255, unique=True)
     bank = models.ForeignKey(Bank, on_delete=models.PROTECT, related_name='account_types')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    updated_at = models.DateTimeField(default=timezone.now)
 
     def clean(self):
         try:
@@ -50,6 +55,10 @@ class AccountType(models.Model):
 
     def __str__(self):
         return f'{self.bank.name} — {self.name}'
+
+    def save(self, *args, **kwargs):
+        self.updated_at = timezone.now()
+        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'account_types'
