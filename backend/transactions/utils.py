@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 FILE_DETECTION_MAP = {
     '360Checking':           'co-checking',
     '360PerformanceSavings': 'co-savings',
-    'transaction_download':  'co-uicksilver',
+    'transaction_download':  'co-quicksilver',
     'SOFI-Checking':         'sofi-checking',
     'SOFI-Savings':          'sofi-savings',
     'WF-Checking':           'wf-checking',

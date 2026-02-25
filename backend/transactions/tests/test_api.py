@@ -40,7 +40,7 @@ def bank(db):
 
 
 @pytest.fixture
-def account_type(db, bank):
+def account_type(db):
     # Use seeded account type for system-defined data
     return AccountType.objects.get(handler_key="sofi-savings")
 
@@ -139,7 +139,7 @@ class TestDetectAccount:
         response = client.get('/accounts/detect?filename=SOFI-Savings.csv')
         assert response.status_code == 200
         data = response.json()
-        assert data['handler_key'] == 'SoFi Savings'
+        assert data['handler_key'] == 'sofi-savings'
         assert data['detected'] is True
 
     def test_returns_null_for_unknown_filename(self, client):

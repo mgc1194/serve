@@ -50,7 +50,7 @@ class TestDetectAccountType:
         assert detect_account_type('sofi-checking.csv') is None
 
     def test_matches_substring_anywhere_in_filename(self):
-        assert detect_account_type('SOFI-Savings-0000-2020-01-01T00_00_00.csv') == 'SoFi Savings'
+        assert detect_account_type('SOFI-Savings-0000-2020-01-01T00_00_00.csv') == 'sofi-savings'
 
 
 # ── upsert_transactions tests ─────────────────────────────────────────────────
@@ -64,15 +64,11 @@ class TestUpsertTransactions:
 
     @pytest.fixture
     def bank(self):
-        return Bank.objects.create(name='Test Bank')
+        return Bank.objects.get(name='SoFi')
 
     @pytest.fixture
-    def account_type(self, bank):
-        return AccountType.objects.create(
-            name='Test Savings',
-            handler_key='SoFi Savings',
-            bank=bank,
-        )
+    def account_type(self):
+        return AccountType.objects.get(handler_key='sofi-savings')
 
     @pytest.fixture
     def account(self, account_type, household):
