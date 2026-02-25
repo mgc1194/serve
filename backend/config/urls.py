@@ -19,11 +19,13 @@ from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
 
-from transactions.api import api
+from transactions.api import api as transactions_api
+from users.api import api as users_api
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', api.urls),
+    path('api/', transactions_api.urls),
+    path('api/', users_api.urls),
 ]
 
 if settings.DEBUG:
