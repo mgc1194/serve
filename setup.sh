@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd "$(dirname "$0")"
+
 echo "=== Serve Database Setup ==="
 echo ""
 
@@ -18,8 +20,9 @@ fi
 echo "Creating databases and generating secure passwords..."
 echo ""
 
-# Generate DB password automatically
+# Generate passwords automatically (no Django dependency)
 SERVE_PASSWORD=$(openssl rand -base64 32)
+DJANGO_SECRET=$(openssl rand -base64 50)
 
 
 # Run setup SQL
@@ -31,9 +34,14 @@ GRANT ALL PRIVILEGES ON serve.* TO 'serve'@'localhost';
 GRANT ALL PRIVILEGES ON test_serve.* TO 'serve'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-cd backend
-DJANGO_SECRET=$(python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())")
-cd ..
+
+if [ $? -ne 0 ]; then
+    echo "Database setup failed!"
+    echo "Make sure MySQL is running and you can connect as root without a password."
+    echo "Try: mysql -u root"
+    exit 1
+fi
+
 # Update .env file
 cat > .env << EOF
 DB_HOST=127.0.0.1

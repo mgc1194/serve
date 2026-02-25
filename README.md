@@ -278,7 +278,7 @@ FILE_DETECTION_MAP = {
 
 ## Troubleshooting
 
-*Database connection errors**
+**Database connection errors**
 ```bash
 # Check MySQL is running
 sudo systemctl status mysql  # Linux
@@ -287,6 +287,19 @@ brew services list           # macOS
 # Test connection (will prompt for password)
 mysql -u serve -p serve
 ```
+If you get authentication errors when Django tries to connect:
+- The `.env` file uses `DB_HOST=127.0.0.1` (TCP connection)
+- MySQL user is created for `'serve'@'localhost'` 
+- In most setups, MySQL treats these as the same
+- If you get "Access denied" errors, try changing `DB_HOST=localhost` in `.env`
+- Or create the user for `127.0.0.1` explicitly:
+  ```sql
+  mysql -u root
+  CREATE USER 'serve'@'127.0.0.1' IDENTIFIED BY 'your_password_from_env';
+  GRANT ALL PRIVILEGES ON serve.* TO 'serve'@'127.0.0.1';
+  GRANT ALL PRIVILEGES ON test_serve.* TO 'serve'@'127.0.0.1';
+  FLUSH PRIVILEGES;
+  ```
 
 **Recreate databases without regenerating .env**
 
