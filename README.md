@@ -94,47 +94,24 @@ brew install mysql
 brew services start mysql
 ```
 
-### 4. Create database and user
+### 4. Run the setup script
 
-Connect to MySQL as root:
-```bash
-mysql -u root -p
-```
-
-Run these SQL commands to create the database and user:
-```sql
-CREATE DATABASE serve CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'serve'@'localhost' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON serve.* TO 'serve'@'localhost';
-GRANT ALL PRIVILEGES ON test_serve.* TO 'serve'@'localhost';
-FLUSH PRIVILEGES;
-EXIT;
-```
-
-### 5. Configure environment variables
-
-Create a file named ".env" in the project root with the following content:
+The setup script creates the databases, user, and generates secure passwords automatically:
 
 ```bash
-# Django configuration
-DJANGO_SECRET_KEY=your-secret-key-here
-DJANGO_DEBUG=True
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1
-
-# Database configuration
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=serve
-DB_USER=serve
-DB_PASSWORD=your_password
+chmod +x setup.sh
+./setup.sh
 ```
 
-Generate a Django secret key with this command:
-```bash
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-```
+This script will:
+- Create `serve` and `test_serve` databases
+- Create the `serve` database user with a secure auto-generated password
+- Generate a `.env` file with all required configuration
+- Generate a secure Django secret key
 
-### 6. Run migrations
+**Note:** The script assumes you can connect to MySQL as root without a password (`mysql -u root`). If your MySQL installation requires a root password, you'll need to modify the script or run the SQL commands manually.
+
+### 5. Run migrations
 
 Apply database migrations:
 ```bash
@@ -142,14 +119,14 @@ cd backend
 python manage.py migrate
 ```
 
-### 7. Create a superuser
+### 6. Create a superuser
 
 Create an admin account:
 ```bash
 python manage.py createsuperuser
 ```
 
-### 8. Run the development server
+### 7. Run the development server
 
 Start the Django development server:
 ```bash
@@ -206,65 +183,6 @@ Django Ninja provides auto-generated interactive API documentation:
 - Links to account (and through it, to household)
 - Labels/categories preserved on re-import
 
-## Usage
-
-### 1. Set up your data via Django Admin
-
-Visit `http://127.0.0.1:8000/admin/` and create:
-
-1. **Household** (e.g., "Smith Family")
-2. **Banks** (e.g., "SoFi", "Capital One")
-3. **AccountTypes** for each bank:
-   - Name: "SoFi Savings"
-   - Handler key: "SoFi Savings" (must match handler in `accounts.py`)
-   - Bank: SoFi
-4. **Accounts** for your household:
-   - Name: "Mario's SoFi Savings" (user-friendly name)
-   - Account type: SoFi Savings
-   - Household: Smith Family
-
-### 2. Import transactions via API
-
-Use the Swagger UI at `/api/docs` or curl:
-
-```bash
-curl -X POST \
-  'http://127.0.0.1:8000/api/transactions/import?account_id=1' \
-  -F 'file=@SOFI-Savings-2026-01-15.csv'
-```
-
-Response:
-```json
-{
-  "filename": "SOFI-Savings-2026-01-15.csv",
-  "inserted": 45,
-  "skipped": 8,
-  "total": 53,
-  "error": null
-}
-```
-
-### 3. Query transactions via Django Admin or ORM
-
-```python
-from transactions.models import Transaction
-
-# All transactions for an account
-transactions = Transaction.objects.filter(account_id=1)
-
-# Transactions for a household
-transactions = Transaction.objects.filter(
-    account__household_id=1
-).select_related('account')
-
-# Filter by date range
-from datetime import date
-jan_transactions = Transaction.objects.filter(
-    account__household_id=1,
-    date__gte=date(2026, 1, 1),
-    date__lt=date(2026, 2, 1)
-)
-```
 
 ## Testing
 
@@ -360,7 +278,7 @@ FILE_DETECTION_MAP = {
 
 ## Troubleshooting
 
-**Database connection errors**
+*Database connection errors**
 ```bash
 # Check MySQL is running
 sudo systemctl status mysql  # Linux
@@ -368,6 +286,48 @@ brew services list           # macOS
 
 # Test connection (will prompt for password)
 mysql -u serve -p serve
+```
+
+**Recreate databases without regenerating .env**
+
+If you need to drop and recreate the databases but want to keep your existing `.env` file and credentials:
+
+```bash
+# Connect to MySQL as root
+mysql -u root
+
+# Run these commands:
+DROP DATABASE IF EXISTS serve;
+DROP DATABASE IF EXISTS test_serve;
+CREATE DATABASE serve CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE test_serve CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EXIT;
+
+# Re-run migrations
+cd backend
+python manage.py migrate
+```
+
+**Reset everything and start from scratch**
+
+If you want to completely reset the project (databases, user, and credentials):
+
+```bash
+# 1. Drop databases and user
+mysql -u root <<EOF
+DROP DATABASE IF EXISTS serve;
+DROP DATABASE IF EXISTS test_serve;
+DROP USER IF EXISTS 'serve'@'localhost';
+EOF
+
+# 2. Remove .env file
+rm .env
+
+# 3. Re-run setup
+./setup.sh
+cd backend
+python manage.py migrate
+python manage.py createsuperuser
 ```
 
 **Migration errors**
