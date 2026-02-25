@@ -1,0 +1,11 @@
+class HandlerKeys:
+    SOFI_SAVINGS = 'sofi-savings'
+    SOFI_CHECKING = 'sofi-checking'
+    CO_CHECKING = 'co-checking'
+    CO_SAVINGS = 'co-savings'
+    CO_QUICKSILVER = 'co-quicksilver'
+    AMEX_DELTA = 'amex-delta'
+    CHASE = 'chase'
+    DISCOVER = 'discover'
+    WF_CHECKING = 'wf-checking'
+    WF_SAVINGS = 'wf-savings'

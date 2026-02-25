@@ -1,4 +1,5 @@
 from .base import BaseHandler
+from transactions.constants import HandlerKeys
 
 
 # ── SoFi ──────────────────────────────────────────────────────────────────────
@@ -130,14 +131,14 @@ class WellsFargoSavingsHandler(BaseHandler):
 # Values are handler instances — one per supported account type.
 
 ACCOUNT_HANDLERS = {
-    'sofi-savings': SoFiSavingsHandler(),
-    'sofi-checking': SoFiCheckingHandler(),
-    'co-checking': CapitalOneCheckingHandler(),
-    'co-savings': CapitalOneSavingsHandler(),
-    'co-quicksilver': CapitalOneQuicksilverHandler(),
-    'amex-delta': AmexHandler(),
-    'chase': ChaseHandler(),
-    'discover': DiscoverHandler(),
-    'wf-checking': WellsFargoCheckingHandler(),
-    'wf-savings': WellsFargoSavingsHandler(),
+    HandlerKeys.SOFI_SAVINGS: SoFiSavingsHandler(),
+    HandlerKeys.SOFI_CHECKING: SoFiCheckingHandler(),
+    HandlerKeys.CO_CHECKING: CapitalOneCheckingHandler(),
+    HandlerKeys.CO_SAVINGS: CapitalOneSavingsHandler(),
+    HandlerKeys.CO_QUICKSILVER: CapitalOneQuicksilverHandler(),
+    HandlerKeys.AMEX_DELTA: AmexHandler(),
+    HandlerKeys.CHASE: ChaseHandler(),
+    HandlerKeys.DISCOVER: DiscoverHandler(),
+    HandlerKeys.WF_CHECKING: WellsFargoCheckingHandler(),
+    HandlerKeys.WF_SAVINGS: WellsFargoSavingsHandler(),
 }

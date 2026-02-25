@@ -1,9 +1,3 @@
-"""
-backend/transactions/tests/test_api.py — Unit tests for API endpoints.
-
-Tests the API layer in isolation using mocked handlers and database queries.
-"""
-
 import pytest
 from unittest.mock import Mock
 import pandas as pd
@@ -14,6 +8,7 @@ from ninja.testing import TestClient
 from ninja.main import NinjaAPI
 
 from transactions.api import api
+from transactions.constants import HandlerKeys
 from transactions.models import Bank, AccountType, Account
 from users.models import Household
 
@@ -42,7 +37,7 @@ def bank(db):
 @pytest.fixture
 def account_type(db):
     # Use seeded account type for system-defined data
-    return AccountType.objects.get(handler_key="sofi-savings")
+    return AccountType.objects.get(handler_key=HandlerKeys.SOFI_SAVINGS)
 
 
 @pytest.fixture
