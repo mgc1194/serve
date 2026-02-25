@@ -10,34 +10,34 @@ from users.models import Household
 class TestDetectAccountType:
 
     def test_detects_capital_one_checking(self):
-        assert detect_account_type('360Checking.csv') == 'CO Checking'
+        assert detect_account_type('360Checking.csv') == 'co-checking'
 
     def test_detects_capital_one_savings(self):
-        assert detect_account_type('360PerformanceSavings.csv') == 'CO Savings'
+        assert detect_account_type('360PerformanceSavings.csv') == 'co-savings'
 
     def test_detects_quicksilver(self):
-        assert detect_account_type('transaction_download.csv') == 'Quicksilver'
+        assert detect_account_type('transaction_download.csv') == 'co-quicksilver'
 
     def test_detects_sofi_checking(self):
-        assert detect_account_type('SOFI-Checking-123.csv') == 'SoFi Checking'
+        assert detect_account_type('SOFI-Checking-123.csv') == 'sofi-checking'
 
     def test_detects_sofi_savings(self):
-        assert detect_account_type('SOFI-Savings-456.csv') == 'SoFi Savings'
+        assert detect_account_type('SOFI-Savings-456.csv') == 'sofi-savings'
 
     def test_detects_wells_fargo_checking(self):
-        assert detect_account_type('WF-Checking.csv') == 'WF Checking'
+        assert detect_account_type('WF-Checking.csv') == 'wf-checking'
 
     def test_detects_wells_fargo_savings(self):
-        assert detect_account_type('WF-Savings.csv') == 'WF Savings'
+        assert detect_account_type('WF-Savings.csv') == 'wf-savings'
 
     def test_detects_amex_activity(self):
-        assert detect_account_type('activity.csv') == 'Delta'
+        assert detect_account_type('activity.csv') == 'amex-delta'
 
     def test_detects_chase(self):
-        assert detect_account_type('Chase1234.csv') == 'Chase'
+        assert detect_account_type('Chase1234.csv') == 'chase'
 
     def test_detects_discover(self):
-        assert detect_account_type('Discover-Export.csv') == 'Discover'
+        assert detect_account_type('Discover-Export.csv') == 'discover'
 
     def test_returns_none_for_unknown_filename(self):
         assert detect_account_type('unknown_bank.csv') is None

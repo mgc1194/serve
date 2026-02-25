@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 # Maps filename substrings to handler_key values in ACCOUNT_HANDLERS.
 # Order matters — more specific patterns should come first.
 FILE_DETECTION_MAP = {
-    '360Checking':           'CO Checking',
-    '360PerformanceSavings': 'CO Savings',
-    'transaction_download':  'Quicksilver',
-    'SOFI-Checking':         'SoFi Checking',
-    'SOFI-Savings':          'SoFi Savings',
-    'WF-Checking':           'WF Checking',
-    'WF-Savings':            'WF Savings',
-    'activity':              'Delta',
-    'Chase':                 'Chase',
-    'Discover':              'Discover',
+    '360Checking':           'co-checking',
+    '360PerformanceSavings': 'co-savings',
+    'transaction_download':  'co-uicksilver',
+    'SOFI-Checking':         'sofi-checking',
+    'SOFI-Savings':          'sofi-savings',
+    'WF-Checking':           'wf-checking',
+    'WF-Savings':            'wf-savings',
+    'activity':              'amex-delta',
+    'Chase':                 'chase',
+    'Discover':              'discover',
 }
 
 
