@@ -3,6 +3,7 @@ from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
 
 from users.models import Household
+from transactions.constants import HandlerKeys
 from transactions.models import Bank, AccountType, Account, Transaction
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
 
@@ -23,7 +24,7 @@ def bank(db):
 @pytest.fixture
 def account_type(db, bank):
     # Use seeded account type for system-defined data
-    return AccountType.objects.get(handler_key="sofi-savings")
+    return AccountType.objects.get(handler_key=HandlerKeys.SOFI_SAVINGS)
 
 
 @pytest.fixture
@@ -67,7 +68,7 @@ class TestBank:
         assert not bank.logo
 
     def test_cannot_be_deleted_with_account_types(self):
-        account_type = AccountType.objects.get(handler_key="sofi-savings")
+        account_type = AccountType.objects.get(handler_key=HandlerKeys.SOFI_SAVINGS)
         with pytest.raises(ProtectedError):
             account_type.bank.delete()
 
@@ -210,7 +211,7 @@ class TestTransaction:
         assert transaction.account.household == household
 
     def test_handler_key_accessible_through_transaction(self, transaction):
-        assert transaction.account.handler_key == transaction.account.account_type.handler_key
+        assert transaction.account.handler_key == HandlerKeys.SOFI_SAVINGS
 
 
 # ── Smoke Test ──────────────────────────────────────────────────────────

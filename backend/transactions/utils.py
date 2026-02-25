@@ -1,5 +1,21 @@
 """
-transactions/utils.py — Business logic for transaction processing.
+transactions/utils.py — Transaction import utilities and domain-level business logic.
+
+This module contains non-model business logic used during transaction
+imports, including:
+
+- inferring an account type from uploaded CSV filenames
+- inserting (upserting) transactions while preserving user-managed fields
+
+Account type detection relies on canonical handler keys defined in
+transactions.constants.HandlerKeys. These keys are system-defined,
+seeded via data migrations, and resolved at runtime through the account
+handler registry.
+
+This module intentionally does not contain parsing logic or persistence
+rules beyond transaction insertion; CSV parsing and normalization are
+handled by account handlers, while referential integrity is enforced at
+the model layer.
 """
 
 import logging
@@ -8,6 +24,7 @@ from typing import Optional
 import pandas as pd
 
 from .models import Account, Transaction
+from transactions.constants import HandlerKeys
 
 logger = logging.getLogger(__name__)
 
@@ -17,16 +34,16 @@ logger = logging.getLogger(__name__)
 # Maps filename substrings to handler_key values in ACCOUNT_HANDLERS.
 # Order matters — more specific patterns should come first.
 FILE_DETECTION_MAP = {
-    '360Checking':           'co-checking',
-    '360PerformanceSavings': 'co-savings',
-    'transaction_download':  'co-quicksilver',
-    'SOFI-Checking':         'sofi-checking',
-    'SOFI-Savings':          'sofi-savings',
-    'WF-Checking':           'wf-checking',
-    'WF-Savings':            'wf-savings',
-    'activity':              'amex-delta',
-    'Chase':                 'chase',
-    'Discover':              'discover',
+    '360Checking': HandlerKeys.CO_CHECKING,
+    '360PerformanceSavings': HandlerKeys.CO_SAVINGS,
+    'transaction_download': HandlerKeys.CO_QUICKSILVER,
+    'SOFI-Checking': HandlerKeys.SOFI_CHECKING,
+    'SOFI-Savings': HandlerKeys.SOFI_SAVINGS,
+    'WF-Checking': HandlerKeys.WF_CHECKING,
+    'WF-Savings': HandlerKeys.WF_SAVINGS,
+    'activity': HandlerKeys.AMEX_DELTA,
+    'Chase': HandlerKeys.CHASE,
+    'Discover': HandlerKeys.DISCOVER,
 }
 
 

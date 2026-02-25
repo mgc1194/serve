@@ -2,28 +2,27 @@
 transactions/models.py — Bank, AccountType, Account, and Transaction models.
 """
 
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from transactions.constants import HandlerKeys
 from users.models import Household
 
 
 class Bank(models.Model):
     """
     Represents a financial institution.
-    handler_key maps to a key in ACCOUNT_HANDLERS in handlers/accounts.py.
+    Suported banks are sytem determined. Adding, edditing or removing
+    institutions should be performed through migrations.
     """
     name = models.CharField(max_length=255, unique=True)
     logo = models.ImageField(upload_to='banks/', blank=True, null=True)
-    created_at = models.DateTimeField(default=timezone.now, editable=False)
-    updated_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        self.updated_at = timezone.now()
-        super().save(*args, **kwargs)
 
     class Meta:
         db_table = 'banks'
@@ -35,30 +34,40 @@ class AccountType(models.Model):
     Maps to a handler in ACCOUNT_HANDLERS via handler_key.
     Each bank can offer multiple account types, each with a unique handler.
     """
-    name = models.CharField(max_length=255)
-    handler_key = models.CharField(max_length=255, unique=True)
-    bank = models.ForeignKey(Bank, on_delete=models.PROTECT, related_name='account_types')
-    created_at = models.DateTimeField(default=timezone.now, editable=False)
-    updated_at = models.DateTimeField(default=timezone.now)
+    HANDLER_CHOICES = [
+        (HandlerKeys.SOFI_SAVINGS, "SoFi Savings"),
+        (HandlerKeys.SOFI_CHECKING, "SoFi Checking"),
+        (HandlerKeys.CO_CHECKING, "360 Checking"),
+        (HandlerKeys.CO_SAVINGS, "360 Performance Savings"),
+        (HandlerKeys.CO_QUICKSILVER, "Quicksilver Credit Card"),
+        (HandlerKeys.WF_CHECKING, "Checking"),
+        (HandlerKeys.WF_SAVINGS, "Savings"),
+        (HandlerKeys.CHASE, "Chase Card"),
+        (HandlerKeys.DISCOVER, "Discover Card"),
+        (HandlerKeys.AMEX_DELTA, "Delta SkyMiles Card"),
+    ]
 
-    def clean(self):
-        try:
-            from transactions.handlers.accounts import ACCOUNT_HANDLERS
-            if self.handler_key and self.handler_key not in ACCOUNT_HANDLERS:
-                raise ValidationError(
-                    f"'{self.handler_key}' is not a valid handler key. "
-                    f"Valid options are: {', '.join(sorted(ACCOUNT_HANDLERS.keys()))}"
-                )
-        except ImportError:
-            # Handlers not yet migrated — skip validation
-            pass
+    name = models.CharField(max_length=255)
+    handler_key = models.CharField(
+        max_length=255,
+        unique=True,
+        choices=HANDLER_CHOICES,
+    )
+    bank = models.ForeignKey(
+        Bank,
+        on_delete=models.PROTECT,
+        related_name="account_types",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f'{self.bank.name} — {self.name}'
 
-    def save(self, *args, **kwargs):
-        self.updated_at = timezone.now()
-        super().save(*args, **kwargs)
+    def get_handler(self):
+        """Returns the handler associated with the selected account type."""
+        from transactions.handlers.accounts import ACCOUNT_HANDLERS
+        return ACCOUNT_HANDLERS[self.handler_key]
 
     class Meta:
         db_table = 'account_types'
