@@ -1,0 +1,50 @@
+[
+  {
+    "model": "transactions.bank",
+    "pk": 1,
+    "fields": {
+      "name": "SoFi",
+      "logo": "banks/sofi.png"
+    }
+  },
+  {
+    "model": "transactions.bank",
+    "pk": 2,
+    "fields": {
+      "name": "Capital One",
+      "logo": "banks/capital_one.png"
+    }
+  },
+  {
+    "model": "transactions.bank",
+    "pk": 3,
+    "fields": {
+      "name": "Wells Fargo",
+      "logo": "banks/wells_fargo.png"
+    }
+  },
+  {
+    "model": "transactions.bank",
+    "pk": 4,
+    "fields": {
+      "name": "Chase",
+      "logo": "banks/chase.png"
+    }
+  },
+  {
+    "model": "transactions.bank",
+    "pk": 5,
+    "fields": {
+      "name": "Discover",
+      "logo": "banks/discover.png"
+    }
+  },
+  {
+    "model": "transactions.bank",
+    "pk": 6,
+    "fields": {
+      "name": "American Express",
+      "logo": "banks/amex.png"
+    }
+  }
+]

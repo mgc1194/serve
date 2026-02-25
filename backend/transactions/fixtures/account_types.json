@@ -1,0 +1,92 @@
+[
+  {
+    "model": "transactions.accounttype",
+    "pk": 1,
+    "fields": {
+      "name": "SoFi Savings",
+      "handler_key": "sofi-savings",
+      "bank": 1
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 2,
+    "fields": {
+      "name": "SoFi Checking",
+      "handler_key": "sofi-checking",
+      "bank": 1
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 3,
+    "fields": {
+      "name": "360 Checking",
+      "handler_key": "co-checking",
+      "bank": 2
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 4,
+    "fields": {
+      "name": "360 Performance Savings",
+      "handler_key": "co-savings",
+      "bank": 2
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 5,
+    "fields": {
+      "name": "Quicksilver Credit Card",
+      "handler_key": "co-quicksilver",
+      "bank": 2
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 6,
+    "fields": {
+      "name": "Checking",
+      "handler_key": "wf-checking",
+      "bank": 3
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 7,
+    "fields": {
+      "name": "Savings",
+      "handler_key": "wf-savings",
+      "bank": 3
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 8,
+    "fields": {
+      "name": "Chase Card",
+      "handler_key": "chase",
+      "bank": 4
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 9,
+    "fields": {
+      "name": "Discover Card",
+      "handler_key": "discover",
+      "bank": 5
+    }
+  },
+  {
+    "model": "transactions.accounttype",
+    "pk": 10,
+    "fields": {
+      "name": "Delta SkyMiles Card",
+      "handler_key": "amex-delta",
+      "bank": 6
+    }
+  }
+]
