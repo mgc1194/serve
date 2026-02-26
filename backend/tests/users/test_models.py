@@ -1,5 +1,10 @@
+"""
+tests/users/test_models.py — Unit tests for Household and CustomUser models.
+"""
+
 import pytest
 from django.contrib.auth import get_user_model
+
 from users.models import Household
 
 User = get_user_model()
@@ -9,13 +14,13 @@ User = get_user_model()
 class TestHousehold:
 
     @pytest.fixture
-    def subject(selfself):
+    def subject(self):
         return Household.objects.create(name='Smith Family')
 
-    def test_household_can_be_created(selfself, subject):
+    def test_household_can_be_created(self, subject):
         assert subject.pk is not None
 
-    def test_household_string_representation(selfself, subject):
+    def test_household_string_representation(self, subject):
         assert str(subject) == 'Smith Family'
 
     def test_multiple_households_can_share_same_name(self):
@@ -47,9 +52,18 @@ class TestCustomUser:
     def test_string_representation_with_email(self, subject):
         assert str(subject) == 'mario (mario@example.com)'
 
-    def test_string_representation_without_email(self):
-        user = User.objects.create_user(username='noemail', password='testpass123')
-        assert str(user) == 'noemail'
+    def test_email_is_normalised_to_lowercase_on_save(self):
+        user = User.objects.create_user(
+            username='luigi',
+            email='Luigi@Example.COM',
+            password='testpass123',
+        )
+        assert user.email == 'luigi@example.com'
+
+    def test_save_raises_if_email_is_missing(self):
+        user = User(username='noemail')
+        with pytest.raises(ValueError, match='email address is required'):
+            user.save()
 
     def test_can_belong_to_a_household(self, subject, household):
         assert household in subject.households.all()
