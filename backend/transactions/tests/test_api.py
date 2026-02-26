@@ -5,23 +5,14 @@ import pandas as pd
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from ninja.testing import TestClient
-from ninja.main import NinjaAPI
 
-from transactions.api import api
+from transactions.api import router
 from transactions.constants import HandlerKeys
 from transactions.models import Bank, AccountType, Account
 from users.models import Household
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-
-@pytest.fixture(autouse=True)
-def reset_ninja_registry():
-    """Clear Ninja API registry before each test to avoid conflicts."""
-    yield
-    # Clear registry after test
-    if 'transactions' in NinjaAPI._registry:
-        NinjaAPI._registry.remove('transactions')
 
 @pytest.fixture
 def household():
@@ -51,7 +42,7 @@ def account(account_type, household):
 
 @pytest.fixture
 def client():
-    return TestClient(api)
+    return TestClient(router)
 
 
 @pytest.fixture
