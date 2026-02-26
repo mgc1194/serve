@@ -6,9 +6,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from ninja.testing import TestClient
 
-from transactions.api import router
+from api.v1.transactions import router
 from transactions.constants import HandlerKeys
-from transactions.models import Bank, AccountType, Account
+from transactions.models import Bank, AccountType, Account, Transaction
 from users.models import Household
 
 
@@ -99,7 +99,7 @@ class TestListAccounts:
         assert data[1]['name'] == 'B Account'
 
 
-# ── GET /api/banks ────────────────────────────────────────────────────────────
+# ── GET /api/v1/banks ─────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestListBanks:
@@ -109,14 +109,13 @@ class TestListBanks:
         assert response.status_code == 200
 
         data = response.json()
-        # Check that all seeded banks are returned
         returned_names = {b['name'] for b in data}
         expected_names = {b.name for b in Bank.objects.all()}
         assert returned_names == expected_names
         assert len(data) == Bank.objects.count()
 
 
-# ── GET /api/accounts/detect ──────────────────────────────────────────────────
+# ── GET /api/v1/accounts/detect ───────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestDetectAccount:
@@ -136,19 +135,16 @@ class TestDetectAccount:
         assert data['detected'] is False
 
 
-# ── POST /api/transactions/import ────────────────────────────────────────────
+# ── POST /api/v1/transactions/import ─────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestImportTransactions:
 
     def test_successful_import(self, client, account, csv_file, sample_dataframe, mocker):
-        # Mock the handler
         mock_handler = Mock()
         mock_handler.process.return_value = sample_dataframe
         mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'SoFi Savings': mock_handler})
-
-        # Mock upsert to avoid DB writes
-        mocker.patch('transactions.api.upsert_transactions', return_value={'inserted': 1, 'skipped': 0, 'total': 1})
+        mocker.patch('api.v1.transactions.upsert_transactions', return_value={'inserted': 1, 'skipped': 0, 'total': 1})
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',
@@ -171,7 +167,6 @@ class TestImportTransactions:
         assert response.status_code == 404
 
     def test_returns_error_for_missing_handler(self, client, account, csv_file, mocker):
-        # Empty handler dict
         mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {}, clear=True)
 
         response = client.post(
@@ -185,7 +180,6 @@ class TestImportTransactions:
         assert 'No handler found' in data['error']
 
     def test_returns_error_for_empty_dataframe(self, client, account, csv_file, mocker):
-        # Mock handler returns empty DataFrame
         mock_handler = Mock()
         mock_handler.process.return_value = pd.DataFrame()
         mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'sofi-savings': mock_handler})
@@ -201,7 +195,6 @@ class TestImportTransactions:
         assert 'no valid transactions' in data['error']
 
     def test_handles_handler_exception(self, client, account, csv_file, mocker):
-        # Mock handler raises exception
         mock_handler = Mock()
         mock_handler.process.side_effect = Exception('Handler error')
         mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'sofi-savings': mock_handler})
@@ -215,3 +208,73 @@ class TestImportTransactions:
         data = response.json()
         assert data['inserted'] == 0
         assert 'Handler error' in data['error']
+
+
+# ── GET /api/v1/transactions ──────────────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestListTransactions:
+
+    @pytest.fixture
+    def transaction(self, account):
+        return Transaction.objects.create(
+            id='abc123',
+            date='2026-01-15',
+            concept='TRADER JOES',
+            amount=-45.50,
+            account=account,
+        )
+
+    @pytest.fixture
+    def another_account(self, account_type, household):
+        return Account.objects.create(
+            name='Another Account',
+            account_type=account_type,
+            household=household,
+        )
+
+    def test_returns_transactions_for_household(self, client, transaction, household):
+        response = client.get(f'/transactions?household_id={household.id}')
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]['id'] == 'abc123'
+
+    def test_returns_empty_for_household_with_no_transactions(self, client, household):
+        response = client.get(f'/transactions?household_id={household.id}')
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_returns_empty_for_nonexistent_household(self, client):
+        response = client.get('/transactions?household_id=9999')
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_filters_by_account_id(self, client, transaction, account, another_account, household):
+        Transaction.objects.create(
+            id='def456',
+            date='2026-01-16',
+            concept='WHOLE FOODS',
+            amount=-32.00,
+            account=another_account,
+        )
+
+        response = client.get(f'/transactions?household_id={household.id}&account_id={account.id}')
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]['id'] == 'abc123'
+
+    def test_response_includes_account_and_bank_info(self, client, transaction, household):
+        response = client.get(f'/transactions?household_id={household.id}')
+        data = response.json()[0]
+        assert data['account_name'] == 'Test Account'
+        assert data['bank_name'] == 'SoFi'
+
+    def test_results_are_ordered_by_date_descending(self, client, account, household):
+        Transaction.objects.create(id='t1', date='2026-01-01', concept='OLDER', amount=-10.00, account=account)
+        Transaction.objects.create(id='t2', date='2026-01-15', concept='NEWER', amount=-20.00, account=account)
+
+        response = client.get(f'/transactions?household_id={household.id}')
+        data = response.json()
+        assert data[0]['id'] == 't2'
+        assert data[1]['id'] == 't1'

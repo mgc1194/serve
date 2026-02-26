@@ -1,11 +1,12 @@
 """
-transactions/api.py — Transaction, account, and bank endpoints.
+api/v1/transactions.py — v1 transaction, account, and bank endpoints.
 
 Endpoints:
-    POST /api/transactions/import  — upload and import a single CSV file
-    GET  /api/accounts             — list accounts for a household
-    GET  /api/banks                — list banks with their account types
-    GET  /api/accounts/detect      — detect account type from filename
+    POST /api/v1/transactions/import  — upload and import a single CSV file
+    GET  /api/v1/accounts             — list accounts for a household
+    GET  /api/v1/banks                — list banks with their account types
+    GET  /api/v1/accounts/detect      — detect account type from filename
+    GET  /api/v1/transactions         — list transactions for a household
 """
 
 import io
@@ -13,53 +14,17 @@ import logging
 from typing import List, Optional
 
 from django.shortcuts import get_object_or_404
-from ninja import Router, File, Schema
+from ninja import Router, File
 from ninja.files import UploadedFile
 
-from .models import Account, Bank
-from .utils import detect_account_type, upsert_transactions
+from transactions.models import Account, Bank, Transaction
+from transactions.utils import detect_account_type, upsert_transactions
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
+from schemas.transactions import AccountSchema, BankSchema, FileImportResult, TransactionSchema, DetectResponse
 
 logger = logging.getLogger(__name__)
 
-router = Router()
-
-
-# ── Schemas ───────────────────────────────────────────────────────────────────
-
-class AccountTypeSchema(Schema):
-    id: int
-    name: str
-    handler_key: str
-
-
-class AccountSchema(Schema):
-    id: int
-    name: str
-    handler_key: str
-    account_type: str
-    bank_id: int
-    bank_name: str
-
-
-class BankSchema(Schema):
-    id: int
-    name: str
-    account_types: List[AccountTypeSchema]
-
-
-class FileImportResult(Schema):
-    filename: str
-    inserted: int
-    skipped: int
-    total: int
-    error: Optional[str] = None
-
-
-class DetectResponse(Schema):
-    filename: str
-    handler_key: Optional[str]
-    detected: bool
+router = Router(tags=['Transactions'])
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -203,3 +168,46 @@ def detect_account(request, filename: str):
         handler_key=handler_key,
         detected=handler_key is not None,
     )
+
+@router.get('/transactions', response=List[TransactionSchema])
+def list_transactions(
+    request,
+    household_id: int,
+    account_id: Optional[int] = None,
+):
+    """Lists all transactions for a household.
+
+    Scoped to a household. An optional account_id narrows results to a
+    single account. Results are ordered by date descending.
+
+    Args:
+        request: The HTTP request object.
+        household_id: The ID of the household to list transactions for.
+        account_id: Optional. Narrows results to a single account.
+
+    Returns:
+        A list of TransactionSchema ordered by date descending.
+    """
+    qs = Transaction.objects.filter(
+        account__household_id=household_id
+    ).select_related('account__account_type__bank').order_by('-date')
+
+    if account_id is not None:
+        qs = qs.filter(account_id=account_id)
+
+    return [
+        {
+            'id': t.id,
+            'date': t.date.isoformat(),
+            'concept': t.concept,
+            'amount': float(t.amount),
+            'label': t.label,
+            'category': t.category,
+            'additional_labels': t.additional_labels,
+            'account_id': t.account_id,
+            'account_name': t.account.name,
+            'bank_name': t.account.account_type.bank.name,
+            'imported_at': t.imported_at.isoformat(),
+        }
+        for t in qs
+    ]
