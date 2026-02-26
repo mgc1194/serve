@@ -18,6 +18,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Dependencies
+node_modules/
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -27,6 +30,9 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
+*.log
+npm-debug.log*
+pnpm-debug.log*
 
 # Sphinx documentation
 docs/_build/
@@ -59,6 +65,8 @@ __pypackages__/
 # Environments
 .DS_Store
 .env
+.env.local
+.env.*.local
 .envrc
 .venv
 env/
@@ -68,13 +76,14 @@ env.bak/
 venv.bak/
 
 
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+# Editor
+.vscode/
 .idea/
+*.swp
+*.swo
 
+# TypeScript
+*.tsbuildinfo
 
 # PyPI configuration file
 .pypirc
