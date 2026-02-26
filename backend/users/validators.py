@@ -10,7 +10,8 @@ import re
 from typing import Optional
 
 from django.core.exceptions import ValidationError
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext as _, ngettext
+
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -52,7 +53,8 @@ class MinimumLengthValidator:
 
         Args:
             password: The password string to validate.
-            _user: The user instance, if available. Not used by this validator.
+            _user: The user instance. Required by Django's validator interface
+                but not used by this validator.
 
         Raises:
             ValidationError: If the password is too short.
@@ -65,7 +67,7 @@ class MinimumLengthValidator:
             )
 
     def get_help_text(self) -> str:
-        """Returns a human-readable description of the password requirement.
+        """Returns a human-readable description of the minimum length requirement.
 
         Returns:
             A help text string describing the minimum length requirement.
@@ -78,12 +80,13 @@ class MinimumLengthValidator:
 class UppercaseLetterValidator:
     """Validates that a password contains at least one uppercase letter."""
 
-    def validate(self, password: str, _user=None) -> None:
+    def validate(self, password: str, _user=None) -> None:  # noqa: PLR6301
         """Raises ValidationError if the password has no uppercase letter.
 
         Args:
             password: The password string to validate.
-            _user: The user instance, if available. Not used by this validator.
+            _user: The user instance. Required by Django's validator interface
+                but not used by this validator.
 
         Raises:
             ValidationError: If no uppercase letter is found.
@@ -96,7 +99,7 @@ class UppercaseLetterValidator:
 
     @staticmethod
     def get_help_text() -> str:
-        """Returns a human-readable description of the password requirement.
+        """Returns a human-readable description of the uppercase letter requirement.
 
         Returns:
             A help text string describing the uppercase letter requirement.
@@ -107,12 +110,13 @@ class UppercaseLetterValidator:
 class LowercaseLetterValidator:
     """Validates that a password contains at least one lowercase letter."""
 
-    def validate(self, password: str, _user=None) -> None:
+    def validate(self, password: str, _user=None) -> None:  # noqa: PLR6301
         """Raises ValidationError if the password has no lowercase letter.
 
         Args:
             password: The password string to validate.
-            _user: The user instance, if available. Not used by this validator.
+            _user: The user instance. Required by Django's validator interface
+                but not used by this validator.
 
         Raises:
             ValidationError: If no lowercase letter is found.
@@ -125,7 +129,7 @@ class LowercaseLetterValidator:
 
     @staticmethod
     def get_help_text() -> str:
-        """Returns a human-readable description of the password requirement.
+        """Returns a human-readable description of the lowercase letter requirement.
 
         Returns:
             A help text string describing the lowercase letter requirement.
@@ -136,12 +140,13 @@ class LowercaseLetterValidator:
 class NumericCharacterValidator:
     """Validates that a password contains at least one numeric digit."""
 
-    def validate(self, password: str, _user=None) -> None:
+    def validate(self, password: str, _user=None) -> None:  # noqa: PLR6301
         """Raises ValidationError if the password contains no digits.
 
         Args:
             password: The password string to validate.
-            _user: The user instance, if available. Not used by this validator.
+            _user: The user instance. Required by Django's validator interface
+                but not used by this validator.
 
         Raises:
             ValidationError: If no digit is found.
@@ -174,33 +179,36 @@ class SpecialCharacterValidator:
     def __init__(self, min_count: int = 1):
         self.min_count = min_count
 
-    def validate(self, password: str, user=None) -> None:
+    def validate(self, password: str, _user=None) -> None:
         """Raises ValidationError if the password lacks enough special characters.
 
         Args:
             password: The password string to validate.
-            user: The user instance, if available. Not used by this validator.
+            _user: The user instance. Required by Django's validator interface
+                but not used by this validator.
 
         Raises:
             ValidationError: If fewer than min_count special characters are found.
         """
         if len(self._SPECIAL_CHARS.findall(password)) < self.min_count:
             raise ValidationError(
-                _(
-                    'This password must contain at least %(min_count)d '
-                    'special character (e.g. !@#$%%^&*).'
+                ngettext(
+                    'This password must contain at least %(min_count)d special character (e.g. !@#$%%^&*).',
+                    'This password must contain at least %(min_count)d special characters (e.g. !@#$%%^&*).',
+                    self.min_count,
                 ),
                 code='password_no_special',
                 params={'min_count': self.min_count},
             )
 
     def get_help_text(self) -> str:
-        """Returns a human-readable description of the password requirement.
+        """Returns a human-readable description of the special character requirement.
 
         Returns:
             A help text string describing the special character requirement.
         """
-        return _(
-            'Your password must contain at least %(min_count)d special character '
-            '(e.g. !@#$%%^&*).'
+        return ngettext(
+            'Your password must contain at least %(min_count)d special character (e.g. !@#$%%^&*).',
+            'Your password must contain at least %(min_count)d special characters (e.g. !@#$%%^&*).',
+            self.min_count,
         ) % {'min_count': self.min_count}
