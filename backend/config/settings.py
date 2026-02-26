@@ -111,21 +111,34 @@ DATABASES = {
 
 AUTH_USER_MODEL = 'users.CustomUser'
 
-# Password validation
+# ── Password validation ───────────────────────────────────────────────────────
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
+    # Django built-ins — retained to catch weak and user-attribute-similar passwords.
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
     },
+    # Custom validators.
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        'NAME': 'users.validators.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 14},
+    },
+    {
+        'NAME': 'users.validators.UppercaseLetterValidator',
+    },
+    {
+        'NAME': 'users.validators.LowercaseLetterValidator',
+    },
+    {
+        'NAME': 'users.validators.NumericCharacterValidator',
+    },
+    {
+        'NAME': 'users.validators.SpecialCharacterValidator',
+        'OPTIONS': {'min_count': 1},
     },
 ]
 
