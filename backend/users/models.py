@@ -53,13 +53,13 @@ class CustomUser(AbstractUser):
             *args: Positional arguments passed to the parent save method.
             **kwargs: Keyword arguments passed to the parent save method.
         """
+        if not self.email:
+            raise ValueError('A valid email address is required.')
         self.email = self.email.lower()
         super().save(*args, **kwargs)
 
     def __str__(self):
-        if self.email:
-            return f'{self.username} ({self.email})'
-        return self.username
+        return f'{self.username} ({self.email})'
 
     class Meta:
         db_table = 'users'
