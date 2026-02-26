@@ -1,25 +1,15 @@
 import pytest
 
 from ninja.testing import TestClient
-from ninja.main import NinjaAPI
-
-from users.api import api
+from api.v1.users import router
 from users.models import CustomUser
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
-@pytest.fixture(autouse=True)
-def reset_ninja_registry():
-    """Clear Ninja API registry before each test to avoid conflicts."""
-    yield
-    if 'users' in NinjaAPI._registry:
-        NinjaAPI._registry.remove('users')
-
-
 @pytest.fixture
 def client():
-    return TestClient(api)
+    return TestClient(router)
 
 
 @pytest.fixture
@@ -52,7 +42,7 @@ class TestAuthRegister:
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
-        return mocker.patch('users.api.login')
+        return mocker.patch('api.v1.users.login')
 
     def test_successful_registration_returns_user(self, client, valid_payload):
         response = client.post('/auth/register', json=valid_payload)
@@ -136,6 +126,17 @@ class TestAuthRegister:
         client.post('/auth/register', json=valid_payload)
         assert CustomUser.objects.filter(email=valid_payload['email']).exists()
 
+    def test_email_is_normalised_to_lowercase(self, client, valid_payload):
+        valid_payload['email'] = 'John@Example.COM'
+        response = client.post('/auth/register', json=valid_payload)
+        assert response.status_code == 200
+        assert response.json()['email'] == 'john@example.com'
+
+    def test_duplicate_email_case_insensitive_returns_400(self, client, valid_payload, registered_user):
+        valid_payload['email'] = 'JOHN@EXAMPLE.COM'
+        response = client.post('/auth/register', json=valid_payload)
+        assert response.status_code == 400
+
 
 # ── POST /api/auth/login ──────────────────────────────────────────────────────
 
@@ -145,7 +146,7 @@ class TestAuthLogin:
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
-        return mocker.patch('users.api.login')
+        return mocker.patch('api.v1.users.login')
 
     def test_successful_login_returns_user(self, client, valid_payload, registered_user):
         response = client.post('/auth/login', json={
@@ -168,6 +169,13 @@ class TestAuthLogin:
             'password': 'SomePassword1!',
         })
         assert response.status_code == 401
+
+    def test_login_email_is_case_insensitive(self, client, valid_payload, registered_user):
+        response = client.post('/auth/login', json={
+            'email': valid_payload['email'].upper(),
+            'password': valid_payload['password'],
+        })
+        assert response.status_code == 200
 
     def test_error_message_does_not_distinguish_email_from_password(self, client, registered_user, valid_payload):
         """Ensures identical error messages for wrong email vs wrong password
