@@ -19,11 +19,17 @@ class Household(models.Model):
 
 
 class CustomUser(AbstractUser):
+    """Custom user model extending Django's AbstractUser.
+
+    Adds a ManyToMany relationship to Household so a user can belong to
+    multiple households (e.g. managing parents' finances).
+
+    Email is the login identifier, enforced as unique and always stored
+    in lowercase via the save() override.
     """
-    Custom user model extending Django's AbstractUser.
-    Adds a ManyToMany relationship to Household so a user
-    can belong to multiple households (e.g. managing parents' finances).
-    """
+
+    email = models.EmailField(unique=True)
+
     households = models.ManyToManyField(
         Household,
         related_name='users',
@@ -39,6 +45,16 @@ class CustomUser(AbstractUser):
         related_name='custom_users',
         blank=True,
     )
+
+    def save(self, *args, **kwargs):
+        """Normalises email to lowercase before saving.
+
+        Args:
+            *args: Positional arguments passed to the parent save method.
+            **kwargs: Keyword arguments passed to the parent save method.
+        """
+        self.email = self.email.lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         if self.email:
