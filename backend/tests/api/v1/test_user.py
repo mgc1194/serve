@@ -200,6 +200,10 @@ class TestAuthLogout:
         response = client.post('/auth/logout')
         assert response.status_code == 401
 
+    def test_authenticated_logout_returns_success(self, client, registered_user):
+        response = client.post('/auth/logout', user=registered_user)
+        assert response.status == 200
+
 
 # ── GET /api/auth/me ──────────────────────────────────────────────────────────
 

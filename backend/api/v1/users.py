@@ -14,6 +14,7 @@ import secrets
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from ninja import Router
 from ninja.security import django_auth
 from ninja.errors import HttpError
@@ -56,8 +57,15 @@ def auth_register(request, payload: RegisterIn):
     if payload.password != payload.confirm_password:
         raise HttpError(400, 'Passwords do not match.')
 
+    # Construct an unsaved user so UserAttributeSimilarityValidator can
+    # compare the password against the user's attributes (email, name, etc.).
+    unsaved_user = CustomUser(
+        email=email,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+    )
     try:
-        validate_password(payload.password)
+        validate_password(payload.password, user=unsaved_user)
     except ValidationError as e:
         raise HttpError(400, ' '.join(e.messages))
 
@@ -66,13 +74,19 @@ def auth_register(request, payload: RegisterIn):
 
     username = _generate_username_from_email(email)
 
-    user = CustomUser.objects.create_user(
-        username=username,
-        email=email,
-        password=payload.password,
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-    )
+    try:
+        user = CustomUser.objects.create_user(
+            username=username,
+            email=email,
+            password=payload.password,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+        )
+    except IntegrityError:
+        # A concurrent request created the same email or username between
+        # our uniqueness check and the insert. Treat as a duplicate email
+        # since that is the most likely cause.
+        raise HttpError(400, 'An account with this email already exists.')
 
     login(request, user)
     logger.info(f'New user registered: {user.username} ({user.email}).')
@@ -103,6 +117,11 @@ def auth_login(request, payload: LoginIn):
     try:
         user = CustomUser.objects.get(email=email)
     except CustomUser.DoesNotExist:
+        raise HttpError(401, 'Invalid email or password.')
+    except CustomUser.MultipleObjectsReturned:
+        # Should not occur once the unique constraint is in place, but
+        # handled defensively for any pre-existing duplicate rows.
+        logger.error(f'Multiple users found for email: {email}')
         raise HttpError(401, 'Invalid email or password.')
 
     authenticated_user = authenticate(
