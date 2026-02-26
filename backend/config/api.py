@@ -11,12 +11,9 @@ Current versions:
 from ninja import NinjaAPI
 
 from api.v1.users import router as users_v1_router
-from transactions.api import router as transactions_router
+from api.v1.transactions import router as transactions_v1_router
 
 api = NinjaAPI(version='1.0.0')
 
 api.add_router('/v1', users_v1_router)
-
-# Transactions router is not yet versioned — will be moved to api/v1/
-# in a follow-up refactor.
-api.add_router('', transactions_router)
+api.add_router('/v1', transactions_v1_router)
