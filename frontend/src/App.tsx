@@ -3,8 +3,7 @@
 // Minimal placeholder for the scaffold PR.
 // ThemeProvider, routing, and AuthProvider will be wired up in the auth PR.
 
-import { Box } from '@mui/material';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { Box, ThemeProvider, CssBaseline } from '@mui/material';
 
 import theme from './theme';
 
