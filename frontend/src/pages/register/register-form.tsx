@@ -1,7 +1,9 @@
 // pages/register/register-form.tsx — Registration form component.
 import { Alert, Box, Button, TextField } from '@mui/material';
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router';
+
 
 import { useAuth } from '@serve/context/auth-context';
 import { register } from '@serve/services/auth';
@@ -18,7 +20,7 @@ export function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);

@@ -13,6 +13,24 @@ function getCsrfToken(): string {
   return match ? match[1] : '';
 }
 
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+
+  get isUnauthorized(): boolean {
+    return this.status === 401 || this.status === 403;
+  }
+
+  get isServerError(): boolean {
+    return this.status >= 500;
+  }
+}
+
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -29,10 +47,10 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
   });
 
   if (!response.ok) {
-    const error = await response
+    const body = await response
       .json()
       .catch(() => ({ detail: 'An unexpected error occurred.' }));
-    throw new Error(error.detail ?? 'An unexpected error occurred.');
+    throw new ApiError(response.status, body.detail ?? 'An unexpected error occurred.');
   }
 
   if (response.status === 204) return undefined as T;

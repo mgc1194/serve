@@ -3,11 +3,12 @@
 // Displays the logo, a tagline, and the BrandFooter. Hidden on mobile.
 
 import { Box, Typography } from '@mui/material';
+import type { ReactNode } from 'react';
 
 import { BrandFooter } from '@serve/components/brand-footer';
 
 interface BrandPanelProps {
-  tagline: React.ReactNode;
+  tagline: ReactNode;
 }
 
 export function BrandPanel({ tagline }: BrandPanelProps) {
