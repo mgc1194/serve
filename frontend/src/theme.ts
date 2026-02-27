@@ -1,11 +1,71 @@
 // theme.ts — MUI theme configuration for SERVE.
 //
-// Colors derived from the SERVE logo:
-//   Navy   #1e2235 — wordmark text
-//   Red    #8b2020 — dollar sign accent
-//   White  #ffffff — backgrounds
+// Palette:
+//   Primary     #1e2235 — navy (wordmark)
+//   Secondary   #AABBFF — periwinkle, AAA on navy (8.43:1)
+//   Accent      #C8ADFF — wisteria, AAA on navy (8.15:1)
 
-import { createTheme } from '@mui/material/styles';
+import { createTheme, keyframes } from '@mui/material/styles';
+
+declare module '@mui/material/styles' {
+  interface Palette {
+    accent: Palette['primary'];
+    tertiary: Palette['primary'];
+
+    rainbowText: {
+      red: string;
+      orange: string;
+      yellow: string;
+      green: string;
+      blue: string;
+      indigo: string;
+      violet: string;
+    };
+  }
+
+  interface PaletteOptions {
+    accent?: PaletteOptions['primary'];
+    tertiary?: PaletteOptions['primary'];
+
+    rainbowText?: {
+      red: string;
+      orange: string;
+      yellow: string;
+      green: string;
+      blue: string;
+      indigo: string;
+      violet: string;
+    };
+  }
+
+  interface Theme {
+    rainbow: {
+      em: {
+        fontStyle: 'normal';
+        animation: string;
+        '@media (prefers-reduced-motion: reduce)': {
+          animation: 'none';
+          color: string;
+        };
+      };
+    };
+  }
+
+  interface ThemeOptions {
+    rainbow?: Theme['rainbow'];
+  }
+}
+
+const rainbowCycle = keyframes`
+    0%   { color: #ff8f8f }
+    15%  { color: #f59942 }
+    30%  { color: #f5de7f }
+    45%  { color: #9ce89d }
+    60%  { color: #a3d6f0 }
+    75%  { color: #afadff }
+    90%  { color: #c4a1f2 }
+    100% { color: #ff8f8f }
+  `;
 
 const theme = createTheme({
   palette: {
@@ -15,9 +75,33 @@ const theme = createTheme({
       contrastText: '#ffffff',
     },
     secondary: {
-      main: '#8b2020',
-      contrastText: '#ffffff',
+      main: '#AABBFF',
+      light: '#C4CCFF',
+      dark: '#2c48ba',   // AAA on bg (7.02:1)
+      contrastText: '#1e2235',
     },
+    accent: {
+      main: '#C8ADFF',
+      light: '#DDD0FF',
+      dark: '#7025bb',   // AAA on bg (7.21:1)
+      contrastText: '#1e2235',
+    },
+    tertiary: {
+      main: '#f99090',
+      dark: '#a10c0c',
+      contrastText: '#1e2235',
+    },
+
+    rainbowText: {
+      red: '#ff8f8f',
+      orange: '#f59942',
+      yellow: '#f5de7f',
+      green: '#9ce89d',
+      blue: '#a3d6f0',
+      indigo: '#afadff',
+      violet: '#c4a1f2',
+    },
+
     error: {
       main: '#c0392b',
     },
@@ -54,6 +138,16 @@ const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: { backgroundColor: '#ffffff' },
+      },
+    },
+  },
+  rainbow: {
+    em: {
+      fontStyle: 'normal',
+      animation: `${rainbowCycle} 5s linear infinite`,
+      '@media (prefers-reduced-motion: reduce)': {
+        animation: 'none',
+        color: '#c4a1f2', // violet fallback
       },
     },
   },

@@ -32,7 +32,10 @@ export default tseslint.config(
     settings: {
       react: { version: 'detect' },
       'import/resolver': {
-        typescript: true,
+        typescript: {
+          alwaysTryTypes: true,
+          project: './tsconfig.app.json',
+        },
         node: true,
       },
     },
@@ -56,6 +59,18 @@ export default tseslint.config(
 
       // ── Imports ────────────────────────────────────────────────────────────
       'import/no-duplicates': 'error',
+      'no-restricted-imports': 'off',
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../*', './*', '!./*.css'],
+              message: "Use the '@serve/' path alias instead of relative imports.",
+            },
+          ],
+        },
+      ],
       'import/order': [
         'error',
         {
@@ -73,6 +88,14 @@ export default tseslint.config(
           },
         },
       ],
+    },
+  },
+  // Context files export both a provider component and a hook — this is
+  // intentional and incompatible with react-refresh's single-export rule.
+  {
+    files: ['src/context/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
     },
   },
 );
