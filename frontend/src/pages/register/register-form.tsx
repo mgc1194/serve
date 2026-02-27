@@ -4,7 +4,6 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 
-
 import { useAuth } from '@serve/context/auth-context';
 import { register } from '@serve/services/auth';
 

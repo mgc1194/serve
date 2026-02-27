@@ -33,7 +33,7 @@ export function BrandPanel({ tagline }: BrandPanelProps) {
         sx={{
           color: '#fff',
           maxWidth: 320,
-          '& em': { color: 'secondary.light', fontStyle: 'normal' },
+          '& em': (theme) => theme.rainbow.em,
         }}
       >
         {tagline}

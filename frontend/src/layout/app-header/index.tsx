@@ -31,7 +31,7 @@ export function AppHeader() {
       <Toolbar>
         <Box
           component="img"
-          src="/images/serve-logo-rainbow-row.svg"
+          src="/images/serve-logo-light.svg"
           alt="SERVE"
           sx={{ height: 100, mr: 'auto' }}
         />

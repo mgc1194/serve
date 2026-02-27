@@ -37,7 +37,7 @@ export function RegisterPage() {
             Create an account
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 4, fontSize: '0.9rem' }}>
-            Start tracking your finances today
+            Start slaying your finances today
           </Typography>
 
           <RegisterForm />

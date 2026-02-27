@@ -18,7 +18,7 @@ export function LoginPage() {
       <BrandPanel
         tagline={
           <>
-            Your money,<br />is a <em>Serve</em>.
+            Your money,<br />is <em>Serving</em>.
           </>
         }
       />
@@ -32,8 +32,13 @@ export function LoginPage() {
         }}
       >
         <Box sx={{ width: '100%', maxWidth: 400 }}>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>
-            Welcome back
+          <Typography
+          variant="h4"
+          sx={{
+           mb: 0.5,
+           '& em': { color: 'secondary.dark', fontStyle: 'normal' }
+           }}>
+            Welcome back <em>Queen</em>
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 4, fontSize: '0.9rem' }}>
             Sign in to your account
