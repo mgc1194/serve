@@ -20,4 +20,46 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    globals: true,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/main.tsx',
+        'src/**/*.story.tsx',
+        'src/**/*.d.ts',
+      ],
+    },
+    workspace: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/**/*.test.{ts,tsx}'],
+          environment: 'jsdom',
+          server: {
+            deps: {
+              external: ['msw', '@mswjs/interceptors'],
+            },
+          },
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['tests/integration/**/*.test.{ts,tsx}'],
+          environment: 'jsdom',
+          server: {
+            deps: {
+              external: ['msw', '@mswjs/interceptors'],
+            },
+          },
+          setupFiles: ['tests/utils/setup.ts']
+        },
+      },
+    ],
+  },
 });
