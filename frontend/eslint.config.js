@@ -112,7 +112,10 @@ export default tseslint.config(
   },
   // Test files — relax rules that don't apply in test context.
   {
-    files: ['tests/**/*.test.{ts,tsx}', 'test-utils/**/*.{ts,tsx}'],
+    files: [
+      'tests/**/*.test.{ts,tsx}', 
+      'tests/utils/**/*.{ts,tsx}', 
+      'src/**/*.test.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-restricted-imports': 'off',
       '@typescript-eslint/no-explicit-any': 'off',

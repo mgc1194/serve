@@ -1,11 +1,10 @@
-// pages/login/login-form.tsx — Login form component.
 import { Alert, Box, Button, Link, TextField } from '@mui/material';
 import { useState } from 'react';
-import type { FormEvent } from 'react';
+import type { SyntheticEvent } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router';
 
-import { useAuth } from '@serve/context/auth-context';
-import { login } from '@serve/services/auth';
+import { useAuth } from '@context/auth-context';
+import { login } from '@services/auth';
 
 export function LoginForm() {
   const { setUser } = useAuth();
@@ -16,7 +15,7 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: SyntheticEvent<HTMLFormElement, SubmitEvent>) {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);

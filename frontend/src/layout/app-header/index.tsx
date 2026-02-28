@@ -3,8 +3,9 @@
 import { AppBar, Box, Button, Toolbar, Typography } from '@mui/material';
 import { useNavigate } from 'react-router';
 
-import { useAuth } from '@serve/context/auth-context';
-import { logout } from '@serve/services/auth';
+import { useAuth } from '@context/auth-context';
+import { logout } from '@services/auth';
+
 
 export function AppHeader() {
   const { user, setUser } = useAuth();
