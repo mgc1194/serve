@@ -92,7 +92,7 @@ def _get_household_for_member(household_id: int, user: CustomUser) -> Household:
         Household.objects.prefetch_related('users'),
         pk=household_id,
     )
-    if not household.users.filter(pk=user.pk).exists():
+    if not any(u.pk == user.pk for u in household.users.all()):  # uses prefetched cache
         raise HttpError(403, 'You are not a member of this household.')
     return household
 
@@ -177,7 +177,6 @@ def create_household(request, payload: HouseholdRequest):
         f'"{household.name}" (id={household.id}).'
     )
 
-    household.refresh_from_db()
     household = Household.objects.prefetch_related('users').get(pk=household.pk)
     return _serialize(household)
 
@@ -245,7 +244,7 @@ def rename_household(request, household_id: int, payload: HouseholdRenameRequest
 
 # ── Delete ────────────────────────────────────────────────────────────────────
 
-@router.delete('/households/{household_id}/', response=None)
+@router.delete('/households/{household_id}/', response={204: None})
 def delete_household(request, household_id: int):
     """Deletes a household.
 
@@ -258,7 +257,7 @@ def delete_household(request, household_id: int):
         household_id: Primary key of the household.
 
     Returns:
-        204 No Content on success.
+        204 No Content on success — empty response body.
 
     Raises:
         HttpError: 403 if the user is not a member.
@@ -282,7 +281,7 @@ def delete_household(request, household_id: int):
         f'User {request.user.email} deleted household (id={household_id}).'
     )
 
-    return None
+    return 204, None
 
 
 # ── Add member ────────────────────────────────────────────────────────────────

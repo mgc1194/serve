@@ -8,6 +8,7 @@ from ninja.testing import TestClient
 
 from api.v1.households import router
 from users.models import CustomUser, Household
+from transactions.models import Account, AccountType, Bank
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -235,7 +236,7 @@ class TestDeleteHousehold:
 
     def test_deletes_household(self, client, alice, household):
         response = client.delete(f'/households/{household.id}/', user=alice)
-        assert response.status_code == 200
+        assert response.status_code == 204
         assert not Household.objects.filter(pk=household.id).exists()
 
     def test_non_member_returns_403(self, client, bob, household):
@@ -250,6 +251,23 @@ class TestDeleteHousehold:
     def test_unauthenticated_returns_401(self, client, household):
         response = client.delete(f'/households/{household.id}/')
         assert response.status_code == 401
+
+    def test_returns_409_when_household_has_accounts(self, client, alice, household):
+        # Create an Account linked to the household — the PROTECT FK prevents deletion.
+        bank = Bank.objects.create(name='Test Bank')
+        account_type = AccountType.objects.create(
+            name='Checking',
+            handler_key='test-checking',
+            bank=bank,
+        )
+        Account.objects.create(
+            name='My Checking',
+            account_type=account_type,
+            household=household,
+        )
+        response = client.delete(f'/households/{household.id}/', user=alice)
+        assert response.status_code == 409
+        assert Household.objects.filter(pk=household.id).exists()
 
 
 # ── POST /households/{id}/members/ ────────────────────────────────────────────
@@ -345,7 +363,8 @@ class TestRemoveMember:
         assert response.status_code == 400
         assert 'last member' in response.json()['detail'].lower()
 
-    def test_non_member_returns_403(self, client, alice, bob, household):
+    def test_non_member_cannot_remove_members(self, client, alice, bob, household):
+        # Bob is not a member of the household — he cannot remove anyone from it.
         response = client.delete(
             f'/households/{household.id}/members/{alice.id}/',
             user=bob,
@@ -363,3 +382,4 @@ class TestRemoveMember:
     def test_nonexistent_household_returns_404(self, client, alice):
         response = client.delete(f'/households/99999/members/{alice.id}/', user=alice)
         assert response.status_code == 404
+        
