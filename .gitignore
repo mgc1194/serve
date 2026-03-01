@@ -93,3 +93,14 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+# Test
+coverage/
+test-results/
+.pytest_cache/
+playwright-report/
+
+# Storybook
+storybook-static/
+
+# Playwright
+playwright/.cache

@@ -5,10 +5,11 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import importPlugin from 'eslint-plugin-import';
+import storybook from 'eslint-plugin-storybook';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  { ignores: ['dist', 'storybook-static'] },
   {
     extends: [
       js.configs.recommended,
@@ -96,6 +97,28 @@ export default tseslint.config(
     files: ['src/context/*.tsx'],
     rules: {
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  // Story files — apply storybook recommended rules and relax
+  // react-refresh since stories export multiple things by design.
+  {
+    files: ['src/**/*.story.tsx'],
+    plugins: { storybook },
+    rules: {
+      ...storybook.configs.recommended.rules,
+      'react-refresh/only-export-components': 'off',
+      '@typescript-eslint/no-restricted-imports': 'off',
+    },
+  },
+  // Test files — relax rules that don't apply in test context.
+  {
+    files: [
+      'tests/**/*.test.{ts,tsx}', 
+      'tests/utils/**/*.{ts,tsx}', 
+      'src/**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
 );

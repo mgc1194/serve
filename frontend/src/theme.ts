@@ -3,7 +3,12 @@
 // Palette:
 //   Primary     #1e2235 — navy (wordmark)
 //   Secondary   #AABBFF — periwinkle, AAA on navy (8.43:1)
+//               #2c48ba — periwinkle dark, AAA on bg (7.02:1)
 //   Accent      #C8ADFF — wisteria, AAA on navy (8.15:1)
+//               #7025bb — wisteria dark, AAA on bg (7.21:1)
+//   Tertiary    #f99090 — coral red, AAA on navy (7.17:1)
+//               #a10c0c — deep red, AAA on bg (7.48:1)
+//   Rainbow     all seven colors AAA on navy
 
 import { createTheme, keyframes } from '@mui/material/styles';
 

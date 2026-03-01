@@ -1,13 +1,8 @@
-// context/auth-context.tsx — Global authentication state.
-//
-// Wraps the app and exposes the current user, a loading flag, and
-// setUser so login/register/logout can update state after their
-// API calls resolve.
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
 
-import { ApiError, getMe } from '@serve/services/auth';
 import type { User } from '@serve/types/global';
+import { ApiError, getMe } from '@services/auth';
 
 interface AuthContextValue {
   user: User | null;
@@ -20,18 +15,24 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 interface AuthProviderProps {
   children: ReactNode;
+  // When provided, skips getMe() and uses this value directly.
+  // Intended for Storybook and tests only.
+  value?: AuthContextValue;
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [sessionError, setSessionError] = useState(false);
+export function AuthProvider({ children, value }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(value?.user ?? null);
+  const [isLoading, setIsLoading] = useState(value ? false : true);
+  const [sessionError, setSessionError] = useState(value?.sessionError ?? false);
+
+  // Capture whether a value was injected at mount time. Using a ref avoids
+  // adding `value` to the useEffect dependency array, which would cause
+  // infinite re-renders since the object reference changes on every render.
+  const isInjected = useRef(!!value);
 
   useEffect(() => {
-    // On mount, check whether a valid session already exists.
-    // Only a 401/403 means the user is unauthenticated — network errors
-    // and 5xx responses are surfaced via sessionError so the app can
-    // show a retry state rather than silently redirecting to /login.
+    if (isInjected.current) return;
+
     getMe()
       .then(setUser)
       .catch(err => {
