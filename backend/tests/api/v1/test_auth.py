@@ -1,7 +1,7 @@
 import pytest
 
 from ninja.testing import TestClient
-from api.v1.users import router
+from api.v1.auth import router
 from users.models import CustomUser
 
 
@@ -42,7 +42,7 @@ class TestAuthRegister:
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
-        return mocker.patch('api.v1.users.login')
+        return mocker.patch('api.v1.auth.login')
 
     def test_successful_registration_returns_user(self, client, valid_payload):
         response = client.post('/auth/register', json=valid_payload)
@@ -146,7 +146,7 @@ class TestAuthLogin:
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
-        return mocker.patch('api.v1.users.login')
+        return mocker.patch('api.v1.auth.login')
 
     def test_successful_login_returns_user(self, client, valid_payload, registered_user):
         response = client.post('/auth/login', json={
@@ -199,7 +199,7 @@ class TestAuthLogout:
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
-        return mocker.patch('api.v1.users.logout')
+        return mocker.patch('api.v1.auth.logout')
 
     def test_unauthenticated_logout_returns_401(self, client):
         response = client.post('/auth/logout')

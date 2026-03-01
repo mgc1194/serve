@@ -10,6 +10,8 @@ from typing import List
 
 from ninja import Schema
 
+from schemas.households import HouseholdSchema
+
 
 class HouseholdSchema(Schema):
     """Output schema for a Household."""
