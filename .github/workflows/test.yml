@@ -21,7 +21,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-    
+
     steps:
       - uses: actions/checkout@v6
 
@@ -48,20 +48,20 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: config.settings
           DJANGO_SECRET_KEY: test-secret-key-for-ci
-          DJANGO_DEBUG: "False"
+          DJANGO_DEBUG: False
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_NAME: test_serve
           DB_USER: serve
           DB_PASSWORD: test_password
         run: python manage.py migrate --noinput
-    
+
       - name: Run Django tests
         working-directory: backend
         env:
           DJANGO_SETTINGS_MODULE: config.settings
           DJANGO_SECRET_KEY: test-secret-key-for-ci
-          DJANGO_DEBUG: "False"
+          DJANGO_DEBUG: False
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_NAME: test_serve
