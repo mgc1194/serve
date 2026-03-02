@@ -10,10 +10,12 @@ Current versions:
 
 from ninja import NinjaAPI
 
-from api.v1.users import router as users_v1_router
+from api.v1.auth import router as auth_v1_router
+from api.v1.households import router as households_v1_router
 from api.v1.transactions import router as transactions_v1_router
 
 api = NinjaAPI(version='1.0.0')
 
-api.add_router('/v1', users_v1_router)
+api.add_router('/v1', auth_v1_router)
 api.add_router('/v1', transactions_v1_router)
+api.add_router('/v1', households_v1_router)

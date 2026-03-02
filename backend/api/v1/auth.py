@@ -21,7 +21,7 @@ from ninja.errors import HttpError
 
 from users.models import CustomUser
 from users.validators import validate_email_format
-from schemas.users import LoginRequest, RegisterRequest, UserSchema, MessageResponse
+from schemas.auth import LoginRequest, RegisterRequest, UserSchema, MessageResponse
 
 logger = logging.getLogger(__name__)
 
