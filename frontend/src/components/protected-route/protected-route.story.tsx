@@ -1,9 +1,9 @@
 import { Typography } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
-import { withRouter, withAuth } from '@storybook-decorators';
 
 import { ProtectedRoute } from '@components/protected-route';
 import type { User } from '@serve/types/global';
+import { withRouter, withAuth } from '@storybook-decorators';
 
 const mockUser: User = {
   id: 1,
