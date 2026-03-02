@@ -54,7 +54,7 @@ jobs:
           DB_NAME: test_serve
           DB_USER: serve
           DB_PASSWORD: test_password
-        run: pytest manage.py migrate --noinput
+        run: python manage.py migrate --noinput
     
       - name: Run Django tests
         working-directory: backend
