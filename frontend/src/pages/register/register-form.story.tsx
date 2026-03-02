@@ -1,8 +1,9 @@
 import { Box } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
-import { withAuth, withRouter } from '@storybook-decorators';
 
 import { RegisterForm } from '@pages/register/register-form';
+import { withAuth, withRouter } from '@storybook-decorators';
+
 
 const meta: Meta<typeof RegisterForm> = {
   title: 'Pages/Register/RegisterForm',

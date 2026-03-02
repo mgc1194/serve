@@ -1,8 +1,9 @@
 import { Typography } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
-import { withRouter, withAuth } from '@storybook-decorators';
 
 import { PublicRoute } from '@serve/components/public-route';
+import { withRouter, withAuth } from '@storybook-decorators';
+
 
 const meta: Meta<typeof PublicRoute> = {
   title: 'Components/PublicRoute',
