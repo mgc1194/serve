@@ -5,10 +5,9 @@ on:
     branches: [ "**" ]
 
 jobs:
-  unit-tests:
-    name: Unit Tests
+  backend:
+    name: Backend Tests
     runs-on: ubuntu-latest
-
     services:
       mysql:
         image: mysql:8.0
@@ -22,7 +21,7 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
+    
     steps:
       - uses: actions/checkout@v6
 
@@ -34,17 +33,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements/dev.txt
 
-      - name: Run unit tests
-        run: pytest tests/unit/ -v
-
       - name: Set up test database
         env:
           MYSQL_PWD: root
         run: |
-          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS test_budget;"
-          mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS 'budget'@'%' IDENTIFIED BY 'test_password';"
-          mysql -h 127.0.0.1 -u root -e "GRANT ALL PRIVILEGES ON test_budget.* TO 'budget'@'%';"
-          mysql -h 127.0.0.1 -u root -e "GRANT CREATE ON *.* TO 'budget'@'%';"
+          mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS test_serve;"
+          mysql -h 127.0.0.1 -u root -e "CREATE USER IF NOT EXISTS 'serve'@'%' IDENTIFIED BY 'test_password';"
+          mysql -h 127.0.0.1 -u root -e "GRANT ALL PRIVILEGES ON test_serve.* TO 'serve'@'%';"
+          mysql -h 127.0.0.1 -u root -e "GRANT CREATE ON *.* TO 'serve'@'%';"
           mysql -h 127.0.0.1 -u root -e "FLUSH PRIVILEGES;"
 
       - name: Run Django migrations
@@ -52,23 +48,56 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: config.settings
           DJANGO_SECRET_KEY: test-secret-key-for-ci
-          DJANGO_DEBUG: False
+          DJANGO_DEBUG: "False"
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
-          DB_NAME: test_budget
-          DB_USER: budget
+          DB_NAME: test_serve
+          DB_USER: serve
           DB_PASSWORD: test_password
-        run: python manage.py migrate --noinput
-
-      - name: Run Django model tests
+        run: pytest manage.py migrate --noinput && pytest -v
+    
+      - name: Run Django tests
         working-directory: backend
         env:
           DJANGO_SETTINGS_MODULE: config.settings
           DJANGO_SECRET_KEY: test-secret-key-for-ci
-          DJANGO_DEBUG: False
+          DJANGO_DEBUG: "False"
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
-          DB_NAME: test_budget
-          DB_USER: root
-          DB_PASSWORD: root
+          DB_NAME: test_serve
+          DB_USER: serve
+          DB_PASSWORD: test_password
         run: pytest -v
+
+  frontend:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v5
+        with:
+          node-version: '18'
+
+      - name: Insall pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        working-directory: frontend
+        run: pnpm tsc --noEmit
+      
+      - name: Lint code
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Run tests
+        working-directory: frontend
+        run: pnpm test --run
