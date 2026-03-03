@@ -3,7 +3,7 @@ import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router';
 
-import theme from '@serve/theme';
+import theme from '../src/theme';
 
 const preview: Preview = {
   decorators: [
