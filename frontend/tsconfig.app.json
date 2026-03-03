@@ -33,7 +33,6 @@
       "@context/*": ["src/context/*"],
       "@services/*": ["src/services/*"],
       "@tests/*": ["tests/*"],
-      "@storybook-decorators": [".storybook/decorators"]
     }
   },
   "include": [

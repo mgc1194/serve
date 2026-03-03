@@ -2,25 +2,26 @@ import { Box } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { LoginForm } from '@pages/login/login-form';
-import { withAuth, withRouter } from '@storybook-decorators';
-
 
 const meta: Meta<typeof LoginForm> = {
   title: 'Pages/Login/LoginForm',
   component: LoginForm,
+  parameters: { layout: 'centered' },
   decorators: [
-    withRouter,
-    withAuth,
     (Story) => (
       <Box sx={{ width: 400, p: 3 }}>
         <Story />
       </Box>
     ),
   ],
-  parameters: { layout: 'centered' },
 };
 
 export default meta;
 type Story = StoryObj<typeof LoginForm>;
 
-export const Default: Story = {};
+export const Default: Story = {
+  parameters: {
+    router:  true,
+    auth: { user: null },
+  },
+};

@@ -3,7 +3,6 @@ import type { Meta, StoryObj } from '@storybook/react';
 
 import { ProtectedRoute } from '@components/protected-route';
 import type { User } from '@serve/types/global';
-import { withRouter, withAuth } from '@storybook-decorators';
 
 const mockUser: User = {
   id: 1,
@@ -17,7 +16,6 @@ const mockUser: User = {
 const meta: Meta<typeof ProtectedRoute> = {
   title: 'Components/ProtectedRoute',
   component: ProtectedRoute,
-  decorators: [withRouter, withAuth],
   parameters: { layout: 'centered' },
 };
 
@@ -25,11 +23,19 @@ export default meta;
 type Story = StoryObj<typeof ProtectedRoute>;
 
 export const Authenticated: Story = {
-  parameters: { authContext: { user: mockUser } },
-  args: { children: <Typography>Protected content visible ✓</Typography> },
+  parameters: {
+    auth: { user: mockUser },
+  },
+  args: {
+    children: <Typography>Protected content visible ✓</Typography>,
+  },
 };
 
 export const ServerError: Story = {
-  parameters: { authContext: { user: null, sessionError: true } },
-  args: { children: <Typography>Protected content</Typography> },
+  parameters: {
+    auth: { user: null, sessionError: true },
+  },
+  args: {
+    children: <Typography>Protected content</Typography>,
+  },
 };
