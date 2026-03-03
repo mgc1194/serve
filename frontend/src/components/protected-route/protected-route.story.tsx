@@ -2,8 +2,8 @@ import { Typography } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { ProtectedRoute } from '@components/protected-route';
+import { AuthProvider } from '@serve/context/auth-context';
 import type { User } from '@serve/types/global';
-import { withRouter, withAuth } from '@storybook-decorators';
 
 const mockUser: User = {
   id: 1,
@@ -17,19 +17,45 @@ const mockUser: User = {
 const meta: Meta<typeof ProtectedRoute> = {
   title: 'Components/ProtectedRoute',
   component: ProtectedRoute,
-  decorators: [withRouter, withAuth],
   parameters: { layout: 'centered' },
+  decorators: [
+    (Story, context) => {
+      const {
+        user = null,
+        isLoading = false,
+        sessionError = false,
+      } = context.parameters.authContext ?? {};
+
+      const mockSetUser = (_user: User | null) => {};
+
+      return (
+        <AuthProvider
+          value={{ user, setUser: mockSetUser, isLoading, sessionError }}
+        >
+          <Story />
+        </AuthProvider>
+      );
+    },
+  ],
 };
 
 export default meta;
 type Story = StoryObj<typeof ProtectedRoute>;
 
 export const Authenticated: Story = {
-  parameters: { authContext: { user: mockUser } },
-  args: { children: <Typography>Protected content visible ✓</Typography> },
+  parameters: {
+    authContext: { user: mockUser },
+  },
+  args: {
+    children: <Typography>Protected content visible ✓</Typography>,
+  },
 };
 
 export const ServerError: Story = {
-  parameters: { authContext: { user: null, sessionError: true } },
-  args: { children: <Typography>Protected content</Typography> },
+  parameters: {
+    authContext: { user: null, sessionError: true },
+  },
+  args: {
+    children: <Typography>Protected content</Typography>,
+  },
 };

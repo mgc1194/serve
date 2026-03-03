@@ -1,22 +1,36 @@
-// .storybook/preview.tsx — Minimal global Storybook configuration.
-
 import type { Preview } from '@storybook/react';
-import { withTheme } from '@storybook-decorators';
+import { CssBaseline } from '@mui/material';
+import { ThemeProvider } from '@mui/material/styles';
+import { BrowserRouter } from 'react-router';
 
+import theme from '@serve/theme';
 
 const preview: Preview = {
-  decorators: [withTheme],
+  decorators: [
+    (Story, { parameters }) => {
+      const {
+        router = false,
+      }: {
+        router?: boolean;
+      } = parameters;
+
+      let content = <Story />;
+
+      if (router) {
+        content = <BrowserRouter>{content}</BrowserRouter>;
+      }
+
+      return (
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          {content}
+        </ThemeProvider>
+      );
+    },
+  ],
+
   parameters: {
     layout: 'fullscreen',
-    controls: {
-      matchers: {
-        color: /(background|color)$/i,
-        date: /date$/i,
-      },
-    },
-    a11y: {
-      element: '#storybook-root',
-    },
   },
 };
 
