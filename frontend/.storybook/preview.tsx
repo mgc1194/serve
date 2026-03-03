@@ -64,9 +64,9 @@ const preview: Preview = {
         date: /date$/i,
       },
     },
-  a11y: {
-    element: '#storybook-root',
-  },
+    a11y: {
+      element: '#storybook-root',
+    },
   },
 };
 
