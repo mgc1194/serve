@@ -4,7 +4,6 @@
 // AuthProvider, and BrowserRouter so components render in a realistic
 // context without boilerplate in every test.
 
-import { AuthProvider } from '@context/auth-context';
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -13,8 +12,8 @@ import type { RenderOptions, RenderResult } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { BrowserRouter } from 'react-router';
 
-import theme from '@serve/theme';
-
+import theme from '../../src/theme';
+import { AuthProvider } from '../../src/context/auth-context';
 
 function makeQueryClient() {
   return new QueryClient({

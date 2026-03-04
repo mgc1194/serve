@@ -15,22 +15,19 @@ const mockUser: User = {
 const meta: Meta<typeof AppHeader> = {
   title: 'Layout/AppHeader',
   component: AppHeader,
-  parameters: { layout: 'fullscreen' },
+  parameters: { 
+    layout: 'fullscreen',
+    router: true,
+   },
 };
 
 export default meta;
 type Story = StoryObj<typeof AppHeader>;
 
 export const Authenticated: Story = {
-  parameters: {
-    router: true,
-    auth: { user: mockUser } 
-  },
+  parameters: { auth: { user: mockUser } },
 };
 
 export const Unauthenticated: Story = {
-  parameters: {
-    router: true,
-    auth: { user: null }
-  },
+  parameters: { auth: { user: null } },
 };

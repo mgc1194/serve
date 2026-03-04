@@ -1,5 +1,3 @@
-// .storybook/main.ts — Storybook configuration for SERVE frontend.
-
 import type { StorybookConfig } from '@storybook/react-vite';
 import path from 'path';
 

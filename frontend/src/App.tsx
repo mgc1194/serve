@@ -4,12 +4,13 @@ import { CssBaseline, ThemeProvider } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
-import { ProtectedRoute } from '@serve/components/protected-route';
-import { PublicRoute } from '@serve/components/public-route';
-import { AuthProvider } from '@serve/context/auth-context';
-import { DashboardPage } from '@serve/pages/dashboard';
-import { LoginPage } from '@serve/pages/login';
-import { RegisterPage } from '@serve/pages/register';
+import { ProtectedRoute } from '@components/protected-route';
+import { PublicRoute } from '@components/public-route';
+import { AuthProvider } from '@context/auth-context';
+import { DashboardPage } from '@pages/dashboard';
+import { HouseholdsPage } from '@pages/households';
+import { LoginPage } from '@pages/login';
+import { RegisterPage } from '@pages/register';
 import theme from '@serve/theme';
 
 const queryClient = new QueryClient();
@@ -43,6 +44,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <HouseholdsPage />
                   </ProtectedRoute>
                 }
               />

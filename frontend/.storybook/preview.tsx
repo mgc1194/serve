@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Preview } from '@storybook/react';
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
@@ -23,25 +24,23 @@ const preview: Preview = {
         };
       } = parameters;
 
-      let content = <Story />;
+      // Auth always wraps every story so useAuth() never throws.
+      // When parameters.auth is absent, defaults to unauthenticated + not loading.
+      const {
+        user: initialUser = null,
+        isLoading = false,
+        sessionError = false,
+      } = auth ?? {};
 
-      if (auth) {
-        const {
-          user = null,
-          isLoading = false,
-          sessionError = false,
-        } = auth;
+      // useState here keeps setUser functional so components that call it
+      // (e.g. logout) actually trigger a re-render in Storybook.
+      const [user, setUser] = useState<User | null>(initialUser);
 
-        const mockSetUser = (_user: User | null) => {};
-
-        content = (
-          <AuthProvider
-            value={{ user, setUser: mockSetUser, isLoading, sessionError }}
-          >
-            {content}
-          </AuthProvider>
-        );
-      }
+      let content = (
+        <AuthProvider value={{ user, setUser, isLoading, sessionError }}>
+          <Story />
+        </AuthProvider>
+      );
 
       if (router) {
         content = <BrowserRouter>{content}</BrowserRouter>;
