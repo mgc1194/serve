@@ -1,5 +1,3 @@
-// pages/dashboard/index.tsx — Placeholder dashboard for authenticated users.
-
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Box, Card, CardActionArea, Typography } from '@mui/material';
 import type { ReactNode } from 'react';

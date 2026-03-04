@@ -1,101 +1,231 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// pages/households/index.test.tsx — Unit tests for the HouseholdsPage.
 
-import {
-  listHouseholds,
-  createHousehold,
-  renameHousehold,
-  deleteHousehold,
-  addMember,
-  ApiError,
-} from '@serve/services/households';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-function mockFetch(status: number, body?: unknown) {
-  return vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-    new Response(body != null ? JSON.stringify(body) : null, {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    }),
-  );
-}
+import { HouseholdsPage } from '@pages/households';
+import * as service from '@services/households';
+
+vi.mock('@serve/context/auth-context', () => ({
+  useAuth: () => ({
+    user: { id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User', username: 'test', households: [] },
+    setUser: vi.fn(),
+  }),
+}));
+vi.mock('@serve/layout/app-header', () => ({ AppHeader: () => <header /> }));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 const household = {
   id: 1,
   name: 'Test Household',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
-  members: [],
+  members: [
+    { id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User' },
+  ],
 };
 
-afterEach(() => vi.restoreAllMocks());
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <HouseholdsPage />
+    </MemoryRouter>,
+  );
+}
 
-describe('listHouseholds', () => {
-  it('returns list on 200', async () => {
-    mockFetch(200, [household]);
-    expect(await listHouseholds()).toEqual([household]);
-  });
-  it('throws ApiError on 401', async () => {
-    mockFetch(401, { detail: 'Unauthorized' });
-    await expect(listHouseholds()).rejects.toThrow(ApiError);
-  });
+beforeEach(() => {
+  vi.spyOn(service, 'listHouseholds').mockResolvedValue([household]);
+  mockNavigate.mockReset();
 });
 
-describe('createHousehold', () => {
-  it('sends POST and returns created household', async () => {
-    const spy = mockFetch(200, { ...household, name: 'New Household' });
-    const result = await createHousehold('New Household');
-    expect(result.name).toBe('New Household');
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('/households/'),
-      expect.objectContaining({ method: 'POST' }),
+// ── Loading and rendering ─────────────────────────────────────────────────────
+
+describe('HouseholdsPage', () => {
+  it('renders household name after loading', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Test Household')).toBeDefined());
+  });
+
+  it('shows empty state when no households', async () => {
+    vi.spyOn(service, 'listHouseholds').mockResolvedValue([]);
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/No households yet/)).toBeDefined(),
     );
   });
-  it('throws ApiError with server message on 400', async () => {
-    mockFetch(400, { detail: 'You already have a household named "New Household".' });
-    await expect(createHousehold('New Household')).rejects.toThrow(
-      'You already have a household named "New Household".',
+
+  it('renders member initials and email', async () => {
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    expect(screen.getByText('TU')).toBeDefined();
+    expect(screen.getByText('test@example.com')).toBeDefined();
+  });
+});
+
+// ── Create ────────────────────────────────────────────────────────────────────
+
+describe('CreateHouseholdForm', () => {
+  it('creates household and appends to list', async () => {
+    const newHousehold = { ...household, id: 2, name: 'New household', members: [] };
+    vi.spyOn(service, 'createHousehold').mockResolvedValue(newHousehold);
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+
+    await userEvent.type(screen.getByPlaceholderText('Household name'), 'New household');
+    await userEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() => expect(screen.getByText('New household')).toBeDefined());
+  });
+
+  it('shows error when create fails', async () => {
+    vi.spyOn(service, 'createHousehold').mockRejectedValue(
+      new service.ApiError(400, 'You already have a household named "Test".'),
+    );
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+
+    await userEvent.type(screen.getByPlaceholderText('Household name'), 'Test');
+    await userEvent.click(screen.getByRole('button', { name: /create/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText('You already have a household named "Test".')).toBeDefined(),
     );
   });
 });
 
-describe('renameHousehold', () => {
-  it('sends PATCH and returns updated household', async () => {
-    const spy = mockFetch(200, { ...household, name: 'Renamed' });
-    const result = await renameHousehold(1, 'Renamed');
-    expect(result.name).toBe('Renamed');
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('/households/1/'),
-      expect.objectContaining({ method: 'PATCH' }),
+// ── Rename ────────────────────────────────────────────────────────────────────
+
+describe('HouseholdCard rename', () => {
+  it('shows input with current name when edit is clicked', async () => {
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /rename/i }));
+    expect(screen.getByDisplayValue('Test Household')).toBeDefined();
+  });
+
+  it('updates household name on save', async () => {
+    vi.spyOn(service, 'renameHousehold').mockResolvedValue({ ...household, name: 'Renamed' });
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /rename/i }));
+    const input = screen.getByDisplayValue('Test Household');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Renamed');
+    await userEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(screen.getByText('Renamed')).toBeDefined());
+  });
+
+  it('cancels editing without saving', async () => {
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /rename/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.getByText('Test Household')).toBeDefined();
+    expect(screen.queryByDisplayValue('Test Household')).toBeNull();
+  });
+
+  it('shows rename error on failure', async () => {
+    vi.spyOn(service, 'renameHousehold').mockRejectedValue(
+      new service.ApiError(400, 'You already have a household named "Other".'),
+    );
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /rename/i }));
+    const input = screen.getByDisplayValue('Test Household');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Other');
+    await userEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() =>
+      expect(screen.getByText('You already have a household named "Other".')).toBeDefined(),
     );
   });
 });
 
-describe('deleteHousehold', () => {
-  it('returns undefined on 204', async () => {
-    mockFetch(204);
-    expect(await deleteHousehold(1)).toBeUndefined();
-  });
-  it('throws ApiError when accounts exist', async () => {
-    mockFetch(409, { detail: 'This household still has accounts.' });
-    await expect(deleteHousehold(1)).rejects.toThrow('This household still has accounts.');
-  });
-});
+// ── Add member ────────────────────────────────────────────────────────────────
 
-describe('addMember', () => {
-  it('sends POST to members endpoint', async () => {
-    const spy = mockFetch(200, {
+describe('HouseholdCard add member', () => {
+  it('adds member and updates the list', async () => {
+    vi.spyOn(service, 'addMember').mockResolvedValue({
       ...household,
-      members: [{ id: 2, email: 'new@example.com', first_name: 'New', last_name: 'User' }],
+      members: [
+        ...household.members,
+        { id: 2, email: 'new@example.com', first_name: 'New', last_name: 'Person' },
+      ],
     });
-    await addMember(1, 'new@example.com');
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('/households/1/members/'),
-      expect.objectContaining({ method: 'POST' }),
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.type(
+      screen.getByPlaceholderText('Add by email address'),
+      'new@example.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /add member/i }));
+    await waitFor(() => expect(screen.getByText('new@example.com')).toBeDefined());
+  });
+
+  it('shows error when member email is not found', async () => {
+    vi.spyOn(service, 'addMember').mockRejectedValue(
+      new service.ApiError(400, 'No account found with that email address.'),
+    );
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.type(
+      screen.getByPlaceholderText('Add by email address'),
+      'unknown@example.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /add member/i }));
+    await waitFor(() =>
+      expect(screen.getByText('No account found with that email address.')).toBeDefined(),
     );
   });
-  it('throws ApiError when email not found', async () => {
-    mockFetch(400, { detail: 'No account found with that email address.' });
-    await expect(addMember(1, 'unknown@example.com')).rejects.toThrow(
-      'No account found with that email address.',
+});
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+
+describe('HouseholdCard delete', () => {
+  it('shows confirm buttons after clicking delete', async () => {
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /delete household/i }));
+    expect(screen.getByRole('button', { name: /yes, delete/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /cancel/i })).toBeDefined();
+  });
+
+  it('cancels delete when cancel is clicked', async () => {
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /delete household/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(screen.queryByRole('button', { name: /yes, delete/i })).toBeNull();
+  });
+
+  it('removes card from list after successful delete', async () => {
+    vi.spyOn(service, 'deleteHousehold').mockResolvedValue(undefined);
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /delete household/i }));
+    await userEvent.click(screen.getByRole('button', { name: /yes, delete/i }));
+    await waitFor(() =>
+      expect(screen.queryByText('Test Household')).toBeNull(),
+    );
+  });
+
+  it('shows delete error when delete fails', async () => {
+    vi.spyOn(service, 'deleteHousehold').mockRejectedValue(
+      new service.ApiError(409, 'This household still has accounts.'),
+    );
+    renderPage();
+    await waitFor(() => screen.getByText('Test Household'));
+    await userEvent.click(screen.getByRole('button', { name: /delete household/i }));
+    await userEvent.click(screen.getByRole('button', { name: /yes, delete/i }));
+    await waitFor(() =>
+      expect(screen.getByText('This household still has accounts.')).toBeDefined(),
     );
   });
 });

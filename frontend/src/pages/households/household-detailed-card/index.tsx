@@ -1,4 +1,4 @@
-// pages/households/household-detail-card/index.tsx — Full management card for a single household.
+// pages/households/household-detailed-card/index.tsx — Full management card for a single household.
 //
 // Displays household name with inline rename, member list with add-by-email,
 // and delete with inline confirmation. All actions are self-contained.

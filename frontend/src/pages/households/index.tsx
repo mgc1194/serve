@@ -1,15 +1,13 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { Box, Container, Divider, Skeleton, Typography , Button } from '@mui/material';
+import { Box, Container, Divider, Skeleton, Typography, Button } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { CreateHouseholdForm } from '@pages/households/create-household-form';
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
 import { AppHeader } from '@serve/layout/app-header';
-import { listHouseholds } from '@serve/services/households';
 import type { HouseholdDetail } from '@serve/types/global';
-
-
+import { listHouseholds } from '@services/households';
 
 export function HouseholdsPage() {
   const navigate = useNavigate();
