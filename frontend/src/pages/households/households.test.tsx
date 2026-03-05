@@ -48,6 +48,12 @@ beforeEach(() => {
 // ── Loading and rendering ─────────────────────────────────────────────────────
 
 describe('HouseholdsPage', () => {
+  it('renders skeletons while loading', () => {
+    vi.spyOn(service, 'listHouseholds').mockReturnValue(new Promise(() => {}));
+    renderPage();
+    expect(document.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0);
+  });
+
   it('renders household name after loading', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('Test Household')).toBeDefined());
@@ -59,6 +65,24 @@ describe('HouseholdsPage', () => {
     await waitFor(() =>
       expect(screen.getByText(/No households yet/)).toBeDefined(),
     );
+  });
+
+  it('shows error alert when load fails', async () => {
+    vi.spyOn(service, 'listHouseholds').mockRejectedValue(new Error('Network error'));
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText(/could not load households/i)).toBeDefined(),
+    );
+  });
+
+  it('retries and recovers after error', async () => {
+    vi.spyOn(service, 'listHouseholds')
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce([household]);
+    renderPage();
+    await waitFor(() => screen.getByText(/could not load households/i));
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(screen.getByText('Test Household')).toBeDefined());
   });
 
   it('renders member initials and email', async () => {

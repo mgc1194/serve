@@ -1,8 +1,12 @@
+// services/households.test.ts — Unit tests for household service endpoints.
+//
+// apiFetch, CSRF, and ApiError behaviour is covered in api-client.test.ts.
+// These tests focus on the correct HTTP method, URL, and error propagation
+// for each household endpoint.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   addMember,
-  ApiError,
   createHousehold,
   deleteHousehold,
   listHouseholds,
@@ -36,7 +40,7 @@ describe('listHouseholds', () => {
 
   it('throws ApiError on 401', async () => {
     mockFetch(401, { detail: 'Unauthorized' });
-    await expect(listHouseholds()).rejects.toThrow(ApiError);
+    await expect(listHouseholds()).rejects.toMatchObject({ status: 401 });
   });
 });
 
@@ -53,9 +57,9 @@ describe('createHousehold', () => {
 
   it('throws ApiError with server message on 400', async () => {
     mockFetch(400, { detail: 'You already have a household named "New household".' });
-    await expect(createHousehold('New household')).rejects.toThrow(
-      'You already have a household named "New household".',
-    );
+    await expect(createHousehold('New household')).rejects.toMatchObject({
+      message: 'You already have a household named "New household".',
+    });
   });
 });
 
@@ -79,7 +83,9 @@ describe('deleteHousehold', () => {
 
   it('throws ApiError with 409 message when accounts exist', async () => {
     mockFetch(409, { detail: 'This household still has accounts.' });
-    await expect(deleteHousehold(1)).rejects.toThrow('This household still has accounts.');
+    await expect(deleteHousehold(1)).rejects.toMatchObject({
+      message: 'This household still has accounts.',
+    });
   });
 });
 
@@ -98,8 +104,8 @@ describe('addMember', () => {
 
   it('throws ApiError when email not found', async () => {
     mockFetch(400, { detail: 'No account found with that email address.' });
-    await expect(addMember(1, 'unknown@example.com')).rejects.toThrow(
-      'No account found with that email address.',
-    );
+    await expect(addMember(1, 'unknown@example.com')).rejects.toMatchObject({
+      message: 'No account found with that email address.',
+    });
   });
 });

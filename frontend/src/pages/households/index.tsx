@@ -1,5 +1,5 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { Box, Container, Divider, Skeleton, Typography, Button } from '@mui/material';
+import { Alert, Box, Button, Container, Divider, Skeleton, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -13,10 +13,13 @@ export function HouseholdsPage() {
   const navigate = useNavigate();
   const [households, setHouseholds] = useState<HouseholdDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
 
   useEffect(() => {
     listHouseholds()
       .then(setHouseholds)
+      .catch(() => setError('Could not load households. Please try again.'))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -30,6 +33,15 @@ export function HouseholdsPage() {
 
   function handleDeleted(id: number) {
     setHouseholds(prev => prev.filter(x => x.id !== id));
+  }
+
+  function handleRetry() {
+    setError(null);
+    setIsLoading(true);
+    listHouseholds()
+      .then(setHouseholds)
+      .catch(() => setError('Could not load households. Please try again.'))
+      .finally(() => setIsLoading(false));
   }
 
   return (
@@ -60,6 +72,17 @@ export function HouseholdsPage() {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {isLoading ? (
             [0, 1].map(i => <Skeleton key={i} variant="rounded" height={220} />)
+          ) : error ? (
+            <Alert
+              severity="error"
+              action={
+                <Button color="inherit" size="small" onClick={handleRetry}>
+                  Retry
+                </Button>
+              }
+            >
+              {error}
+            </Alert>
           ) : households.length === 0 ? (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
               No households yet — create one above.

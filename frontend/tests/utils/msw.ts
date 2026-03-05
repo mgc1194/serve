@@ -8,15 +8,6 @@ import { setupServer } from 'msw/node';
 
 const API = '/api/v1';
 
-export const mockUser = {
-  id: 1,
-  username: 'testuser',
-  email: 'test@example.com',
-  first_name: 'Test',
-  last_name: 'User',
-  households: [],
-};
-
 export const mockHousehold = {
   id: 1,
   name: 'Test Household',
@@ -27,6 +18,14 @@ export const mockHousehold = {
   ],
 };
 
+export const mockUser = {
+  id: 1,
+  username: 'testuser',
+  email: 'test@example.com',
+  first_name: 'Test',
+  last_name: 'User',
+  households: [mockHousehold],
+};
 export const handlers = [
   http.get(`${API}/auth/me`, () => {
     return HttpResponse.json(mockUser);
