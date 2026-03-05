@@ -4,7 +4,7 @@ api/v1/accounts.py — Account management endpoints.
 Endpoints:
     GET    /api/v1/accounts/         — list accounts across the user's households
     POST   /api/v1/accounts/         — create an account in a household
-    PATCH  /api/v1/accounts/{id}/    — update an account's name or type
+    PATCH  /api/v1/accounts/{id}/    — rename an account
     DELETE /api/v1/accounts/{id}/    — delete an account
 """
 
@@ -13,6 +13,7 @@ from enum import Enum
 from typing import List, Optional
 
 from django.db import IntegrityError
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.errors import HttpError
@@ -136,7 +137,10 @@ def create_account(request, payload: AccountCreateRequest):
         raise HttpError(400, 'Account name cannot be blank.')
 
     household = _get_household_for_member(payload.household_id, request.user)
-    account_type = get_object_or_404(AccountType, pk=payload.account_type_id)
+    account_type = get_object_or_404(
+        AccountType.objects.select_related('bank'),
+        pk=payload.account_type_id,
+    )
 
     try:
         account = Account.objects.create(
@@ -152,16 +156,18 @@ def create_account(request, payload: AccountCreateRequest):
         f'"{account.name}" (id={account.id}) in household "{household.name}" (id={household.id}).'
     )
 
-    account = Account.objects.select_related('account_type__bank', 'household').get(pk=account.pk)
+    # Attach the already-fetched relations so _serialize has no extra queries.
+    account.account_type = account_type
+    account.household = household
     return _serialize(account)
 
 
 @router.patch('/accounts/{account_id}/', response=AccountDetailSchema)
 def rename_account(request, account_id: int, payload: AccountRenameRequest):
-    """Renames an account.
+    """Renames an existing account.
 
-    The user must be a member of the household the account belongs to. Account
-    names must be unique within a household.
+    The user must be a member of the household the account belongs to.
+    The new name must be unique within that household.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -172,8 +178,8 @@ def rename_account(request, account_id: int, payload: AccountRenameRequest):
         The updated AccountDetailSchema.
 
     Raises:
-        HttpError: 400 if the name is blank.
-        HttpError: 400 if an account with that name already exists in the household.
+        HttpError: 400 if the new name is blank.
+        HttpError: 400 if another account in the household already has that name.
         HttpError: 403 if the user is not a member of the household.
         HttpError: 404 if the account does not exist.
     """
@@ -230,7 +236,7 @@ def delete_account(request, account_id: int):
 
     try:
         account.delete()
-    except Exception:
+    except ProtectedError:
         raise HttpError(409, 'This account has transactions and cannot be deleted.')
 
     logger.info(

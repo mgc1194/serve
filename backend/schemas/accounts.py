@@ -10,6 +10,7 @@ class AccountCreateRequest(Schema):
     account_type_id: int
     name: str
 
+
 class AccountDetailSchema(Schema):
     """
     Full account representation returned after create and on list.

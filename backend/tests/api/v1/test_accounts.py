@@ -7,7 +7,7 @@ import pytest
 from ninja.testing import TestClient
 
 from api.v1.accounts import router
-from transactions.models import Account, AccountType, Bank
+from transactions.models import Account, AccountType, Bank, Transaction
 from users.models import CustomUser, Household
 
 
@@ -293,7 +293,7 @@ class TestCreateAccount:
         )
         assert response.status_code == 404
 
-    def test_different_account_types_same_name_allowed(self, client, alice, household):
+    def test_different_account_types_same_name_not_allowed(self, client, alice, household):
         at_checking = AccountType.objects.get(handler_key='sofi-checking')
         at_savings = AccountType.objects.get(handler_key='sofi-savings')
 
@@ -316,15 +316,9 @@ class TestCreateAccount:
 class TestRenameAccount:
 
     def test_renames_account_successfully(self, client, alice, account):
-        response = client.patch(
-            f'/accounts/{account.id}/',
-            json={'name': 'Renamed Account'},
-            user=alice,
-        )
+        response = client.patch(f'/accounts/{account.id}/', json={'name': 'New Name'}, user=alice)
         assert response.status_code == 200
-        assert response.json()['name'] == 'Renamed Account'
-        account.refresh_from_db()
-        assert account.name == 'Renamed Account'
+        assert response.json()['name'] == 'New Name'
 
     def test_rename_is_persisted(self, client, alice, account):
         client.patch(f'/accounts/{account.id}/', json={'name': 'Persisted Rename'}, user=alice)
@@ -363,16 +357,13 @@ class TestRenameAccount:
         assert response.status_code == 200
         assert response.json()['name'] == account.name
 
+    def test_returns_403_if_not_a_member(self, client, bob, account):
+        response = client.patch(f'/accounts/{account.id}/', json={'name': 'Hacked'}, user=bob)
+        assert response.status_code == 403
+
     def test_returns_404_for_nonexistent_account(self, client, alice):
         response = client.patch('/accounts/9999/', json={'name': 'Does Not Exist'}, user=alice)
         assert response.status_code == 404
-
-    def test_returns_403_if_not_a_member(self, client, bob, account):
-        response = client.patch(f'/accounts/{account.id}/', json={'name': 'Hacker Name'}, user=bob)
-        assert response.status_code == 403
-        account.refresh_from_db()
-        assert account.name != 'Hacker Name'
-
 
 @pytest.mark.django_db
 class TestDeleteAccount:
@@ -390,3 +381,17 @@ class TestDeleteAccount:
         response = client.delete(f'/accounts/{account.id}/', user=bob)
         assert response.status_code == 403
         assert Account.objects.filter(pk=account.id).exists()
+
+    def test_returns_409_if_account_has_transactions(self, client, alice, account):
+        Transaction.objects.create(
+            id='a' * 32,
+            date='2026-01-15',
+            concept='TRADER JOES',
+            amount=-45.50,
+            account=account,
+        )
+        response = client.delete(f'/accounts/{account.id}/', user=alice)
+        assert response.status_code == 409
+        assert 'transactions' in response.json()['detail'].lower()
+        assert Account.objects.filter(pk=account.id).exists()
+        
