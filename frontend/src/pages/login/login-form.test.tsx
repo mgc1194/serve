@@ -4,14 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useAuth } from '@serve/context/auth-context';
 import { LoginForm } from '@serve/pages/login/login-form';
-import { login, ApiError } from '@serve/services/auth';
+import { login, ApiError } from '@services/auth';
 
 vi.mock('@serve/context/auth-context', () => ({
   useAuth: vi.fn(),
 }));
 
-vi.mock('@serve/services/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@serve/services/auth')>();
+vi.mock('@services/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@services/auth')>();
   return { ...actual, login: vi.fn() };
 });
 

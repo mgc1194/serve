@@ -5,6 +5,21 @@ export interface Household {
   name: string;
 }
 
+export interface HouseholdMember {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+}
+
+export interface HouseholdDetail {
+  id: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  members: HouseholdMember[];
+}
+
 export interface User {
   id: number;
   username: string;

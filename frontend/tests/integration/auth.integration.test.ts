@@ -7,11 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import { http, HttpResponse } from 'msw';
 
-import { ApiError, getMe, login, logout, register } from '@serve/services/auth';
+import { ApiError } from '@services/api-client';
+import { getMe, login, logout, register } from '@services/auth';
 
 import { mockUser, server } from '../utils/msw';
 
-// ── login ─────────────────────────────────────────────────────────────────────
 
 describe('login', () => {
   it('returns the user on success', async () => {
@@ -42,7 +42,6 @@ describe('login', () => {
   });
 });
 
-// ── register ──────────────────────────────────────────────────────────────────
 
 describe('register', () => {
   it('returns the created user on success', async () => {
@@ -67,7 +66,6 @@ describe('register', () => {
   });
 });
 
-// ── logout ────────────────────────────────────────────────────────────────────
 
 describe('logout', () => {
   it('resolves on 204', async () => {
@@ -85,7 +83,6 @@ describe('logout', () => {
   });
 });
 
-// ── getMe ─────────────────────────────────────────────────────────────────────
 
 describe('getMe', () => {
   it('returns the current user on success', async () => {
