@@ -326,6 +326,43 @@ class TestRenameAccount:
         account.refresh_from_db()
         assert account.name == 'Renamed Account'
 
+    def test_rename_is_persisted(self, client, alice, account):
+        client.patch(f'/accounts/{account.id}/', json={'name': 'Persisted Rename'}, user=alice)
+        account.refresh_from_db()
+        assert account.name == 'Persisted Rename'
+
+    def test_trims_whitespace_from_name(self, client, alice, account):
+        response = client.patch(f'/accounts/{account.id}/', json={'name': '  Trimmed  '}, user=alice)
+        assert response.status_code == 200
+        assert response.json()['name'] == 'Trimmed'
+
+    def test_returns_full_account_detail(self, client, alice, account):
+        response = client.patch(f'/accounts/{account.id}/', json={'name': 'Renamed'}, user=alice)
+        data = response.json()
+        assert set(data.keys()) == {
+            'id', 'name', 'handler_key',
+            'account_type_id', 'account_type',
+            'bank_id', 'bank_name',
+            'household_id', 'household_name',
+            'created_at', 'updated_at',
+        }
+
+    def test_returns_400_for_blank_name(self, client, alice, account):
+        response = client.patch(f'/accounts/{account.id}/', json={'name': '   '}, user=alice)
+        assert response.status_code == 400
+        assert 'blank' in response.json()['detail'].lower()
+
+    def test_returns_400_for_duplicate_name_in_household(self, client, alice, household, account, account_type):
+        Account.objects.create(name='Other Account', account_type=account_type, household=household)
+        response = client.patch(f'/accounts/{account.id}/', json={'name': 'Other Account'}, user=alice)
+        assert response.status_code == 400
+        assert 'already exists' in response.json()['detail'].lower()
+
+    def test_renaming_to_same_name_is_a_no_op(self, client, alice, account):
+        response = client.patch(f'/accounts/{account.id}/', json={'name': account.name}, user=alice)
+        assert response.status_code == 200
+        assert response.json()['name'] == account.name
+
     def test_returns_404_for_nonexistent_account(self, client, alice):
         response = client.patch('/accounts/9999/', json={'name': 'Does Not Exist'}, user=alice)
         assert response.status_code == 404
