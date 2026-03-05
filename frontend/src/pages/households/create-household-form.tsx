@@ -9,8 +9,8 @@ import {
 } from '@mui/material';
 import { useRef, useState } from 'react';
 
-import { createHousehold, ApiError } from '@serve/services/households';
 import type { HouseholdDetail } from '@serve/types/global';
+import { createHousehold, ApiError } from '@services/households';
 
 interface CreateHouseholdFormProps {
   onCreate: (household: HouseholdDetail) => void;
@@ -54,6 +54,7 @@ export function CreateHouseholdForm({ onCreate }: CreateHouseholdFormProps) {
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleCreate()}
           placeholder="Household name"
+          inputProps={{ 'aria-label': 'Household name' }}
           size="small"
           fullWidth
           disabled={isCreating}

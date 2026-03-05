@@ -22,8 +22,8 @@ import { useState } from 'react';
 
 import { AddHouseholdMemberForm } from '@pages/households/household-detailed-card/add-household-member-form';
 import { HouseholdMemberList } from '@pages/households/household-detailed-card/household-member-list';
-import { renameHousehold, deleteHousehold, ApiError } from '@serve/services/households';
 import type { HouseholdDetail } from '@serve/types/global';
+import { renameHousehold, deleteHousehold, ApiError } from '@services/households';
 
 interface HouseholdDetailCardProps {
   household: HouseholdDetail;
@@ -140,6 +140,7 @@ export function HouseholdDetailCard({ household, onUpdated, onDeleted }: Househo
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Typography
               variant="h6"
+              component="h4"
               sx={{ fontFamily: '"DM Serif Display", Georgia, serif', flex: 1 }}
             >
               {household.name}
@@ -162,7 +163,7 @@ export function HouseholdDetailCard({ household, onUpdated, onDeleted }: Househo
 
       {/* Members */}
       <Box sx={{ px: 3, py: 2 }}>
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5 }}>
+        <Typography variant="subtitle2" component="h5" color="text.secondary" sx={{ mb: 1.5 }}>
           Members
         </Typography>
         <Box sx={{ mb: 2 }}>

@@ -11,7 +11,7 @@ import {
   deleteHousehold,
   listHouseholds,
   renameHousehold,
-} from '@serve/services/households';
+} from '@services/households';
 
 function mockFetch(status: number, body?: unknown) {
   return vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(

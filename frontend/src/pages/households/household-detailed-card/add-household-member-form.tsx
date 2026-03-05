@@ -1,4 +1,4 @@
-// pages/households/add-household-member-form/index.tsx — Email input for adding a member.
+// pages/households/household-detailed-card/add-household-member-form.tsx — Email input for adding a member.
 
 import PersonAddOutlinedIcon from '@mui/icons-material/PersonAddOutlined';
 import {
@@ -55,6 +55,7 @@ export function AddHouseholdMemberForm({ householdId, onMemberAdded }: AddHouseh
           onChange={e => setEmail(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           placeholder="Add by email address"
+          inputProps={{ 'aria-label': 'Member email' }}
           size="small"
           fullWidth
           disabled={isAdding}

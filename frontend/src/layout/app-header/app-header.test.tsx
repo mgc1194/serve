@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useAuth } from '@serve/context/auth-context';
 import { AppHeader } from '@serve/layout/app-header';
-import { logout } from '@serve/services/auth';
+import { logout } from '@services/auth';
 
 vi.mock('@serve/context/auth-context', () => ({ useAuth: vi.fn() }));
-vi.mock('@serve/services/auth', () => ({ logout: vi.fn() }));
+vi.mock('@services/auth', () => ({ logout: vi.fn() }));
 
 
 const mockUseAuth = vi.mocked(useAuth);

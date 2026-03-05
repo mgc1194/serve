@@ -1,4 +1,4 @@
-// pages/households/household-member-list/index.tsx — Read-only list of household members.
+// pages/households/household-detailed-card/household-member-list.tsx — Read-only list of household members.
 
 import { Box, Typography } from '@mui/material';
 

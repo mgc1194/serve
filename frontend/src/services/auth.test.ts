@@ -5,7 +5,7 @@
 // for each auth endpoint.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getMe, login, logout, register } from '@serve/services/auth';
+import { getMe, login, logout, register } from '@services/auth';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);

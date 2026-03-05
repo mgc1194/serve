@@ -2,10 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
-import { renameHousehold, deleteHousehold, addMember, ApiError } from '@serve/services/households';
+import { renameHousehold, deleteHousehold, addMember, ApiError } from '@services/households';
 
-vi.mock('@serve/services/households', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@serve/services/households')>();
+vi.mock('@services/households', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@services/households')>();
   return { ...actual, renameHousehold: vi.fn(), deleteHousehold: vi.fn(), addMember: vi.fn() };
 });
 
