@@ -1,4 +1,4 @@
-// pages/accounts/filter-chip.tsx — Reusable chip for active/inactive filter state.
+// components/filter-chip/index.tsx — Reusable chip for active/inactive filter state.
 //
 // Renders a single selectable chip. When active it appears filled in the
 // primary colour; when inactive it renders outlined. An optional onClear

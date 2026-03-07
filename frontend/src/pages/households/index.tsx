@@ -16,9 +16,7 @@ import { listHouseholds } from '@services/households';
 
 export function HouseholdsPage() {
   const navigate = useNavigate();
-  const { user, setUser } = useAuth();
-  // user is guaranteed non-null here — this page is behind ProtectedRoute.
-  const authedUser = user!;
+  const { setUser } = useAuth();
   const [households, setHouseholds] = useState<HouseholdDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +52,12 @@ export function HouseholdsPage() {
   function handleCreated(h: HouseholdDetail) {
     setHouseholds(prev => [...prev, h]);
     setAccountCounts(prev => ({ ...prev, [h.id]: 0 }));
-    setUser({ ...authedUser, households: [...authedUser.households, { id: h.id, name: h.name }] });
+    setUser(prev => prev ? { ...prev, households: [...prev.households, { id: h.id, name: h.name }] } : prev);
   }
 
   function handleUpdated(h: HouseholdDetail) {
     setHouseholds(prev => prev.map(x => (x.id === h.id ? h : x)));
-    setUser({ ...authedUser, households: authedUser.households.map(x => x.id === h.id ? { id: h.id, name: h.name } : x) });
+    setUser(prev => prev ? { ...prev, households: prev.households.map(x => x.id === h.id ? { id: h.id, name: h.name } : x) } : prev);
   }
 
   function handleDeleted(id: number) {
@@ -69,7 +67,7 @@ export function HouseholdsPage() {
       delete next[id];
       return next;
     });
-    setUser({ ...authedUser, households: authedUser.households.filter(x => x.id !== id) });
+    setUser(prev => prev ? { ...prev, households: prev.households.filter(x => x.id !== id) } : prev);
   }
 
   function handleRetry() {

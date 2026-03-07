@@ -1,5 +1,5 @@
-// Thin wrapper around NavCard with household-specific title, description,
-// and icon. Navigates to /households on click.
+// Thin wrapper around NavCard with Account-specific title, description,
+// and icon. Navigates to /accounts on click.
 
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import { useNavigate } from 'react-router';

@@ -19,9 +19,23 @@ vi.mock('@layout/app-header', () => ({ AppHeader: () => <header /> }));
 
 // CreateAccountDialog is a multi-step dialog that fetches banks — stub it out
 // so HouseholdsPage tests stay focused on page-level concerns.
+// The stub exposes both onClose and onCreated so dialog lifecycle can be tested.
 vi.mock('@pages/accounts/create-account-dialog', () => ({
-  CreateAccountDialog: ({ open, onClose }: { open: boolean; onClose: () => void }) =>
-    open ? <div role="dialog"><button type="button" onClick={onClose}>Close dialog</button></div> : null,
+  CreateAccountDialog: ({
+    open,
+    onClose,
+    onCreated,
+  }: {
+    open: boolean;
+    onClose: () => void;
+    onCreated: () => void;
+  }) =>
+    open ? (
+      <div role="dialog">
+        <button type="button" onClick={onClose}>Close dialog</button>
+        <button type="button" onClick={onCreated}>Create account</button>
+      </div>
+    ) : null,
 }));
 
 const mockNavigate = vi.fn();
@@ -171,15 +185,10 @@ describe('HouseholdsPage add account dialog', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('1 account')).toBeDefined());
 
-    // Simulate a successful account creation by calling onCreated via the stub
-    // We reach into the stub by finding and clicking a "create" trigger — instead,
-    // we verify the count increments by directly triggering onCreated. Since the
-    // stub doesn't expose onCreated, we test this at the integration boundary:
-    // open the dialog and confirm the count is still correct beforehand.
     await userEvent.click(screen.getByText('Add account'));
-    expect(screen.getByRole('dialog')).toBeDefined();
-    // Count hasn't changed yet — dialog is open
-    expect(screen.getByText('1 account')).toBeDefined();
+    await userEvent.click(screen.getByRole('button', { name: /create account/i }));
+
+    await waitFor(() => expect(screen.getByText('2 accounts')).toBeDefined());
   });
 });
 

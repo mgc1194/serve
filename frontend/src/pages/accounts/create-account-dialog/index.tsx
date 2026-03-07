@@ -83,6 +83,7 @@ export function CreateAccountDialog({
         setSelectedHousehold(preselectedHousehold);
         setStep('bank');
       } else {
+        setSelectedHousehold(null);
         setStep('household');
       }
       setSelectedBank(null);

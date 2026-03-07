@@ -32,15 +32,6 @@ export const mockUser = {
   households: [mockHousehold],
 };
 
-export const mockBank = {
-  id: 1,
-  name: 'SoFi',
-  account_types: [
-    { id: 1, name: 'SoFi Savings', handler_key: 'sofi-savings' },
-    { id: 2, name: 'SoFi Checking', handler_key: 'sofi-checking' },
-  ],
-};
-
 export const mockAccount = {
   id: 1,
   name: 'My Savings',
