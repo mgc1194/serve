@@ -1,8 +1,11 @@
 // pages/households/household-detailed-card/index.tsx — Full management card for a single household.
 //
 // Displays household name with inline rename, member list with add-by-email,
+// account count chip (links to /accounts?household_id=N), add-account shortcut,
 // and delete with inline confirmation. All actions are self-contained.
 
+import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
+import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import EditIcon from '@mui/icons-material/Edit';
@@ -10,6 +13,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Divider,
   IconButton,
@@ -19,6 +23,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import { AddHouseholdMemberForm } from '@pages/households/household-detailed-card/add-household-member-form';
 import { HouseholdMemberList } from '@pages/households/household-detailed-card/household-member-list';
@@ -29,9 +34,20 @@ interface HouseholdDetailCardProps {
   household: HouseholdDetail;
   onUpdated: (household: HouseholdDetail) => void;
   onDeleted: (id: number) => void;
+  /** Count of accounts in this household, fetched by the parent. */
+  accountCount: number | null;
+  onAddAccount?: (household: HouseholdDetail) => void;
 }
 
-export function HouseholdDetailCard({ household, onUpdated, onDeleted }: HouseholdDetailCardProps) {
+export function HouseholdDetailCard({
+  household,
+  onUpdated,
+  onDeleted,
+  accountCount,
+  onAddAccount,
+}: HouseholdDetailCardProps) {
+  const navigate = useNavigate();
+
   // Rename
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(household.name);
@@ -84,6 +100,10 @@ export function HouseholdDetailCard({ household, onUpdated, onDeleted }: Househo
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  function handleAccountChipClick() {
+    navigate(`/accounts?household_id=${household.id}`);
   }
 
   return (
@@ -157,6 +177,45 @@ export function HouseholdDetailCard({ household, onUpdated, onDeleted }: Househo
             </Tooltip>
           </Box>
         )}
+
+        {/* Account count chip + add account */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1.5 }}>
+          <Tooltip title="View accounts for this household">
+            <Chip
+              icon={<AccountBalanceOutlinedIcon sx={{ fontSize: '14px !important' }} />}
+              label={
+                accountCount === null
+                  ? 'Accounts'
+                  : `${accountCount} ${accountCount === 1 ? 'account' : 'accounts'}`
+              }
+              size="small"
+              onClick={handleAccountChipClick}
+              sx={{
+                bgcolor: 'secondary.light',
+                color: 'secondary.dark',
+                fontWeight: 500,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'secondary.main' },
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="Add an account to this household">
+            <Chip
+              icon={<AddIcon sx={{ fontSize: '14px !important' }} />}
+              label="Add account"
+              size="small"
+              onClick={() => onAddAccount?.(household)}
+              sx={{
+                bgcolor: 'transparent',
+                border: 1,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                cursor: 'pointer',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
+            />
+          </Tooltip>
+        </Box>
       </Box>
 
       <Divider />
@@ -191,7 +250,8 @@ export function HouseholdDetailCard({ household, onUpdated, onDeleted }: Househo
               color="error"
               onClick={handleDelete}
               disabled={isDeleting}
-              startIcon={isDeleting ? <CircularProgress size={14} color="inherit" /> : undefined}
+              startIcon={isDeleting ? <CircularProgress size={14} color="inherit" /> : null}
+              aria-label="Yes, delete"
             >
               Yes, delete
             </Button>
@@ -200,14 +260,17 @@ export function HouseholdDetailCard({ household, onUpdated, onDeleted }: Househo
             </Button>
           </>
         ) : (
-          <Button
-            size="small"
-            color="error"
-            onClick={() => setConfirmDelete(true)}
-            sx={{ ml: 'auto' }}
-          >
-            Delete household
-          </Button>
+          <>
+            <Box sx={{ flex: 1 }} />
+            <Button
+              size="small"
+              color="error"
+              onClick={() => setConfirmDelete(true)}
+              aria-label="Delete household"
+            >
+              Delete household
+            </Button>
+          </>
         )}
       </Box>
     </Paper>

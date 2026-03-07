@@ -5,10 +5,14 @@ import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
 const meta: Meta<typeof HouseholdDetailCard> = {
   title: 'Households/HouseholdDetailCard',
   component: HouseholdDetailCard,
-  parameters: { layout: 'padded' },
+  parameters: {
+    layout: 'padded',
+    router: true,
+  },
   args: {
     onUpdated: () => {},
     onDeleted: () => {},
+    onAddAccount: () => {},
   },
 };
 
@@ -31,6 +35,7 @@ export const WithMembers: Story = {
         { id: 2, email: 'bob@example.com', first_name: 'Bob', last_name: 'Smith' },
       ],
     },
+    accountCount: 1,
   },
 };
 
@@ -40,5 +45,6 @@ export const NoMembers: Story = {
       ...baseHousehold,
       members: [],
     },
+    accountCount: null,
   },
 };

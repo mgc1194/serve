@@ -3,8 +3,8 @@
 import { Box, Link, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router';
 
-import { BrandPanel } from '@serve/components/brand-panel';
-import { LoginForm } from '@serve/pages/login/login-form';
+import { BrandPanel } from '@components/brand-panel';
+import { LoginForm } from '@pages/login/login-form';
 
 export function LoginPage() {
   return (

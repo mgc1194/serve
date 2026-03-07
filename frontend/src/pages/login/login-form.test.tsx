@@ -2,11 +2,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useAuth } from '@serve/context/auth-context';
-import { LoginForm } from '@serve/pages/login/login-form';
+import { useAuth } from '@context/auth-context';
+import { LoginForm } from '@pages/login/login-form';
 import { login, ApiError } from '@services/auth';
 
-vi.mock('@serve/context/auth-context', () => ({
+vi.mock('@context/auth-context', () => ({
   useAuth: vi.fn(),
 }));
 

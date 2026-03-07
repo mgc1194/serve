@@ -2,11 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
-import { useAuth } from '@serve/context/auth-context';
-import { AppHeader } from '@serve/layout/app-header';
+import { useAuth } from '@context/auth-context';
+import { AppHeader } from '@layout/app-header';
 import { logout } from '@services/auth';
 
-vi.mock('@serve/context/auth-context', () => ({ useAuth: vi.fn() }));
+vi.mock('@context/auth-context', () => ({ useAuth: vi.fn() }));
 vi.mock('@services/auth', () => ({ logout: vi.fn() }));
 
 

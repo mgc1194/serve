@@ -31,6 +31,30 @@ export const mockUser = {
   last_name: 'User',
   households: [mockHousehold],
 };
+
+export const mockBank = {
+  id: 1,
+  name: 'SoFi',
+  account_types: [
+    { id: 1, name: 'SoFi Savings', handler_key: 'sofi-savings' },
+    { id: 2, name: 'SoFi Checking', handler_key: 'sofi-checking' },
+  ],
+};
+
+export const mockAccount = {
+  id: 1,
+  name: 'My Savings',
+  handler_key: 'sofi-savings',
+  account_type_id: 1,
+  account_type: 'SoFi Savings',
+  bank_id: 1,
+  bank_name: 'SoFi',
+  household_id: 1,
+  household_name: 'Test Household',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+};
+
 export const handlers = [
   http.get(`${API}/auth/me`, () => {
     return HttpResponse.json(mockUser);
@@ -75,6 +99,25 @@ export const handlers = [
       members: [...mockDetailedHousehold.members, newMember],
     });
   }),
+
+  http.get(`${API}/accounts/`, () => HttpResponse.json([mockAccount])),
+
+  http.post(`${API}/accounts/`, async ({ request }) => {
+    const body = await request.json() as { household_id: number; account_type_id: number; name: string };
+    const name = body.name.trim();
+    const normalized = name.charAt(0).toUpperCase() + name.slice(1);
+    return HttpResponse.json({ ...mockAccount, id: 99, name: normalized });
+  }),
+
+  http.patch(`${API}/accounts/:id/`, async ({ params, request }) => {
+    const body = await request.json() as { name: string };
+    const name = body.name.trim();
+    const normalized = name.charAt(0).toUpperCase() + name.slice(1);
+    return HttpResponse.json({ ...mockAccount, id: Number(params.id), name: normalized });
+  }),
+
+  http.delete(`${API}/accounts/:id/`, () => new HttpResponse(null, { status: 204 })),
+
 ];
 
 export const server = setupServer(...handlers);

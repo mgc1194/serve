@@ -4,7 +4,7 @@
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import { useNavigate } from 'react-router';
 
-import { NavCard } from '@serve/components/nav-card';
+import { NavCard } from '@components/nav-card';
 
 export function HouseholdsNavCard() {
   const navigate = useNavigate();
