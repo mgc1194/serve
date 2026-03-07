@@ -28,19 +28,26 @@ export function AccountsPage() {
   const [createOpen, setCreateOpen] = useState(false);
 
   // Filter stored in URL so it survives reload and is shareable
-  const householdIdFilter = searchParams.get('household_id')
-    ? Number(searchParams.get('household_id'))
-    : undefined;
+  const householdIdParam = searchParams.get('household_id');
+  const householdIdFilter = 
+    householdIdParam !== null
+      ? (() => {
+        const parsed = Number(householdIdParam);
+        return isNaN(parsed) ? undefined : parsed;
+      })()
+      : undefined;
 
   const households: Household[] = useMemo(() => user?.households ?? [], [user]);
 
-  const preselectedHousehold = householdIdFilter
-    ? (households.find(h => h.id === householdIdFilter) ?? null)
-    : null;
+  const preselectedHousehold = 
+    householdIdFilter !== undefined
+      ? (households.find(h => h.id === householdIdFilter) ?? null)
+      : null;
 
-  const activeHousehold = householdIdFilter
-    ? households.find(h => h.id === householdIdFilter)
-    : undefined;
+  const activeHousehold =
+    householdIdFilter !== undefined
+      ? households.find(h => h.id === householdIdFilter)
+      : undefined;
 
   function load() {
     setIsLoading(true);
