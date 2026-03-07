@@ -1,47 +1,109 @@
+// pages/households/index.tsx — Households management page.
+
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Alert, Box, Button, Container, Divider, Skeleton, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { useAuth } from '@context/auth-context';
+import { AppHeader } from '@layout/app-header';
+import { CreateAccountDialog } from '@pages/accounts/create-account-dialog';
 import { CreateHouseholdForm } from '@pages/households/create-household-form';
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
-import { AppHeader } from '@serve/layout/app-header';
-import type { HouseholdDetail } from '@serve/types/global';
+import type { Household, HouseholdDetail } from '@serve/types/global';
+import { listAccounts } from '@services/accounts';
 import { listHouseholds } from '@services/households';
 
 export function HouseholdsPage() {
   const navigate = useNavigate();
+  const { setUser } = useAuth();
   const [households, setHouseholds] = useState<HouseholdDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Account counts keyed by household id — fetched once, incremented locally.
+  const [accountCounts, setAccountCounts] = useState<Record<number, number>>({});
+
+  // Create account dialog — opened from a card's "Add account" chip
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const [addAccountHousehold, setAddAccountHousehold] = useState<Household | null>(null);
 
   useEffect(() => {
     listHouseholds()
-      .then(setHouseholds)
+      .then(loaded => {
+        setHouseholds(loaded);
+        // Fetch account counts separately — failure is non-fatal, cards just
+        // show the fallback "Accounts" label rather than blocking the whole page.
+        listAccounts()
+          .then(accounts => {
+            const counts: Record<number, number> = {};
+            for (const h of loaded) counts[h.id] = 0;
+            for (const a of accounts) {
+              if (counts[a.household_id] !== undefined) counts[a.household_id]++;
+            }
+            setAccountCounts(counts);
+          })
+          .catch(() => { /* leave accountCounts empty — cards render with null */ });
+      })
       .catch(() => setError('Could not load households. Please try again.'))
       .finally(() => setIsLoading(false));
   }, []);
 
   function handleCreated(h: HouseholdDetail) {
     setHouseholds(prev => [...prev, h]);
+    setAccountCounts(prev => ({ ...prev, [h.id]: 0 }));
+    setUser(prev => prev ? { ...prev, households: [...prev.households, { id: h.id, name: h.name }] } : prev);
   }
 
   function handleUpdated(h: HouseholdDetail) {
     setHouseholds(prev => prev.map(x => (x.id === h.id ? h : x)));
+    setUser(prev => prev ? { ...prev, households: prev.households.map(x => x.id === h.id ? { id: h.id, name: h.name } : x) } : prev);
   }
 
   function handleDeleted(id: number) {
     setHouseholds(prev => prev.filter(x => x.id !== id));
+    setAccountCounts(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setUser(prev => prev ? { ...prev, households: prev.households.filter(x => x.id !== id) } : prev);
   }
 
   function handleRetry() {
     setError(null);
     setIsLoading(true);
     listHouseholds()
-      .then(setHouseholds)
+      .then(loaded => {
+        setHouseholds(loaded);
+        listAccounts()
+          .then(accounts => {
+            const counts: Record<number, number> = {};
+            for (const h of loaded) counts[h.id] = 0;
+            for (const a of accounts) {
+              if (counts[a.household_id] !== undefined) counts[a.household_id]++;
+            }
+            setAccountCounts(counts);
+          })
+          .catch(() => { /* non-fatal */ });
+      })
       .catch(() => setError('Could not load households. Please try again.'))
       .finally(() => setIsLoading(false));
+  }
+
+  function handleAddAccount(household: HouseholdDetail) {
+    setAddAccountHousehold({ id: household.id, name: household.name });
+    setAddAccountOpen(true);
+  }
+
+  function handleAccountCreated() {
+    if (addAccountHousehold) {
+      setAccountCounts(prev => ({
+        ...prev,
+        [addAccountHousehold.id]: (prev[addAccountHousehold.id] ?? 0) + 1,
+      }));
+    }
+    setAddAccountOpen(false);
   }
 
   return (
@@ -92,14 +154,23 @@ export function HouseholdsPage() {
               <HouseholdDetailCard
                 key={h.id}
                 household={h}
+                accountCount={accountCounts[h.id] ?? null}
                 onUpdated={handleUpdated}
                 onDeleted={handleDeleted}
+                onAddAccount={handleAddAccount}
               />
             ))
           )}
         </Box>
-
       </Container>
+
+      <CreateAccountDialog
+        open={addAccountOpen}
+        onClose={() => setAddAccountOpen(false)}
+        onCreated={handleAccountCreated}
+        preselectedHousehold={addAccountHousehold}
+        households={[]}
+      />
     </Box>
   );
 }

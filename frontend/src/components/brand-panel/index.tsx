@@ -5,7 +5,7 @@
 import { Box, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 
-import { BrandFooter } from '@serve/components/brand-footer';
+import { BrandFooter } from '@components/brand-footer';
 
 interface BrandPanelProps {
   tagline: ReactNode;

@@ -3,8 +3,8 @@
 import { Box, Link, Typography } from '@mui/material';
 import { Link as RouterLink } from 'react-router';
 
-import { BrandPanel } from '@serve/components/brand-panel';
-import { RegisterForm } from '@serve/pages/register/register-form';
+import { BrandPanel } from '@components/brand-panel';
+import { RegisterForm } from '@pages/register/register-form';
 
 export function RegisterPage() {
   return (

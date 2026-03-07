@@ -9,6 +9,12 @@ vi.mock('@services/households', async (importOriginal) => {
   return { ...actual, renameHousehold: vi.fn(), deleteHousehold: vi.fn(), addMember: vi.fn() };
 });
 
+const mockNavigate = vi.fn();
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
 const mockRenameHousehold = vi.mocked(renameHousehold);
 const mockDeleteHousehold = vi.mocked(deleteHousehold);
 const mockAddMember = vi.mocked(addMember);
@@ -21,45 +27,94 @@ const household = {
   members: [{ id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User' }],
 };
 
-function setup(overrides: Partial<typeof household> = {}) {
+function setup(
+  overrides: Partial<typeof household> = {},
+  accountCount: number | null = 3,
+) {
   const onUpdated = vi.fn();
   const onDeleted = vi.fn();
+  const onAddAccount = vi.fn();
   render(
     <HouseholdDetailCard
       household={{ ...household, ...overrides }}
       onUpdated={onUpdated}
       onDeleted={onDeleted}
+      accountCount={accountCount}
+      onAddAccount={onAddAccount}
     />,
   );
-  return { onUpdated, onDeleted };
+  return { onUpdated, onDeleted, onAddAccount };
 }
 
 beforeEach(() => { vi.clearAllMocks(); });
 
-// Rendering
 describe('HouseholdDetailCard rendering', () => {
   it('renders household name', () => {
     setup();
     expect(screen.getByText('Test Household')).toBeDefined();
   });
+
   it('renders member initials and email', () => {
     setup();
     expect(screen.getByText('TU')).toBeDefined();
     expect(screen.getByText('test@example.com')).toBeDefined();
   });
+
   it('shows empty members message when no members', () => {
     setup({ members: [] });
     expect(screen.getByText('No members yet.')).toBeDefined();
   });
 });
 
-// Rename
+
+describe('HouseholdDetailCard account count chip', () => {
+  it('shows plural label when count is greater than one', () => {
+    setup({}, 3);
+    expect(screen.getByText('3 accounts')).toBeDefined();
+  });
+
+  it('shows singular label when count is one', () => {
+    setup({}, 1);
+    expect(screen.getByText('1 account')).toBeDefined();
+  });
+
+  it('shows zero accounts label when count is zero', () => {
+    setup({}, 0);
+    expect(screen.getByText('0 accounts')).toBeDefined();
+  });
+
+  it('shows fallback label when count is null', () => {
+    setup({}, null);
+    expect(screen.getByText('Accounts')).toBeDefined();
+  });
+
+  it('navigates to the filtered accounts page when clicked', () => {
+    setup();
+    fireEvent.click(screen.getByText('3 accounts'));
+    expect(mockNavigate).toHaveBeenCalledWith('/accounts?household_id=1');
+  });
+});
+
+describe('HouseholdDetailCard add account chip', () => {
+  it('renders the Add account chip', () => {
+    setup();
+    expect(screen.getByText('Add account')).toBeDefined();
+  });
+
+  it('calls onAddAccount with the household when clicked', () => {
+    const { onAddAccount } = setup();
+    fireEvent.click(screen.getByText('Add account'));
+    expect(onAddAccount).toHaveBeenCalledWith({ ...household });
+  });
+});
+
 describe('HouseholdDetailCard rename', () => {
   it('shows input with current name when rename is clicked', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /rename/i }));
     expect(screen.getByDisplayValue('Test Household')).toBeDefined();
   });
+
   it('calls onUpdated with new name on save', async () => {
     mockRenameHousehold.mockResolvedValueOnce({ ...household, name: 'Renamed' });
     const { onUpdated } = setup();
@@ -68,6 +123,7 @@ describe('HouseholdDetailCard rename', () => {
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith({ ...household, name: 'Renamed' }));
   });
+
   it('saves on Enter key', async () => {
     mockRenameHousehold.mockResolvedValueOnce({ ...household, name: 'Renamed' });
     const { onUpdated } = setup();
@@ -76,6 +132,7 @@ describe('HouseholdDetailCard rename', () => {
     fireEvent.keyDown(screen.getByDisplayValue('Renamed'), { key: 'Enter' });
     await waitFor(() => expect(onUpdated).toHaveBeenCalled());
   });
+
   it('cancels editing on Escape key', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /rename/i }));
@@ -83,12 +140,14 @@ describe('HouseholdDetailCard rename', () => {
     expect(screen.queryByDisplayValue('Test Household')).toBeNull();
     expect(screen.getByText('Test Household')).toBeDefined();
   });
+
   it('cancels editing on cancel button click', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /rename/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(screen.queryByDisplayValue('Test Household')).toBeNull();
   });
+
   it('shows rename error on failure', async () => {
     mockRenameHousehold.mockRejectedValueOnce(new ApiError(400, 'Name already taken.'));
     setup();
@@ -99,7 +158,6 @@ describe('HouseholdDetailCard rename', () => {
   });
 });
 
-// Add member
 describe('HouseholdDetailCard add member', () => {
   it('calls onUpdated with new member on success', async () => {
     const updated = { ...household, members: [...household.members, { id: 2, email: 'new@example.com', first_name: 'New', last_name: 'Person' }] };
@@ -109,6 +167,7 @@ describe('HouseholdDetailCard add member', () => {
     fireEvent.click(screen.getByRole('button', { name: /add member/i }));
     await waitFor(() => expect(onUpdated).toHaveBeenCalledWith(updated));
   });
+
   it('clears email input after successful add', async () => {
     mockAddMember.mockResolvedValueOnce({ ...household, members: [...household.members, { id: 2, email: 'new@example.com', first_name: 'New', last_name: 'Person' }] });
     setup();
@@ -116,6 +175,7 @@ describe('HouseholdDetailCard add member', () => {
     fireEvent.click(screen.getByRole('button', { name: /add member/i }));
     await waitFor(() => expect((screen.getByPlaceholderText('Add by email address') as HTMLInputElement).value).toBe(''));
   });
+
   it('shows error when email not found', async () => {
     mockAddMember.mockRejectedValueOnce(new ApiError(400, 'No account found with that email address.'));
     setup();
@@ -125,7 +185,6 @@ describe('HouseholdDetailCard add member', () => {
   });
 });
 
-// Delete
 describe('HouseholdDetailCard delete', () => {
   it('shows confirm buttons after clicking delete', () => {
     setup();
@@ -133,12 +192,14 @@ describe('HouseholdDetailCard delete', () => {
     expect(screen.getByRole('button', { name: /yes, delete/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /cancel/i })).toBeDefined();
   });
+
   it('cancels delete on cancel click', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /delete household/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(screen.queryByRole('button', { name: /yes, delete/i })).toBeNull();
   });
+
   it('calls onDeleted with household id on success', async () => {
     mockDeleteHousehold.mockResolvedValueOnce(undefined);
     const { onDeleted } = setup();
@@ -146,6 +207,7 @@ describe('HouseholdDetailCard delete', () => {
     fireEvent.click(screen.getByRole('button', { name: /yes, delete/i }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(1));
   });
+
   it('shows delete error on failure', async () => {
     mockDeleteHousehold.mockRejectedValueOnce(new ApiError(409, 'This household still has accounts.'));
     setup();

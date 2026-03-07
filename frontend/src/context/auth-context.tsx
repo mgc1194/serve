@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { Dispatch, ReactNode, SetStateAction } from 'react';
 
 import type { User } from '@serve/types/global';
 import { ApiError, getMe } from '@services/auth';
 
 interface AuthContextValue {
   user: User | null;
-  setUser: (user: User | null) => void;
+  setUser: Dispatch<SetStateAction<User | null>>;
   isLoading: boolean;
   sessionError: boolean;
 }

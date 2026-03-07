@@ -1,12 +1,11 @@
 // pages/dashboard/index.tsx — Dashboard with navigation cards to app sections.
 
-import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import { Box, Container, Typography } from '@mui/material';
 
+import { useAuth } from '@context/auth-context';
+import { AppHeader } from '@layout/app-header';
+import { AccountsNavCard } from '@pages/dashboard/accounts-nav-card';
 import { HouseholdsNavCard } from '@pages/dashboard/households-nav-card';
-import { NavCard } from '@serve/components/nav-card';
-import { useAuth } from '@serve/context/auth-context';
-import { AppHeader } from '@serve/layout/app-header';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -25,13 +24,7 @@ export function DashboardPage() {
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <HouseholdsNavCard />
-          <NavCard
-            icon={<AccountBalanceOutlinedIcon />}
-            title="Accounts"
-            description="View and manage your financial accounts."
-            onClick={() => {}}
-            disabled
-          />
+          <AccountsNavCard />
         </Box>
       </Container>
     </Box>

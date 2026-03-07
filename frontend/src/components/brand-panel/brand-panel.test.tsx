@@ -2,7 +2,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { BrandPanel } from '@serve/components/brand-panel';
+import { BrandPanel } from '@components/brand-panel';
 import theme from '@serve/theme';
 
 function renderWithTheme(ui: React.ReactElement) {

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { BrandPanel } from '@serve/components/brand-panel';
+import { BrandPanel } from '@components/brand-panel';
 
 const meta: Meta<typeof BrandPanel> = {
   title: 'Components/BrandPanel',

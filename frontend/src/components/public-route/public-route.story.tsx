@@ -1,7 +1,7 @@
 import { Typography } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { PublicRoute } from '@serve/components/public-route';
+import { PublicRoute } from '@components/public-route';
 
 const meta: Meta<typeof PublicRoute> = {
   title: 'Components/PublicRoute',

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { CreateHouseholdForm } from '@serve/pages/households/create-household-form';
+import { CreateHouseholdForm } from '@pages/households/create-household-form';
 import { createHousehold, ApiError } from '@services/households';
 
 vi.mock('@services/households', async (importOriginal) => {

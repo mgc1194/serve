@@ -7,6 +7,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { ProtectedRoute } from '@components/protected-route';
 import { PublicRoute } from '@components/public-route';
 import { AuthProvider } from '@context/auth-context';
+import { AccountsPage } from '@pages/accounts';
 import { DashboardPage } from '@pages/dashboard';
 import { HouseholdsPage } from '@pages/households';
 import { LoginPage } from '@pages/login';
@@ -52,6 +53,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <HouseholdsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/accounts"
+                element={
+                  <ProtectedRoute>
+                    <AccountsPage />
                   </ProtectedRoute>
                 }
               />

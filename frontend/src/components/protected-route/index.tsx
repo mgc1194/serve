@@ -3,7 +3,7 @@ import { Alert, Box, Button } from '@mui/material';
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router';
 
-import { useAuth } from '@serve/context/auth-context';
+import { useAuth } from '@context/auth-context';
 
 interface ProtectedRouteProps {
   children: ReactNode;
