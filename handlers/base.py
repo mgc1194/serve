@@ -66,7 +66,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import pandas as pd
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -83,11 +82,11 @@ class BaseHandler:
     encoding: str = 'latin1'  # CSV file encoding
     negate_amount: bool = False  # Set True if the bank inverts sign (e.g. Amex, Discover)
     csv_names: list = None  # Column names to assign (for headerless CSVs e.g. Wells Fargo)
-    csv_header: Optional[int] = 0  # Row number of header; None for headerless CSVs
+    csv_header: int | None = 0  # Row number of header; None for headerless CSVs
 
     # ── Public entry point ─────────────────────────────────────────────────
 
-    def process(self, file_path: str) -> Optional[pd.DataFrame]:
+    def process(self, file_path: str) -> pd.DataFrame | None:
         """
         Parse, clean, and return a normalized DataFrame for this account.
         Returns None and logs the error if anything goes wrong.

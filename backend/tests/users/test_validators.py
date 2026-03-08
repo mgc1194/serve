@@ -1,14 +1,13 @@
 import pytest
-
 from django.core.exceptions import ValidationError
 
 from users.validators import (
-    validate_email_format,
-    MinimumLengthValidator,
-    UppercaseLetterValidator,
     LowercaseLetterValidator,
+    MinimumLengthValidator,
     NumericCharacterValidator,
     SpecialCharacterValidator,
+    UppercaseLetterValidator,
+    validate_email_format,
 )
 
 

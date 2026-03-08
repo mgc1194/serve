@@ -7,11 +7,10 @@ helper used directly in the API layer.
 """
 
 import re
-from typing import Optional
 
 from django.core.exceptions import ValidationError
-from django.utils.translation import gettext as _, ngettext
-
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 
@@ -19,7 +18,7 @@ from django.utils.translation import gettext as _, ngettext
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
-def validate_email_format(email: str) -> Optional[str]:
+def validate_email_format(email: str) -> str | None:
     """Validates that an email address has a recognisable format.
 
     Checks for the presence of an @ symbol and at least one dot in the
@@ -80,7 +79,7 @@ class MinimumLengthValidator:
 class UppercaseLetterValidator:
     """Validates that a password contains at least one uppercase letter."""
 
-    def validate(self, password: str, _user=None) -> None:  # noqa: PLR6301
+    def validate(self, password: str, _user=None) -> None:
         """Raises ValidationError if the password has no uppercase letter.
 
         Args:
@@ -110,7 +109,7 @@ class UppercaseLetterValidator:
 class LowercaseLetterValidator:
     """Validates that a password contains at least one lowercase letter."""
 
-    def validate(self, password: str, _user=None) -> None:  # noqa: PLR6301
+    def validate(self, password: str, _user=None) -> None:
         """Raises ValidationError if the password has no lowercase letter.
 
         Args:
@@ -140,7 +139,7 @@ class LowercaseLetterValidator:
 class NumericCharacterValidator:
     """Validates that a password contains at least one numeric digit."""
 
-    def validate(self, password: str, _user=None) -> None:  # noqa: PLR6301
+    def validate(self, password: str, _user=None) -> None:
         """Raises ValidationError if the password contains no digits.
 
         Args:

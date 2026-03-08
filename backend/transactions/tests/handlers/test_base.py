@@ -2,12 +2,12 @@
 tests/unit/handlers/test_base.py — Unit tests for BaseHandler.
 """
 
-import pytest
-import pandas as pd
 from io import StringIO
 
-from transactions.handlers.base import BaseHandler
+import pandas as pd
+import pytest
 
+from transactions.handlers.base import BaseHandler
 
 # ── Minimal concrete handlers for testing ─────────────────────────────────────
 

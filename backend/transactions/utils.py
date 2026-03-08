@@ -19,12 +19,12 @@ the model layer.
 """
 
 import logging
-from typing import Optional
 
 import pandas as pd
 
-from .models import Account, Transaction
 from transactions.constants import HandlerKeys
+
+from .models import Account, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ FILE_DETECTION_MAP = {
 }
 
 
-def detect_account_type(filename: str) -> Optional[str]:
+def detect_account_type(filename: str) -> str | None:
     """
     Attempt to detect the account type from a CSV filename.
 

@@ -16,12 +16,12 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from ninja import Router
-from ninja.security import django_auth
 from ninja.errors import HttpError
+from ninja.security import django_auth
 
+from schemas.auth import LoginRequest, MessageResponse, RegisterRequest, UserSchema
 from users.models import CustomUser
 from users.validators import validate_email_format
-from schemas.auth import LoginRequest, RegisterRequest, UserSchema, MessageResponse
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ def auth_register(request, payload: RegisterRequest):
     try:
         validate_password(payload.password, user=unsaved_user)
     except ValidationError as e:
-        raise HttpError(400, ' '.join(e.messages))
+        raise HttpError(400, ' '.join(e.messages)) from None
 
     if CustomUser.objects.filter(email=email).exists():
         raise HttpError(400, 'An account with this email already exists.')
@@ -86,7 +86,7 @@ def auth_register(request, payload: RegisterRequest):
         # A concurrent request created the same email or username between
         # our uniqueness check and the insert. Treat as a duplicate email
         # since that is the most likely cause.
-        raise HttpError(400, 'An account with this email already exists.')
+        raise HttpError(400, 'An account with this email already exists.') from None
 
     login(request, user)
     logger.info(f'New user registered: {user.username} ({user.email}).')
@@ -117,12 +117,12 @@ def auth_login(request, payload: LoginRequest):
     try:
         user = CustomUser.objects.get(email=email)
     except CustomUser.DoesNotExist:
-        raise HttpError(401, 'Invalid email or password.')
+        raise HttpError(401, 'Invalid email or password.') from None
     except CustomUser.MultipleObjectsReturned:
         # Should not occur once the unique constraint is in place, but
         # handled defensively for any pre-existing duplicate rows.
         logger.error(f'Multiple users found for email: {email}')
-        raise HttpError(401, 'Invalid email or password.')
+        raise HttpError(401, 'Invalid email or password.') from None
 
     authenticated_user = authenticate(
         request,

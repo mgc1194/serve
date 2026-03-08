@@ -19,7 +19,6 @@ import pandas as pd
 import mysql.connector
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ class Database:
 
     @staticmethod
     @contextmanager
-    def connect(config: Optional[DBConfig] = None):
+    def connect(config: DBConfig | None = None):
         """
         Context manager that yields a Database instance with an open connection.
         Commits on clean exit, rolls back on exception.
@@ -162,9 +161,9 @@ class Database:
 
     def query_transactions(
             self,
-            year: Optional[int] = None,
-            month: Optional[int] = None,
-            account: Optional[str] = None,
+            year: int | None = None,
+            month: int | None = None,
+            account: str | None = None,
     ) -> pd.DataFrame:
         """
         Query transactions with optional filters.

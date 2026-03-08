@@ -5,7 +5,6 @@ Schemas define the API contract independently from the database models.
 """
 
 from datetime import datetime
-from typing import List
 
 from ninja import Schema
 
@@ -40,7 +39,7 @@ class HouseholdDetailSchema(Schema):
     name: str
     created_at: datetime
     updated_at: datetime
-    members: List[MemberSchema]
+    members: list[MemberSchema]
 
 
 class HouseholdRequest(Schema):
@@ -59,4 +58,3 @@ class MemberRequest(Schema):
     """Request schema for adding a member to a household."""
 
     email: str
-    

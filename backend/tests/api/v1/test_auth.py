@@ -1,9 +1,8 @@
 import pytest
-
 from ninja.testing import TestClient
+
 from api.v1.auth import router
 from users.models import CustomUser
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

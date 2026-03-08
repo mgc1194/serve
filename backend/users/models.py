@@ -11,11 +11,11 @@ class Household(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return self.name
-
     class Meta:
         db_table = 'households'
+
+    def __str__(self):
+        return self.name
 
 
 class CustomUser(AbstractUser):
@@ -58,8 +58,8 @@ class CustomUser(AbstractUser):
         self.email = self.email.lower()
         super().save(*args, **kwargs)
 
-    def __str__(self):
-        return f'{self.username} ({self.email})'
-
     class Meta:
         db_table = 'users'
+
+    def __str__(self):
+        return f'{self.username} ({self.email})'

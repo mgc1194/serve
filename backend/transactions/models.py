@@ -3,9 +3,8 @@ transactions/models.py — Bank, AccountType, Account, and Transaction models.
 """
 
 
-from django.core.exceptions import ValidationError
 from django.db import models
-from django.utils import timezone
+
 from transactions.constants import HandlerKeys
 from users.models import Household
 
@@ -21,11 +20,12 @@ class Bank(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        db_table = 'banks'
+
     def __str__(self):
         return self.name
 
-    class Meta:
-        db_table = 'banks'
 
 
 class AccountType(models.Model):
@@ -61,6 +61,10 @@ class AccountType(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        db_table = 'account_types'
+        unique_together = [['bank', 'name']]
+
     def __str__(self):
         return f'{self.bank.name} — {self.name}'
 
@@ -68,10 +72,6 @@ class AccountType(models.Model):
         """Returns the handler associated with the selected account type."""
         from transactions.handlers.accounts import ACCOUNT_HANDLERS
         return ACCOUNT_HANDLERS[self.handler_key]
-
-    class Meta:
-        db_table = 'account_types'
-        unique_together = [['bank', 'name']]
 
 
 class Account(models.Model):
@@ -87,16 +87,16 @@ class Account(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    @property
-    def handler_key(self):
-        return self.account_type.handler_key
+    class Meta:
+        db_table = 'accounts'
+        unique_together = [['household', 'name']]
 
     def __str__(self):
         return f'{self.account_type.bank.name} — {self.name}'
 
-    class Meta:
-        db_table = 'accounts'
-        unique_together = [['household', 'name']]
+    @property
+    def handler_key(self):
+        return self.account_type.handler_key
 
 
 class Transaction(models.Model):
@@ -110,14 +110,11 @@ class Transaction(models.Model):
     date = models.DateField()
     concept = models.TextField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    label = models.CharField(max_length=255, blank=True, null=True)
-    category = models.CharField(max_length=255, blank=True, null=True)
-    additional_labels = models.TextField(blank=True, null=True)
+    label = models.CharField(max_length=255, blank=True)
+    category = models.CharField(max_length=255, blank=True)
+    additional_labels = models.TextField(blank=True)
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='transactions')
     imported_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f'{self.date} — {self.concept} ({self.amount})'
 
     class Meta:
         db_table = 'transactions'
@@ -126,3 +123,6 @@ class Transaction(models.Model):
             models.Index(fields=['label'], name='idx_transactions_label'),
             models.Index(fields=['category'], name='idx_transactions_category'),
         ]
+
+    def __str__(self):
+        return f'{self.date} — {self.concept} ({self.amount})'

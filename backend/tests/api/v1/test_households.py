@@ -3,13 +3,11 @@ tests/api/v1/test_households.py — Tests for household management endpoints.
 """
 
 import pytest
-
 from ninja.testing import TestClient
 
 from api.v1.households import router
-from users.models import CustomUser, Household
 from transactions.models import Account, AccountType, Bank
-
+from users.models import CustomUser, Household
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -382,4 +380,3 @@ class TestRemoveMember:
     def test_nonexistent_household_returns_404(self, client, alice):
         response = client.delete(f'/households/99999/members/{alice.id}/', user=alice)
         assert response.status_code == 404
-        

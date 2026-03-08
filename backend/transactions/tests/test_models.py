@@ -2,11 +2,10 @@ import pytest
 from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
 
-from users.models import Household
 from transactions.constants import HandlerKeys
-from transactions.models import Bank, AccountType, Account, Transaction
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
-
+from transactions.models import Account, AccountType, Bank, Transaction
+from users.models import Household
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

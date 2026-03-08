@@ -25,9 +25,9 @@ migration.
 """
 
 
-from .base import BaseHandler
 from transactions.constants import HandlerKeys
 
+from .base import BaseHandler
 
 # ── SoFi ──────────────────────────────────────────────────────────────────────
 

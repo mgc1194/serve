@@ -3,11 +3,10 @@ tests/api/v1/test_accounts.py — Tests for account management endpoints.
 """
 
 import pytest
-
 from ninja.testing import TestClient
 
 from api.v1.accounts import router
-from transactions.models import Account, AccountType, Bank, Transaction
+from transactions.models import Account, AccountType, Transaction
 from users.models import CustomUser, Household
 
 
@@ -394,4 +393,3 @@ class TestDeleteAccount:
         assert response.status_code == 409
         assert 'transactions' in response.json()['detail'].lower()
         assert Account.objects.filter(pk=account.id).exists()
-        

@@ -18,13 +18,13 @@ from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
-from users.models import CustomUser, Household
 from schemas.households import (
     HouseholdDetailSchema,
-    HouseholdRequest,
     HouseholdRenameRequest,
+    HouseholdRequest,
     MemberRequest,
 )
+from users.models import CustomUser, Household
 
 logger = logging.getLogger(__name__)
 
@@ -275,7 +275,7 @@ def delete_household(request, household_id: int):
             409,
             'This household still has accounts. '
             'Remove all accounts before deleting the household.',
-        )
+        ) from None
 
     logger.info(
         f'User {request.user.email} deleted household (id={household_id}).'
@@ -311,7 +311,7 @@ def add_member(request, household_id: int, payload: MemberRequest):
     try:
         new_member = CustomUser.objects.get(email=email)
     except CustomUser.DoesNotExist:
-        raise HttpError(400, 'No account found with that email address.')
+        raise HttpError(400, 'No account found with that email address.') from None
 
     if household.users.filter(pk=new_member.pk).exists():
         raise HttpError(400, 'This user is already a member of the household.')
@@ -356,7 +356,7 @@ def remove_member(request, household_id: int, user_id: int):
     try:
         target = CustomUser.objects.get(pk=user_id)
     except CustomUser.DoesNotExist:
-        raise HttpError(400, 'User not found.')
+        raise HttpError(400, 'User not found.') from None
 
     if not household.users.filter(pk=target.pk).exists():
         raise HttpError(400, 'This user is not a member of the household.')

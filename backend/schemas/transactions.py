@@ -5,9 +5,8 @@ Schemas define the API contract independently from the database models.
 """
 from datetime import date
 
-from typing import Optional
-
 from ninja import Schema
+
 
 class FileImportResult(Schema):
     """Output schema for a CSV file import result."""
@@ -16,7 +15,7 @@ class FileImportResult(Schema):
     inserted: int
     skipped: int
     total: int
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class TransactionSchema(Schema):
@@ -26,9 +25,9 @@ class TransactionSchema(Schema):
     date: str
     concept: str
     amount: float
-    label: Optional[str]
-    category: Optional[str]
-    additional_labels: Optional[str]
+    label: str | None
+    category: str | None
+    additional_labels: str | None
     account_id: int
     account_name: str
     bank_name: str

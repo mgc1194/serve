@@ -6,18 +6,9 @@ Fields that are internal to the database (e.g. password hashes, internal
 flags) are intentionally excluded here.
 """
 
-from typing import List
-
 from ninja import Schema
 
 from schemas.households import HouseholdSchema
-
-
-class HouseholdSchema(Schema):
-    """Output schema for a Household."""
-
-    id: int
-    name: str
 
 
 class UserSchema(Schema):
@@ -32,7 +23,7 @@ class UserSchema(Schema):
     email: str
     first_name: str
     last_name: str
-    households: List[HouseholdSchema]
+    households: list[HouseholdSchema]
 
 
 class RegisterRequest(Schema):

@@ -12,26 +12,24 @@ Endpoints:
 import hashlib
 import io
 import logging
-from typing import List, Optional
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from ninja import Router, File
+from ninja import File, Router
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 from ninja.security import django_auth
 
-from transactions.models import Account, Transaction
-from transactions.utils import upsert_transactions
-from transactions.handlers.accounts import ACCOUNT_HANDLERS
 from schemas.transactions import (
     FileImportResult,
     TransactionCreateRequest,
     TransactionSchema,
     TransactionUpdateRequest,
 )
+from transactions.handlers.accounts import ACCOUNT_HANDLERS
+from transactions.models import Account, Transaction
+from transactions.utils import upsert_transactions
 from users.models import Household
-
 
 logger = logging.getLogger(__name__)
 
@@ -102,11 +100,11 @@ def _make_transaction_id(account_id: int, date: str, concept: str, amount: str) 
 
 # ── GET /transactions/ ────────────────────────────────────────────────────────
 
-@router.get('/transactions/', response=List[TransactionSchema])
+@router.get('/transactions/', response=list[TransactionSchema])
 def list_transactions(
     request,
     household_id: int,
-    account_id: Optional[int] = None,
+    account_id: int | None = None,
 ):
     """Lists all transactions for a household.
 
@@ -199,7 +197,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
             },
         )
     except IntegrityError:
-        raise HttpError(400, 'An identical transaction already exists.')
+        raise HttpError(400, 'An identical transaction already exists.') from None
 
     if not created:
         raise HttpError(400, 'An identical transaction already exists.')
@@ -289,7 +287,7 @@ def delete_transaction(request, transaction_id: str):
 def import_transactions(
     request,
     account_id: int,
-    file: UploadedFile = File(...),
+    file: UploadedFile = File(...), # noqa: B008
 ):
     """Imports a single CSV file into the database.
 
@@ -352,4 +350,3 @@ def import_transactions(
             total=0,
             error=str(e),
         )
-    

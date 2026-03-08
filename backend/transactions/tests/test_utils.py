@@ -1,9 +1,10 @@
-import pytest
-import pandas as pd
 from datetime import date
 
-from transactions.utils import detect_account_type, upsert_transactions
+import pandas as pd
+import pytest
+
 from transactions.models import Account, AccountType, Bank, Transaction
+from transactions.utils import detect_account_type, upsert_transactions
 from users.models import Household
 
 
