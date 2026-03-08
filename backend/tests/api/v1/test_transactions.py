@@ -74,16 +74,6 @@ def account(db, account_type, household):
 
 
 @pytest.fixture
-def other_account(db, account_type, other_household):
-    """An account that belongs to bob's household."""
-    return Account.objects.create(
-        name='Bob Account',
-        account_type=account_type,
-        household=other_household,
-    )
-
-
-@pytest.fixture
 def transaction(db, account):
     return Transaction.objects.create(
         id='abc123' * 5 + 'ab',  # 32 chars

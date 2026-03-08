@@ -14,6 +14,7 @@ import io
 import logging
 from typing import List, Optional
 
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from ninja import Router, File
 from ninja.errors import HttpError
@@ -167,6 +168,10 @@ def create_transaction(request, payload: TransactionCreateRequest):
         HttpError: 400 if a transaction with the same derived ID already exists.
         HttpError: 403 if the user is not a member of the account's household.
         HttpError: 404 if the account does not exist.
+
+    Note:
+        Duplicate detection uses get_or_create rather than a separate existence
+        check to avoid a TOCTOU race condition under concurrent requests.
     """
     concept = payload.concept.strip()
     if not concept:
@@ -183,15 +188,18 @@ def create_transaction(request, payload: TransactionCreateRequest):
     amount_str = f'{payload.amount:.2f}'
     transaction_id = _make_transaction_id(account.id, date_str, concept, amount_str)
 
-    transaction, created = Transaction.objects.get_or_create(
-        id=transaction_id,
-        defaults={
-            'date': payload.date,
-            'concept': concept,
-            'amount': payload.amount,
-            'account': account,
-        },
-    )
+    try:
+        transaction, created = Transaction.objects.get_or_create(
+            id=transaction_id,
+            defaults={
+                'date': payload.date,
+                'concept': concept,
+                'amount': payload.amount,
+                'account': account,
+            },
+        )
+    except IntegrityError:
+        raise HttpError(400, 'An identical transaction already exists.')
 
     if not created:
         raise HttpError(400, 'An identical transaction already exists.')
@@ -295,6 +303,10 @@ def import_transactions(
 
     Returns:
         A FileImportResult with counts of inserted, skipped, and total rows.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the account's household.
+        HttpError: 404 if the account does not exist.
     """
     account = get_object_or_404(
         Account.objects.select_related('household'),
