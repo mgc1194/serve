@@ -123,16 +123,18 @@ class BaseHandler:
 
         amount = -raw_df[self.col_amount] if self.negate_amount else raw_df[self.col_amount]
 
-        clean_df = pd.DataFrame({
-            'ID': raw_df.apply(self._generate_id, axis=1),
-            'Date': pd.to_datetime(raw_df[self.col_date], format=self.date_format),
-            'Concept': raw_df[self.col_concept],
-            'Account': self.account,
-            'Amount': amount,
-            'Label': None,
-            'Category': None,
-            'Additional Labels': None,
-        })
+        clean_df = pd.DataFrame(
+            {
+                'ID': raw_df.apply(self._generate_id, axis=1),
+                'Date': pd.to_datetime(raw_df[self.col_date], format=self.date_format),
+                'Concept': raw_df[self.col_concept],
+                'Account': self.account,
+                'Amount': amount,
+                'Label': None,
+                'Category': None,
+                'Additional Labels': None,
+            }
+        )
 
         return clean_df
 

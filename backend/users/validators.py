@@ -37,6 +37,7 @@ def validate_email_format(email: str) -> str | None:
 
 # ── Password validators ───────────────────────────────────────────────────────
 
+
 class MinimumLengthValidator:
     """Validates that a password meets a minimum character length.
 

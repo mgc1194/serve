@@ -9,7 +9,6 @@ from users.models import Household
 
 
 class TestDetectAccountType:
-
     def test_detects_capital_one_checking(self):
         assert detect_account_type('360Checking.csv') == 'co-checking'
 
@@ -56,9 +55,9 @@ class TestDetectAccountType:
 
 # ── upsert_transactions tests ─────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestUpsertTransactions:
-
     @pytest.fixture
     def household(self):
         return Household.objects.create(name='Test Household')
@@ -81,15 +80,17 @@ class TestUpsertTransactions:
 
     @pytest.fixture
     def sample_df(self):
-        return pd.DataFrame({
-            'ID': ['abc123', 'def456'],
-            'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
-            'Concept': ['TRADER JOES', 'METRO FARE'],
-            'Amount': [-45.50, -2.45],
-            'Label': [None, None],
-            'Category': [None, None],
-            'Additional Labels': [None, None],
-        })
+        return pd.DataFrame(
+            {
+                'ID': ['abc123', 'def456'],
+                'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
+                'Concept': ['TRADER JOES', 'METRO FARE'],
+                'Amount': [-45.50, -2.45],
+                'Label': [None, None],
+                'Category': [None, None],
+                'Additional Labels': [None, None],
+            }
+        )
 
     def test_inserts_new_transactions(self, account, sample_df):
         result = upsert_transactions(sample_df, account)
@@ -153,15 +154,17 @@ class TestUpsertTransactions:
             account=account,
         )
         # Import batch with one existing, one new
-        df = pd.DataFrame({
-            'ID': ['abc123', 'new999'],
-            'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
-            'Concept': ['TRADER JOES', 'NEW TRANSACTION'],
-            'Amount': [-45.50, -10.00],
-            'Label': [None, None],
-            'Category': [None, None],
-            'Additional Labels': [None, None],
-        })
+        df = pd.DataFrame(
+            {
+                'ID': ['abc123', 'new999'],
+                'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
+                'Concept': ['TRADER JOES', 'NEW TRANSACTION'],
+                'Amount': [-45.50, -10.00],
+                'Label': [None, None],
+                'Category': [None, None],
+                'Additional Labels': [None, None],
+            }
+        )
         result = upsert_transactions(df, account)
         assert result['inserted'] == 1
         assert result['skipped'] == 1
@@ -170,26 +173,32 @@ class TestUpsertTransactions:
     def test_links_transactions_to_correct_account(self, account, household, bank):
         # Create second account
         at2 = AccountType.objects.create(name='Other', handler_key='Other', bank=bank)
-        account2 = Account.objects.create(name='Other Account', account_type=at2, household=household)
+        account2 = Account.objects.create(
+            name='Other Account', account_type=at2, household=household
+        )
 
-        df1 = pd.DataFrame({
-            'ID': ['txn1'],
-            'Date': pd.to_datetime(['2026-01-15']),
-            'Concept': ['TXN 1'],
-            'Amount': [-10.00],
-            'Label': [None],
-            'Category': [None],
-            'Additional Labels': [None],
-        })
-        df2 = pd.DataFrame({
-            'ID': ['txn2'],
-            'Date': pd.to_datetime(['2026-01-20']),
-            'Concept': ['TXN 2'],
-            'Amount': [-20.00],
-            'Label': [None],
-            'Category': [None],
-            'Additional Labels': [None],
-        })
+        df1 = pd.DataFrame(
+            {
+                'ID': ['txn1'],
+                'Date': pd.to_datetime(['2026-01-15']),
+                'Concept': ['TXN 1'],
+                'Amount': [-10.00],
+                'Label': [None],
+                'Category': [None],
+                'Additional Labels': [None],
+            }
+        )
+        df2 = pd.DataFrame(
+            {
+                'ID': ['txn2'],
+                'Date': pd.to_datetime(['2026-01-20']),
+                'Concept': ['TXN 2'],
+                'Amount': [-20.00],
+                'Label': [None],
+                'Category': [None],
+                'Additional Labels': [None],
+            }
+        )
 
         upsert_transactions(df1, account)
         upsert_transactions(df2, account2)

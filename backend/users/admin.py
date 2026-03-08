@@ -19,4 +19,3 @@ class CustomUserAdmin(UserAdmin):
         *UserAdmin.fieldsets,
         ('Households', {'fields': ('households',)}),
     )
-

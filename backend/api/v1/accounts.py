@@ -92,10 +92,8 @@ def list_accounts(
     if household_id is not None:
         _get_household_for_member(household_id, request.user)
 
-    qs = (
-        Account.objects
-        .filter(household__users=request.user)
-        .select_related('account_type__bank', 'household')
+    qs = Account.objects.filter(household__users=request.user).select_related(
+        'account_type__bank', 'household'
     )
 
     if household_id is not None:
@@ -148,7 +146,9 @@ def create_account(request, payload: AccountCreateRequest):
             household=household,
         )
     except IntegrityError:
-        raise HttpError(400, f'An account named "{name}" already exists in this household.') from None
+        raise HttpError(
+            400, f'An account named "{name}" already exists in this household.'
+        ) from None
 
     logger.info(
         f'User {request.user.email} created account '
@@ -197,7 +197,9 @@ def rename_account(request, account_id: int, payload: AccountRenameRequest):
         account.name = name
         account.save(update_fields=['name', 'updated_at'])
     except IntegrityError:
-        raise HttpError(400, f'An account named "{name}" already exists in this household.') from None
+        raise HttpError(
+            400, f'An account named "{name}" already exists in this household.'
+        ) from None
 
     logger.info(
         f'User {request.user.email} renamed account '

@@ -3,15 +3,15 @@ from django.utils import timezone
 
 
 def seed_banks(apps, schema_editor):
-    Bank = apps.get_model("transactions", "Bank")
+    Bank = apps.get_model('transactions', 'Bank')
 
     banks = [
-        ("SoFi", "banks/sofi.png"),
-        ("Capital One", "banks/capital_one.png"),
-        ("Wells Fargo", "banks/wells_fargo.png"),
-        ("Chase", "banks/chase.png"),
-        ("Discover", "banks/discover.png"),
-        ("American Express", "banks/amex.png"),
+        ('SoFi', 'banks/sofi.png'),
+        ('Capital One', 'banks/capital_one.png'),
+        ('Wells Fargo', 'banks/wells_fargo.png'),
+        ('Chase', 'banks/chase.png'),
+        ('Discover', 'banks/discover.png'),
+        ('American Express', 'banks/amex.png'),
     ]
 
     now = timezone.now()
@@ -20,16 +20,15 @@ def seed_banks(apps, schema_editor):
         Bank.objects.update_or_create(
             name=name,
             defaults={
-                "logo": logo,
-                "updated_at": now,
+                'logo': logo,
+                'updated_at': now,
             },
         )
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ("transactions", "0001_initial"),
+        ('transactions', '0001_initial'),
     ]
 
     operations = [

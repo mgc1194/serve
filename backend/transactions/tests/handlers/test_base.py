@@ -11,6 +11,7 @@ from transactions.handlers.base import BaseHandler
 
 # ── Minimal concrete handlers for testing ─────────────────────────────────────
 
+
 class SimpleHandler(BaseHandler):
     account = 'Test Account'
     date_format = '%Y-%m-%d'
@@ -30,16 +31,18 @@ class NegatingHandler(BaseHandler):
 
 # ── Test data ─────────────────────────────────────────────────────────────────
 
-SIMPLE_CSV = "Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n"
-MULTI_ROW_CSV = "Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n2026-01-16,METRO FARE,-2.45\n"
-EMPTY_CSV = "Date,Description,Amount\n"
-BAD_CSV = "Date,WrongColumn,Amount\n2026-01-15,TRADER JOES,-45.50\n"
+SIMPLE_CSV = 'Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n'
+MULTI_ROW_CSV = (
+    'Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n2026-01-16,METRO FARE,-2.45\n'
+)
+EMPTY_CSV = 'Date,Description,Amount\n'
+BAD_CSV = 'Date,WrongColumn,Amount\n2026-01-15,TRADER JOES,-45.50\n'
 
 
 # ── ID generation ─────────────────────────────────────────────────────────────
 
-class TestGenerateId:
 
+class TestGenerateId:
     @pytest.fixture
     def row(self):
         return pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'})
@@ -60,15 +63,29 @@ class TestGenerateId:
 
     def test_uses_all_raw_columns_including_dropped_ones(self):
         """Balance column disambiguates otherwise identical expenses."""
-        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'Expense', 'Amount': '500.00', 'Balance': '10000.00'})
-        row2 = pd.Series({'Date': '2026-01-15', 'Description': 'Expense', 'Amount': '500.00', 'Balance': '10500.00'})
+        row1 = pd.Series(
+            {
+                'Date': '2026-01-15',
+                'Description': 'Expense',
+                'Amount': '500.00',
+                'Balance': '10000.00',
+            }
+        )
+        row2 = pd.Series(
+            {
+                'Date': '2026-01-15',
+                'Description': 'Expense',
+                'Amount': '500.00',
+                'Balance': '10500.00',
+            }
+        )
         assert BaseHandler._generate_id(row1) != BaseHandler._generate_id(row2)
 
 
 # ── Output DataFrame shape ────────────────────────────────────────────────────
 
-class TestOutputShape:
 
+class TestOutputShape:
     @pytest.fixture
     def subject(self, mocker):
         mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(SIMPLE_CSV)))
@@ -78,7 +95,16 @@ class TestOutputShape:
         assert subject is not None
 
     def test_has_correct_columns(self, subject):
-        expected = ['ID', 'Date', 'Concept', 'Account', 'Amount', 'Label', 'Category', 'Additional Labels']
+        expected = [
+            'ID',
+            'Date',
+            'Concept',
+            'Account',
+            'Amount',
+            'Label',
+            'Category',
+            'Additional Labels',
+        ]
         assert list(subject.columns) == expected
 
     def test_has_correct_row_count(self, subject):
@@ -105,8 +131,8 @@ class TestOutputShape:
 
 # ── Multiple rows ─────────────────────────────────────────────────────────────
 
-class TestMultipleRows:
 
+class TestMultipleRows:
     @pytest.fixture
     def subject(self, mocker):
         mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(MULTI_ROW_CSV)))
@@ -121,8 +147,8 @@ class TestMultipleRows:
 
 # ── Amount handling ───────────────────────────────────────────────────────────
 
-class TestAmountPassthrough:
 
+class TestAmountPassthrough:
     @pytest.fixture
     def subject(self, mocker):
         mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(SIMPLE_CSV)))
@@ -133,7 +159,6 @@ class TestAmountPassthrough:
 
 
 class TestAmountNegation:
-
     @pytest.fixture
     def subject(self, mocker):
         mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(SIMPLE_CSV)))
@@ -145,8 +170,8 @@ class TestAmountNegation:
 
 # ── Error handling ────────────────────────────────────────────────────────────
 
-class TestErrorHandling:
 
+class TestErrorHandling:
     def test_returns_none_for_missing_file(self):
         result = SimpleHandler().process('nonexistent_file.csv')
         assert result is None

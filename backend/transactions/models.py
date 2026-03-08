@@ -2,7 +2,6 @@
 transactions/models.py — Bank, AccountType, Account, and Transaction models.
 """
 
-
 from django.db import models
 
 from transactions.constants import HandlerKeys
@@ -15,6 +14,7 @@ class Bank(models.Model):
     Suported banks are sytem determined. Adding, edditing or removing
     institutions should be performed through migrations.
     """
+
     name = models.CharField(max_length=255, unique=True)
     logo = models.ImageField(upload_to='banks/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -27,24 +27,24 @@ class Bank(models.Model):
         return self.name
 
 
-
 class AccountType(models.Model):
     """
     Represents a type of account offered by a bank (e.g. 360 Performance Savings).
     Maps to a handler in ACCOUNT_HANDLERS via handler_key.
     Each bank can offer multiple account types, each with a unique handler.
     """
+
     HANDLER_CHOICES = [
-        (HandlerKeys.SOFI_SAVINGS, "SoFi Savings"),
-        (HandlerKeys.SOFI_CHECKING, "SoFi Checking"),
-        (HandlerKeys.CO_CHECKING, "360 Checking"),
-        (HandlerKeys.CO_SAVINGS, "360 Performance Savings"),
-        (HandlerKeys.CO_QUICKSILVER, "Quicksilver Credit Card"),
-        (HandlerKeys.WF_CHECKING, "Checking"),
-        (HandlerKeys.WF_SAVINGS, "Savings"),
-        (HandlerKeys.CHASE, "Chase Card"),
-        (HandlerKeys.DISCOVER, "Discover Card"),
-        (HandlerKeys.AMEX_DELTA, "Delta SkyMiles Card"),
+        (HandlerKeys.SOFI_SAVINGS, 'SoFi Savings'),
+        (HandlerKeys.SOFI_CHECKING, 'SoFi Checking'),
+        (HandlerKeys.CO_CHECKING, '360 Checking'),
+        (HandlerKeys.CO_SAVINGS, '360 Performance Savings'),
+        (HandlerKeys.CO_QUICKSILVER, 'Quicksilver Credit Card'),
+        (HandlerKeys.WF_CHECKING, 'Checking'),
+        (HandlerKeys.WF_SAVINGS, 'Savings'),
+        (HandlerKeys.CHASE, 'Chase Card'),
+        (HandlerKeys.DISCOVER, 'Discover Card'),
+        (HandlerKeys.AMEX_DELTA, 'Delta SkyMiles Card'),
     ]
 
     name = models.CharField(max_length=255)
@@ -56,7 +56,7 @@ class AccountType(models.Model):
     bank = models.ForeignKey(
         Bank,
         on_delete=models.PROTECT,
-        related_name="account_types",
+        related_name='account_types',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -71,6 +71,7 @@ class AccountType(models.Model):
     def get_handler(self):
         """Returns the handler associated with the selected account type."""
         from transactions.handlers.accounts import ACCOUNT_HANDLERS
+
         return ACCOUNT_HANDLERS[self.handler_key]
 
 
@@ -81,6 +82,7 @@ class Account(models.Model):
     (e.g. "Mario's 360 Savings" and "Partner's 360 Savings").
     The handler is resolved through account_type.handler_key.
     """
+
     name = models.CharField(max_length=255)
     account_type = models.ForeignKey(AccountType, on_delete=models.PROTECT, related_name='accounts')
     household = models.ForeignKey(Household, on_delete=models.PROTECT, related_name='accounts')
@@ -106,6 +108,7 @@ class Transaction(models.Model):
     so that fields like balance disambiguate otherwise identical rows.
     Labels and category are manually assigned and never overwritten on re-import.
     """
+
     id = models.CharField(max_length=32, primary_key=True)
     date = models.DateField()
     concept = models.TextField()

@@ -31,7 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 if not SECRET_KEY:
-    raise ValueError("DJANGO_SECRET_KEY must be set in .env")
+    raise ValueError('DJANGO_SECRET_KEY must be set in .env')
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
@@ -49,7 +49,6 @@ INSTALLED_APPS = [
     # Third party
     'corsheaders',
     'ninja',
-
     # Local
     'users',
     'transactions',

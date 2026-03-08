@@ -24,12 +24,12 @@ requires both a new handler implementation and a corresponding data
 migration.
 """
 
-
 from transactions.constants import HandlerKeys
 
 from .base import BaseHandler
 
 # ── SoFi ──────────────────────────────────────────────────────────────────────
+
 
 class SoFiSavingsHandler(BaseHandler):
     account = 'SoFi Savings'
@@ -49,6 +49,7 @@ class SoFiCheckingHandler(BaseHandler):
 
 # ── Capital One ───────────────────────────────────────────────────────────────
 
+
 class CapitalOneCheckingHandler(BaseHandler):
     account = 'CO Checking'
     date_format = '%m/%d/%y'
@@ -59,10 +60,12 @@ class CapitalOneCheckingHandler(BaseHandler):
     @staticmethod
     def _apply_amount_logic(df):
         df['Amount'] = df.apply(
-            lambda row: row['Transaction Amount']
-            if row['Transaction Type'] == 'Credit'
-            else -row['Transaction Amount'],
-            axis=1
+            lambda row: (
+                row['Transaction Amount']
+                if row['Transaction Type'] == 'Credit'
+                else -row['Transaction Amount']
+            ),
+            axis=1,
         )
         return df
 
@@ -77,10 +80,12 @@ class CapitalOneSavingsHandler(BaseHandler):
     @staticmethod
     def _apply_amount_logic(df):
         df['Amount'] = df.apply(
-            lambda row: row['Transaction Amount']
-            if row['Transaction Type'] == 'Credit'
-            else -row['Transaction Amount'],
-            axis=1
+            lambda row: (
+                row['Transaction Amount']
+                if row['Transaction Type'] == 'Credit'
+                else -row['Transaction Amount']
+            ),
+            axis=1,
         )
         return df
 
@@ -101,6 +106,7 @@ class CapitalOneQuicksilverHandler(BaseHandler):
 
 # ── Amex ──────────────────────────────────────────────────────────────────────
 
+
 class AmexHandler(BaseHandler):
     account = 'Delta'
     date_format = '%m/%d/%Y'
@@ -112,6 +118,7 @@ class AmexHandler(BaseHandler):
 
 # ── Chase ─────────────────────────────────────────────────────────────────────
 
+
 class ChaseHandler(BaseHandler):
     account = 'Chase'
     date_format = '%m/%d/%Y'
@@ -121,6 +128,7 @@ class ChaseHandler(BaseHandler):
 
 
 # ── Discover ──────────────────────────────────────────────────────────────────
+
 
 class DiscoverHandler(BaseHandler):
     account = 'Discover'
@@ -132,6 +140,7 @@ class DiscoverHandler(BaseHandler):
 
 
 # ── Wells Fargo ───────────────────────────────────────────────────────────────
+
 
 class WellsFargoCheckingHandler(BaseHandler):
     account = 'WF Checking'

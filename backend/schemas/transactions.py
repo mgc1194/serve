@@ -3,6 +3,7 @@ schemas/transactions.py — API schemas for transaction-related endpoints.
 
 Schemas define the API contract independently from the database models.
 """
+
 from datetime import date
 
 from ninja import Schema
