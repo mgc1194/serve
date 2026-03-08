@@ -18,6 +18,8 @@ from transactions.models import AccountType, Account, Transaction
 from users.models import CustomUser, Household
 
 
+# ── Fixtures ──────────────────────────────────────────────────────────────────
+
 @pytest.fixture
 def client():
     return TestClient(router)
@@ -111,6 +113,8 @@ def sample_dataframe():
     }])
 
 
+# ── GET /transactions/ ────────────────────────────────────────────────────────
+
 @pytest.mark.django_db
 class TestListTransactions:
 
@@ -179,6 +183,8 @@ class TestListTransactions:
         response = client.get('/transactions/?household_id=9999', user=alice)
         assert response.status_code == 404
 
+
+# ── POST /transactions/ ───────────────────────────────────────────────────────
 
 @pytest.mark.django_db
 class TestCreateTransaction:
@@ -309,6 +315,8 @@ class TestCreateTransaction:
         assert response.status_code == 401
 
 
+# ── PATCH /transactions/{id}/ ─────────────────────────────────────────────────
+
 @pytest.mark.django_db
 class TestUpdateTransaction:
 
@@ -375,12 +383,14 @@ class TestUpdateTransaction:
         transaction.refresh_from_db()
         original_amount = transaction.amount
         original_date = transaction.date
+
         client.patch(
             f'/transactions/{transaction.id}/',
             json={'concept': 'NEW NAME'},
             user=alice,
         )
         transaction.refresh_from_db()
+
         assert transaction.amount == original_amount
         assert transaction.date == original_date
 
@@ -453,6 +463,14 @@ class TestImportTransactions:
         assert data['total'] == 1
         assert data['error'] is None
 
+    def test_returns_403_for_non_member(self, client, bob, account, csv_file):
+        response = client.post(
+            f'/transactions/import?account_id={account.id}',
+            FILES={'file': csv_file},
+            user=bob,
+        )
+        assert response.status_code == 403
+
     def test_returns_404_for_nonexistent_account(self, client, alice, csv_file):
         response = client.post(
             '/transactions/import?account_id=9999',
@@ -508,3 +526,4 @@ class TestImportTransactions:
 
         assert response.status_code == 200
         assert 'Handler error' in response.json()['error']
+        

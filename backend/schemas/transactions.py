@@ -34,12 +34,12 @@ class TransactionSchema(Schema):
     bank_name: str
     imported_at: str
 
+
 class TransactionCreateRequest(Schema):
     """Request schema for manually creating a transaction.
 
     The id is derived server-side from the field values, matching the
-    same MD5 hashing strategy used during CSV import so that a manually
-    added transaction can never be re-imported as a duplicate.
+    same MD5 hashing strategy used during CSV import.
     """
 
     account_id: int
@@ -57,10 +57,3 @@ class TransactionUpdateRequest(Schema):
     """
 
     concept: str
-
-class DetectResponse(Schema):
-    """Output schema for an account type detection result."""
-
-    filename: str
-    handler_key: Optional[str]
-    detected: bool

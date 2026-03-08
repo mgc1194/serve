@@ -29,6 +29,8 @@ from schemas.transactions import (
     TransactionSchema,
     TransactionUpdateRequest,
 )
+from users.models import Household
+
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +125,6 @@ def list_transactions(
         HttpError: 403 if the user is not a member of the household.
         HttpError: 404 if the household does not exist.
     """
-    from users.models import Household
     household = get_object_or_404(Household, pk=household_id)
     if not household.users.filter(pk=request.user.pk).exists():
         raise HttpError(403, 'You are not a member of this household.')
@@ -182,16 +183,16 @@ def create_transaction(request, payload: TransactionCreateRequest):
     amount_str = f'{payload.amount:.2f}'
     transaction_id = _make_transaction_id(account.id, date_str, concept, amount_str)
 
-    if Transaction.objects.filter(pk=transaction_id).exists():
-        raise HttpError(400, 'An identical transaction already exists.')
-
-    transaction = Transaction.objects.create(
+    transaction, created = Transaction.objects.get_or_create(
         id=transaction_id,
         date=payload.date,
         concept=concept,
         amount=payload.amount,
         account=account,
     )
+
+    if not created:
+        raise HttpError(400, 'An identical transaction already exists.')
 
     logger.info(
         f'User {request.user.email} manually created transaction '
@@ -293,7 +294,13 @@ def import_transactions(
     Returns:
         A FileImportResult with counts of inserted, skipped, and total rows.
     """
-    account = get_object_or_404(Account, id=account_id)
+    account = get_object_or_404(
+        Account.objects.select_related('household'),
+        id=account_id,
+    )
+    if not account.household.users.filter(pk=request.user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
+
     handler = ACCOUNT_HANDLERS.get(account.handler_key)
 
     if handler is None:
@@ -331,3 +338,4 @@ def import_transactions(
             total=0,
             error=str(e),
         )
+    
