@@ -185,10 +185,12 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
     transaction, created = Transaction.objects.get_or_create(
         id=transaction_id,
-        date=payload.date,
-        concept=concept,
-        amount=payload.amount,
-        account=account,
+        defaults={
+            'date': payload.date,
+            'concept': concept,
+            'amount': payload.amount,
+            'account': account,
+        },
     )
 
     if not created:
