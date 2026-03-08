@@ -3,38 +3,11 @@ schemas/transactions.py — API schemas for transaction-related endpoints.
 
 Schemas define the API contract independently from the database models.
 """
+from datetime import date
 
-from typing import List, Optional
+from typing import Optional
 
 from ninja import Schema
-
-
-class AccountTypeSchema(Schema):
-    """Output schema for an AccountType."""
-
-    id: int
-    name: str
-    handler_key: str
-
-
-class AccountSchema(Schema):
-    """Output schema for an Account."""
-
-    id: int
-    name: str
-    handler_key: str
-    account_type: str
-    bank_id: int
-    bank_name: str
-
-
-class BankSchema(Schema):
-    """Output schema for a Bank, including its account types."""
-
-    id: int
-    name: str
-    account_types: List[AccountTypeSchema]
-
 
 class FileImportResult(Schema):
     """Output schema for a CSV file import result."""
@@ -62,9 +35,25 @@ class TransactionSchema(Schema):
     imported_at: str
 
 
-class DetectResponse(Schema):
-    """Output schema for an account type detection result."""
+class TransactionCreateRequest(Schema):
+    """Request schema for manually creating a transaction.
 
-    filename: str
-    handler_key: Optional[str]
-    detected: bool
+    The id is derived server-side from the field values, matching the
+    same MD5 hashing strategy used during CSV import.
+    """
+
+    account_id: int
+    date: date
+    concept: str
+    amount: float
+
+
+class TransactionUpdateRequest(Schema):
+    """Request schema for editing a transaction.
+
+    Only concept (description) is editable after creation.
+    Date, amount, and account are immutable — if those need to change,
+    delete and re-create the transaction.
+    """
+
+    concept: str

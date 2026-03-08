@@ -1,6 +1,35 @@
 from datetime import datetime
 
+from typing import List
+
 from ninja import Schema
+
+
+class AccountTypeSchema(Schema):
+    """Output schema for an AccountType."""
+
+    id: int
+    name: str
+    handler_key: str
+
+
+class AccountSchema(Schema):
+    """Output schema for an Account."""
+
+    id: int
+    name: str
+    handler_key: str
+    account_type: str
+    bank_id: int
+    bank_name: str
+
+
+class BankSchema(Schema):
+    """Output schema for a Bank, including its account types."""
+
+    id: int
+    name: str
+    account_types: List[AccountTypeSchema]
 
 
 class AccountCreateRequest(Schema):

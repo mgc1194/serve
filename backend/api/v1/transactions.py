@@ -1,33 +1,289 @@
 """
-api/v1/transactions.py — v1 transaction, account, and bank endpoints.
+api/v1/transactions.py — Transaction management endpoints.
 
 Endpoints:
-    POST /api/v1/transactions/import  — upload and import a single CSV file
-    GET  /api/v1/accounts             — list accounts for a household
-    GET  /api/v1/banks                — list banks with their account types
-    GET  /api/v1/accounts/detect      — detect account type from filename
-    GET  /api/v1/transactions         — list transactions for a household
+    GET    /api/v1/transactions/          — list transactions for a household
+    POST   /api/v1/transactions/          — manually create a transaction
+    PATCH  /api/v1/transactions/{id}/     — edit a transaction's description
+    DELETE /api/v1/transactions/{id}/     — delete a transaction
+    POST   /api/v1/transactions/import    — upload and import a single CSV file
 """
 
+import hashlib
 import io
 import logging
 from typing import List, Optional
 
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from ninja import Router, File
+from ninja.errors import HttpError
 from ninja.files import UploadedFile
+from ninja.security import django_auth
 
-from transactions.models import Account, Bank, Transaction
-from transactions.utils import detect_account_type, upsert_transactions
+from transactions.models import Account, Transaction
+from transactions.utils import upsert_transactions
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
-from schemas.transactions import AccountSchema, BankSchema, FileImportResult, TransactionSchema, DetectResponse
+from schemas.transactions import (
+    FileImportResult,
+    TransactionCreateRequest,
+    TransactionSchema,
+    TransactionUpdateRequest,
+)
+from users.models import Household
+
 
 logger = logging.getLogger(__name__)
 
-router = Router(tags=['Transactions'])
+router = Router(tags=['Transactions'], auth=django_auth)
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_transaction_for_household_member(transaction_id: str, user) -> Transaction:
+    """Fetches a transaction and verifies the user is a member of its household.
+
+    Args:
+        transaction_id: Primary key of the transaction.
+        user: The requesting user.
+
+    Returns:
+        The Transaction instance with account and bank pre-selected.
+
+    Raises:
+        HttpError: 404 if the transaction does not exist.
+        HttpError: 403 if the user is not a member of the household.
+    """
+    transaction = get_object_or_404(
+        Transaction.objects.select_related('account__account_type__bank', 'account__household'),
+        pk=transaction_id,
+    )
+    if not transaction.account.household.users.filter(pk=user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
+    return transaction
+
+
+def _serialize(t: Transaction) -> dict:
+    """Serializes a Transaction into a dict matching TransactionSchema."""
+    return {
+        'id': t.id,
+        'date': t.date.isoformat(),
+        'concept': t.concept,
+        'amount': float(t.amount),
+        'label': t.label,
+        'category': t.category,
+        'additional_labels': t.additional_labels,
+        'account_id': t.account_id,
+        'account_name': t.account.name,
+        'bank_name': t.account.account_type.bank.name,
+        'imported_at': t.imported_at.isoformat(),
+    }
+
+
+def _make_transaction_id(account_id: int, date: str, concept: str, amount: str) -> str:
+    """Derives an MD5 transaction ID from its core fields.
+
+    Mirrors the hashing strategy used by CSV import handlers so that a
+    manually added transaction and an imported one with identical fields
+    will collide and not be duplicated.
+
+    Args:
+        account_id: The account the transaction belongs to.
+        date: ISO-format date string (YYYY-MM-DD).
+        concept: The transaction description.
+        amount: String representation of the amount.
+
+    Returns:
+        A 32-character hex MD5 digest.
+    """
+    raw = f'{account_id}|{date}|{concept}|{amount}'
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+# ── GET /transactions/ ────────────────────────────────────────────────────────
+
+@router.get('/transactions/', response=List[TransactionSchema])
+def list_transactions(
+    request,
+    household_id: int,
+    account_id: Optional[int] = None,
+):
+    """Lists all transactions for a household.
+
+    Scoped to the requesting user — the household_id must belong to a
+    household the user is a member of. An optional account_id narrows
+    results to a single account. Results are ordered by date descending.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        household_id: The ID of the household to list transactions for.
+        account_id: Optional. Narrows results to a single account.
+
+    Returns:
+        A list of TransactionSchema ordered by date descending.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the household does not exist.
+    """
+    household = get_object_or_404(Household, pk=household_id)
+    if not household.users.filter(pk=request.user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
+
+    qs = (
+        Transaction.objects
+        .filter(account__household_id=household_id)
+        .select_related('account__account_type__bank')
+        .order_by('-date', '-imported_at')
+    )
+
+    if account_id is not None:
+        qs = qs.filter(account_id=account_id)
+
+    return [_serialize(t) for t in qs]
+
+
+# ── POST /transactions/ ───────────────────────────────────────────────────────
+
+@router.post('/transactions/', response=TransactionSchema)
+def create_transaction(request, payload: TransactionCreateRequest):
+    """Manually creates a single transaction.
+
+    The transaction ID is derived from the field values using the same
+    MD5 strategy as CSV import, so re-importing a file that contains an
+    identical transaction will skip it rather than duplicate it.
+
+    The user must be a member of the household that owns the target account.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        payload: TransactionCreateRequest with account_id, date, concept,
+            and amount.
+
+    Returns:
+        The created TransactionSchema.
+
+    Raises:
+        HttpError: 400 if concept is blank.
+        HttpError: 400 if a transaction with the same derived ID already exists.
+        HttpError: 403 if the user is not a member of the account's household.
+        HttpError: 404 if the account does not exist.
+
+    Note:
+        Duplicate detection uses get_or_create rather than a separate existence
+        check to avoid a TOCTOU race condition under concurrent requests.
+    """
+    concept = payload.concept.strip()
+    if not concept:
+        raise HttpError(400, 'Transaction concept cannot be blank.')
+
+    account = get_object_or_404(
+        Account.objects.select_related('account_type__bank', 'household'),
+        pk=payload.account_id,
+    )
+    if not account.household.users.filter(pk=request.user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
+
+    date_str = payload.date.isoformat()
+    amount_str = f'{payload.amount:.2f}'
+    transaction_id = _make_transaction_id(account.id, date_str, concept, amount_str)
+
+    try:
+        transaction, created = Transaction.objects.get_or_create(
+            id=transaction_id,
+            defaults={
+                'date': payload.date,
+                'concept': concept,
+                'amount': payload.amount,
+                'account': account,
+            },
+        )
+    except IntegrityError:
+        raise HttpError(400, 'An identical transaction already exists.')
+
+    if not created:
+        raise HttpError(400, 'An identical transaction already exists.')
+
+    logger.info(
+        f'User {request.user.email} manually created transaction '
+        f'(id={transaction.id}) in account "{account.name}" (id={account.id}).'
+    )
+
+    return _serialize(transaction)
+
+
+# ── PATCH /transactions/{id}/ ─────────────────────────────────────────────────
+
+@router.patch('/transactions/{transaction_id}/', response=TransactionSchema)
+def update_transaction(request, transaction_id: str, payload: TransactionUpdateRequest):
+    """Edits a transaction's description (concept).
+
+    Only the concept field is editable after creation. Date, amount, and
+    account are immutable — delete and re-create to change those.
+
+    The user must be a member of the household that owns the transaction.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        transaction_id: Primary key of the transaction to edit.
+        payload: TransactionUpdateRequest with the new concept.
+
+    Returns:
+        The updated TransactionSchema.
+
+    Raises:
+        HttpError: 400 if the new concept is blank.
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the transaction does not exist.
+    """
+    concept = payload.concept.strip()
+    if not concept:
+        raise HttpError(400, 'Transaction concept cannot be blank.')
+
+    transaction = _get_transaction_for_household_member(transaction_id, request.user)
+
+    transaction.concept = concept
+    transaction.save(update_fields=['concept'])
+
+    logger.info(
+        f'User {request.user.email} updated concept for transaction '
+        f'(id={transaction.id}) in account (id={transaction.account_id}).'
+    )
+
+    return _serialize(transaction)
+
+
+# ── DELETE /transactions/{id}/ ────────────────────────────────────────────────
+
+@router.delete('/transactions/{transaction_id}/', response={204: None})
+def delete_transaction(request, transaction_id: str):
+    """Deletes a transaction.
+
+    The user must be a member of the household that owns the transaction.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        transaction_id: Primary key of the transaction to delete.
+
+    Returns:
+        204 No Content on success.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the transaction does not exist.
+    """
+    transaction = _get_transaction_for_household_member(transaction_id, request.user)
+    transaction.delete()
+
+    logger.info(
+        f'User {request.user.email} deleted transaction '
+        f'(id={transaction_id}) from account (id={transaction.account_id}).'
+    )
+
+    return 204, None
+
+
+# ── POST /transactions/import ─────────────────────────────────────────────────
 
 @router.post('/transactions/import', response=FileImportResult)
 def import_transactions(
@@ -41,14 +297,24 @@ def import_transactions(
     after filename-based detection suggests a type.
 
     Args:
-        request: The HTTP request object.
+        request: The HTTP request object. Must be authenticated.
         account_id: The ID of the account the file belongs to.
         file: The uploaded CSV file.
 
     Returns:
         A FileImportResult with counts of inserted, skipped, and total rows.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the account's household.
+        HttpError: 404 if the account does not exist.
     """
-    account = get_object_or_404(Account, id=account_id)
+    account = get_object_or_404(
+        Account.objects.select_related('household'),
+        id=account_id,
+    )
+    if not account.household.users.filter(pk=request.user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
+
     handler = ACCOUNT_HANDLERS.get(account.handler_key)
 
     if handler is None:
@@ -86,128 +352,4 @@ def import_transactions(
             total=0,
             error=str(e),
         )
-
-
-@router.get('/accounts', response=List[AccountSchema])
-def list_accounts(request, household_id: int):
-    """Lists all accounts belonging to a household.
-
-    Used to populate the account selector in the upload UI.
-
-    Args:
-        request: The HTTP request object.
-        household_id: The ID of the household to list accounts for.
-
-    Returns:
-        A list of AccountSchema objects ordered by bank name then account name.
-    """
-    accounts = Account.objects.filter(
-        household_id=household_id
-    ).select_related('account_type__bank').order_by('account_type__bank__name', 'name')
-
-    return [
-        {
-            'id': acc.id,
-            'name': acc.name,
-            'handler_key': acc.handler_key,
-            'account_type': acc.account_type.name,
-            'bank_id': acc.account_type.bank.id,
-            'bank_name': acc.account_type.bank.name,
-        }
-        for acc in accounts
-    ]
-
-
-@router.get('/banks', response=List[BankSchema])
-def list_banks(request):
-    """Lists all banks with their account types.
-
-    Used to group the account dropdown by bank in the UI.
-
-    Args:
-        request: The HTTP request object.
-
-    Returns:
-        A list of BankSchema objects ordered by bank name.
-    """
-    banks = Bank.objects.prefetch_related('account_types').order_by('name')
-
-    return [
-        {
-            'id': bank.id,
-            'name': bank.name,
-            'account_types': [
-                {
-                    'id': at.id,
-                    'name': at.name,
-                    'handler_key': at.handler_key,
-                }
-                for at in bank.account_types.all()
-            ],
-        }
-        for bank in banks
-    ]
-
-
-@router.get('/accounts/detect', response=DetectResponse)
-def detect_account(request, filename: str):
-    """Suggests an account type based on the uploaded filename.
-
-    The suggestion is always shown to the user for confirmation.
-
-    Args:
-        request: The HTTP request object.
-        filename: The name of the uploaded file.
-
-    Returns:
-        A DetectResponse with the detected handler key and a boolean flag.
-    """
-    handler_key = detect_account_type(filename)
-    return DetectResponse(
-        filename=filename,
-        handler_key=handler_key,
-        detected=handler_key is not None,
-    )
-
-@router.get('/transactions', response=List[TransactionSchema])
-def list_transactions(
-    request,
-    household_id: int,
-    account_id: Optional[int] = None,
-):
-    """Lists all transactions for a household.
-
-    Scoped to a household. An optional account_id narrows results to a
-    single account. Results are ordered by date descending.
-
-    Args:
-        request: The HTTP request object.
-        household_id: The ID of the household to list transactions for.
-        account_id: Optional. Narrows results to a single account.
-
-    Returns:
-        A list of TransactionSchema ordered by date descending.
-    """
-    qs = Transaction.objects.filter(
-        account__household_id=household_id
-    ).select_related('account__account_type__bank').order_by('-date')
-
-    if account_id is not None:
-        qs = qs.filter(account_id=account_id)
-
-    return [
-        {
-            'id': t.id,
-            'date': t.date.isoformat(),
-            'concept': t.concept,
-            'amount': float(t.amount),
-            'label': t.label,
-            'category': t.category,
-            'additional_labels': t.additional_labels,
-            'account_id': t.account_id,
-            'account_name': t.account.name,
-            'bank_name': t.account.account_type.bank.name,
-            'imported_at': t.imported_at.isoformat(),
-        }
-        for t in qs
-    ]
+    

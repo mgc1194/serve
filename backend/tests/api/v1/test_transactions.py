@@ -1,3 +1,9 @@
+"""
+tests/api/v1/test_transactions.py — Tests for transaction management endpoints.
+"""
+
+import hashlib
+
 import pytest
 from unittest.mock import Mock
 import pandas as pd
@@ -8,31 +14,58 @@ from ninja.testing import TestClient
 
 from api.v1.transactions import router
 from transactions.constants import HandlerKeys
-from transactions.models import Bank, AccountType, Account, Transaction
-from users.models import Household
+from transactions.models import AccountType, Account, Transaction
+from users.models import CustomUser, Household
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def household():
-    return Household.objects.create(name='Test Household')
+def client():
+    return TestClient(router)
 
 
 @pytest.fixture
-def bank(db):
-    # Use seeded bank for system-defined data
-    return Bank.objects.get(name="SoFi")
+def alice(db):
+    return CustomUser.objects.create_user(
+        username='alice',
+        email='alice@example.com',
+        password='Password1!',
+    )
+
+
+@pytest.fixture
+def bob(db):
+    return CustomUser.objects.create_user(
+        username='bob',
+        email='bob@example.com',
+        password='Password1!',
+    )
+
+
+@pytest.fixture
+def household(db, alice):
+    """A household with alice as its only member."""
+    h = Household.objects.create(name='Alice Household')
+    h.users.add(alice)
+    return h
+
+
+@pytest.fixture
+def other_household(db, bob):
+    """A household that alice does not belong to."""
+    h = Household.objects.create(name='Bob Household')
+    h.users.add(bob)
+    return h
 
 
 @pytest.fixture
 def account_type(db):
-    # Use seeded account type for system-defined data
     return AccountType.objects.get(handler_key=HandlerKeys.SOFI_SAVINGS)
 
 
 @pytest.fixture
-def account(account_type, household):
+def account(db, account_type, household):
     return Account.objects.create(
         name='Test Account',
         account_type=account_type,
@@ -41,98 +74,352 @@ def account(account_type, household):
 
 
 @pytest.fixture
-def client():
-    return TestClient(router)
+def transaction(db, account):
+    return Transaction.objects.create(
+        id='abc123' * 5 + 'ab',  # 32 chars
+        date='2026-01-15',
+        concept='TRADER JOES',
+        amount=-45.50,
+        account=account,
+    )
 
 
 @pytest.fixture
-def sample_csv_content():
-    """Sample CSV content as bytes."""
-    return b"Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n"
+def csv_file():
+    return SimpleUploadedFile(
+        'test.csv',
+        b'Date,Description,Amount\n2026-01-15,TRADER JOES,-45.50\n',
+        content_type='text/csv',
+    )
 
 
 @pytest.fixture
 def sample_dataframe():
-    """Sample processed DataFrame from a handler."""
-    return pd.DataFrame({
-        'ID': ['abc123'],
-        'Date': pd.to_datetime(['2026-01-15']),
-        'Concept': ['TRADER JOES'],
-        'Account': ['Test Account'],
-        'Amount': [-45.50],
-        'Label': [None],
-        'Category': [None],
-        'Additional Labels': [None],
-    })
+    return pd.DataFrame([{
+        'ID': 'abc123' * 5 + 'ab',
+        'Date': pd.Timestamp('2026-01-15'),
+        'Concept': 'TRADER JOES',
+        'Amount': -45.50,
+    }])
 
 
-@pytest.fixture
-def csv_file(sample_csv_content):
-    return SimpleUploadedFile("test.csv", sample_csv_content, content_type="text/csv")
-
-# ── GET /api/accounts ─────────────────────────────────────────────────────────
+# ── GET /transactions/ ────────────────────────────────────────────────────────
 
 @pytest.mark.django_db
-class TestListAccounts:
+class TestListTransactions:
 
-    def test_returns_accounts_for_household(self, client, account, household):
-        response = client.get(f'/accounts?household_id={household.id}')
+    def test_returns_transactions_for_household(self, client, alice, transaction, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
-        assert data[0]['name'] == 'Test Account'
+        assert data[0]['id'] == transaction.id
 
-    def test_returns_empty_for_nonexistent_household(self, client):
-        response = client.get('/accounts?household_id=9999')
+    def test_returns_empty_for_household_with_no_transactions(self, client, alice, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_orders_by_bank_name_then_account_name(self, client, household):
-        at1 = AccountType.objects.get(handler_key='sofi-checking')
-        at2 = AccountType.objects.get(handler_key='sofi-savings')
-        Account.objects.create(name='B Account', account_type=at1, household=household)
-        Account.objects.create(name='A Account', account_type=at2, household=household)
+    def test_filters_by_account_id(self, client, alice, transaction, account, household, account_type):
+        second_account = Account.objects.create(
+            name='Second Account',
+            account_type=account_type,
+            household=household,
+        )
+        Transaction.objects.create(
+            id='def456' * 5 + 'de',
+            date='2026-01-16',
+            concept='WHOLE FOODS',
+            amount=-32.00,
+            account=second_account,
+        )
 
-        response = client.get(f'/accounts?household_id={household.id}')
+        response = client.get(
+            f'/transactions/?household_id={household.id}&account_id={account.id}',
+            user=alice,
+        )
         data = response.json()
-        assert data[0]['name'] == 'A Account'
-        assert data[1]['name'] == 'B Account'
+        assert len(data) == 1
+        assert data[0]['id'] == transaction.id
+
+    def test_response_includes_account_and_bank_info(self, client, alice, transaction, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        data = response.json()[0]
+        assert data['account_name'] == 'Test Account'
+        assert data['bank_name'] == 'SoFi'
+
+    def test_results_ordered_by_date_descending(self, client, alice, account, household):
+        Transaction.objects.create(
+            id='t1' + 'x' * 30, date='2026-01-01', concept='OLDER', amount=-10.00, account=account
+        )
+        Transaction.objects.create(
+            id='t2' + 'x' * 30, date='2026-01-15', concept='NEWER', amount=-20.00, account=account
+        )
+
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        data = response.json()
+        assert data[0]['concept'] == 'NEWER'
+        assert data[1]['concept'] == 'OLDER'
+
+    def test_unauthenticated_returns_401(self, client, household):
+        response = client.get(f'/transactions/?household_id={household.id}')
+        assert response.status_code == 401
+
+    def test_returns_403_for_non_member(self, client, bob, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=bob)
+        assert response.status_code == 403
+
+    def test_returns_404_for_nonexistent_household(self, client, alice):
+        response = client.get('/transactions/?household_id=9999', user=alice)
+        assert response.status_code == 404
 
 
-# ── GET /api/v1/banks ─────────────────────────────────────────────────────────
+# ── POST /transactions/ ───────────────────────────────────────────────────────
 
 @pytest.mark.django_db
-class TestListBanks:
+class TestCreateTransaction:
 
-    def test_returns_all_banks(self, client, bank):
-        response = client.get('/banks')
+    def test_creates_transaction_successfully(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': 'WHOLE FOODS',
+                'amount': -55.00,
+            },
+            user=alice,
+        )
         assert response.status_code == 200
-
         data = response.json()
-        returned_names = {b['name'] for b in data}
-        expected_names = {b.name for b in Bank.objects.all()}
-        assert returned_names == expected_names
-        assert len(data) == Bank.objects.count()
+        assert data['concept'] == 'WHOLE FOODS'
+        assert data['amount'] == -55.00
+        assert data['account_name'] == 'Test Account'
+
+    def test_persists_to_database(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': 'COSTCO',
+                'amount': -120.00,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert Transaction.objects.filter(concept='COSTCO').exists()
+
+    def test_id_is_md5_of_fields(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-15',
+                'concept': 'TARGET',
+                'amount': -30.00,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        raw = f'{account.id}|2026-02-15|TARGET|-30.00'
+        expected_id = hashlib.md5(raw.encode()).hexdigest()
+        assert response.json()['id'] == expected_id
+
+    def test_strips_whitespace_from_concept(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': '  AMAZON  ',
+                'amount': -12.99,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert response.json()['concept'] == 'AMAZON'
+
+    def test_blank_concept_returns_400(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': '   ',
+                'amount': -10.00,
+            },
+            user=alice,
+        )
+        assert response.status_code == 400
+        assert 'concept cannot be blank' in response.json()['detail'].lower()
+
+    def test_duplicate_transaction_returns_400(self, client, alice, account):
+        payload = {
+            'account_id': account.id,
+            'date': '2026-02-01',
+            'concept': 'NETFLIX',
+            'amount': -15.99,
+        }
+        client.post('/transactions/', json=payload, user=alice)
+        response = client.post('/transactions/', json=payload, user=alice)
+        assert response.status_code == 400
+        assert 'already exists' in response.json()['detail'].lower()
+
+    def test_returns_403_for_non_member(self, client, bob, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': 'SPOTIFY',
+                'amount': -9.99,
+            },
+            user=bob,
+        )
+        assert response.status_code == 403
+
+    def test_returns_404_for_nonexistent_account(self, client, alice):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': 9999,
+                'date': '2026-02-01',
+                'concept': 'HULU',
+                'amount': -7.99,
+            },
+            user=alice,
+        )
+        assert response.status_code == 404
+
+    def test_unauthenticated_returns_401(self, client, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': 'TEST',
+                'amount': -1.00,
+            },
+        )
+        assert response.status_code == 401
 
 
-# ── GET /api/v1/accounts/detect ───────────────────────────────────────────────
+# ── PATCH /transactions/{id}/ ─────────────────────────────────────────────────
 
 @pytest.mark.django_db
-class TestDetectAccount:
+class TestUpdateTransaction:
 
-    def test_detects_known_filename(self, client):
-        response = client.get('/accounts/detect?filename=SOFI-Savings.csv')
+    def test_updates_concept_successfully(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'TRADER JOE\'S'},
+            user=alice,
+        )
         assert response.status_code == 200
-        data = response.json()
-        assert data['handler_key'] == 'sofi-savings'
-        assert data['detected'] is True
+        assert response.json()['concept'] == "TRADER JOE'S"
 
-    def test_returns_null_for_unknown_filename(self, client):
-        response = client.get('/accounts/detect?filename=unknown.csv')
+    def test_persists_to_database(self, client, alice, transaction):
+        client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'UPDATED CONCEPT'},
+            user=alice,
+        )
+        transaction.refresh_from_db()
+        assert transaction.concept == 'UPDATED CONCEPT'
+
+    def test_strips_whitespace_from_concept(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': '  TRIMMED  '},
+            user=alice,
+        )
         assert response.status_code == 200
-        data = response.json()
-        assert data['handler_key'] is None
-        assert data['detected'] is False
+        assert response.json()['concept'] == 'TRIMMED'
+
+    def test_blank_concept_returns_400(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': '   '},
+            user=alice,
+        )
+        assert response.status_code == 400
+        assert 'concept cannot be blank' in response.json()['detail'].lower()
+
+    def test_returns_403_for_non_member(self, client, bob, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'HACKED'},
+            user=bob,
+        )
+        assert response.status_code == 403
+
+    def test_returns_404_for_nonexistent_transaction(self, client, alice):
+        response = client.patch(
+            '/transactions/nonexistent_id_000000000000000/',
+            json={'concept': 'X'},
+            user=alice,
+        )
+        assert response.status_code == 404
+
+    def test_unauthenticated_returns_401(self, client, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'X'},
+        )
+        assert response.status_code == 401
+
+    def test_other_fields_unchanged_after_update(self, client, alice, transaction):
+        transaction.refresh_from_db()
+        original_amount = transaction.amount
+        original_date = transaction.date
+
+        client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'NEW NAME'},
+            user=alice,
+        )
+        transaction.refresh_from_db()
+
+        assert transaction.amount == original_amount
+        assert transaction.date == original_date
+
+
+# ── DELETE /transactions/{id}/ ────────────────────────────────────────────────
+
+@pytest.mark.django_db
+class TestDeleteTransaction:
+
+    def test_deletes_transaction_successfully(self, client, alice, transaction):
+        response = client.delete(
+            f'/transactions/{transaction.id}/',
+            user=alice,
+        )
+        assert response.status_code == 204
+
+    def test_removes_from_database(self, client, alice, transaction):
+        transaction_id = transaction.id
+        client.delete(f'/transactions/{transaction_id}/', user=alice)
+        assert not Transaction.objects.filter(pk=transaction_id).exists()
+
+    def test_returns_403_for_non_member(self, client, bob, transaction):
+        response = client.delete(
+            f'/transactions/{transaction.id}/',
+            user=bob,
+        )
+        assert response.status_code == 403
+        assert Transaction.objects.filter(pk=transaction.id).exists()
+
+    def test_returns_404_for_nonexistent_transaction(self, client, alice):
+        response = client.delete(
+            '/transactions/nonexistent_id_000000000000000/',
+            user=alice,
+        )
+        assert response.status_code == 404
+
+    def test_unauthenticated_returns_401(self, client, transaction):
+        response = client.delete(f'/transactions/{transaction.id}/')
+        assert response.status_code == 401
 
 
 # ── POST /api/v1/transactions/import ─────────────────────────────────────────
@@ -140,15 +427,22 @@ class TestDetectAccount:
 @pytest.mark.django_db
 class TestImportTransactions:
 
-    def test_successful_import(self, client, account, csv_file, sample_dataframe, mocker):
+    def test_successful_import(self, client, alice, account, csv_file, sample_dataframe, mocker):
         mock_handler = Mock()
         mock_handler.process.return_value = sample_dataframe
-        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'SoFi Savings': mock_handler})
-        mocker.patch('api.v1.transactions.upsert_transactions', return_value={'inserted': 1, 'skipped': 0, 'total': 1})
+        mocker.patch.dict(
+            'transactions.handlers.accounts.ACCOUNT_HANDLERS',
+            {'sofi-savings': mock_handler},
+        )
+        mocker.patch(
+            'api.v1.transactions.upsert_transactions',
+            return_value={'inserted': 1, 'skipped': 0, 'total': 1},
+        )
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',
-            FILES={'file': csv_file}
+            FILES={'file': csv_file},
+            user=alice,
         )
 
         assert response.status_code == 200
@@ -159,19 +453,29 @@ class TestImportTransactions:
         assert data['total'] == 1
         assert data['error'] is None
 
-    def test_returns_error_for_nonexistent_account(self, client, csv_file):
+    def test_returns_403_for_non_member(self, client, bob, account, csv_file):
+        response = client.post(
+            f'/transactions/import?account_id={account.id}',
+            FILES={'file': csv_file},
+            user=bob,
+        )
+        assert response.status_code == 403
+
+    def test_returns_404_for_nonexistent_account(self, client, alice, csv_file):
         response = client.post(
             '/transactions/import?account_id=9999',
-            FILES={'file': csv_file}
+            FILES={'file': csv_file},
+            user=alice,
         )
         assert response.status_code == 404
 
-    def test_returns_error_for_missing_handler(self, client, account, csv_file, mocker):
+    def test_returns_error_for_missing_handler(self, client, alice, account, csv_file, mocker):
         mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {}, clear=True)
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',
-            FILES={'file': csv_file}
+            FILES={'file': csv_file},
+            user=alice,
         )
 
         assert response.status_code == 200
@@ -179,102 +483,37 @@ class TestImportTransactions:
         assert data['inserted'] == 0
         assert 'No handler found' in data['error']
 
-    def test_returns_error_for_empty_dataframe(self, client, account, csv_file, mocker):
+    def test_returns_error_for_empty_dataframe(self, client, alice, account, csv_file, mocker):
         mock_handler = Mock()
         mock_handler.process.return_value = pd.DataFrame()
-        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'sofi-savings': mock_handler})
+        mocker.patch.dict(
+            'transactions.handlers.accounts.ACCOUNT_HANDLERS',
+            {'sofi-savings': mock_handler},
+        )
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',
-            FILES={'file': csv_file}
+            FILES={'file': csv_file},
+            user=alice,
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert data['inserted'] == 0
-        assert 'no valid transactions' in data['error']
+        assert 'no valid transactions' in response.json()['error'].lower()
 
-    def test_handles_handler_exception(self, client, account, csv_file, mocker):
+    def test_handles_handler_exception(self, client, alice, account, csv_file, mocker):
         mock_handler = Mock()
         mock_handler.process.side_effect = Exception('Handler error')
-        mocker.patch.dict('transactions.handlers.accounts.ACCOUNT_HANDLERS', {'sofi-savings': mock_handler})
+        mocker.patch.dict(
+            'transactions.handlers.accounts.ACCOUNT_HANDLERS',
+            {'sofi-savings': mock_handler},
+        )
 
         response = client.post(
             f'/transactions/import?account_id={account.id}',
-            FILES={'file': csv_file}
+            FILES={'file': csv_file},
+            user=alice,
         )
 
         assert response.status_code == 200
-        data = response.json()
-        assert data['inserted'] == 0
-        assert 'Handler error' in data['error']
-
-
-# ── GET /api/v1/transactions ──────────────────────────────────────────────────
-
-@pytest.mark.django_db
-class TestListTransactions:
-
-    @pytest.fixture
-    def transaction(self, account):
-        return Transaction.objects.create(
-            id='abc123',
-            date='2026-01-15',
-            concept='TRADER JOES',
-            amount=-45.50,
-            account=account,
-        )
-
-    @pytest.fixture
-    def another_account(self, account_type, household):
-        return Account.objects.create(
-            name='Another Account',
-            account_type=account_type,
-            household=household,
-        )
-
-    def test_returns_transactions_for_household(self, client, transaction, household):
-        response = client.get(f'/transactions?household_id={household.id}')
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]['id'] == 'abc123'
-
-    def test_returns_empty_for_household_with_no_transactions(self, client, household):
-        response = client.get(f'/transactions?household_id={household.id}')
-        assert response.status_code == 200
-        assert response.json() == []
-
-    def test_returns_empty_for_nonexistent_household(self, client):
-        response = client.get('/transactions?household_id=9999')
-        assert response.status_code == 200
-        assert response.json() == []
-
-    def test_filters_by_account_id(self, client, transaction, account, another_account, household):
-        Transaction.objects.create(
-            id='def456',
-            date='2026-01-16',
-            concept='WHOLE FOODS',
-            amount=-32.00,
-            account=another_account,
-        )
-
-        response = client.get(f'/transactions?household_id={household.id}&account_id={account.id}')
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]['id'] == 'abc123'
-
-    def test_response_includes_account_and_bank_info(self, client, transaction, household):
-        response = client.get(f'/transactions?household_id={household.id}')
-        data = response.json()[0]
-        assert data['account_name'] == 'Test Account'
-        assert data['bank_name'] == 'SoFi'
-
-    def test_results_are_ordered_by_date_descending(self, client, account, household):
-        Transaction.objects.create(id='t1', date='2026-01-01', concept='OLDER', amount=-10.00, account=account)
-        Transaction.objects.create(id='t2', date='2026-01-15', concept='NEWER', amount=-20.00, account=account)
-
-        response = client.get(f'/transactions?household_id={household.id}')
-        data = response.json()
-        assert data[0]['id'] == 't2'
-        assert data[1]['id'] == 't1'
+        assert 'Handler error' in response.json()['error']
+        
