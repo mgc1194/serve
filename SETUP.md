@@ -24,6 +24,7 @@ You can do SERVE development on macOS, Ubuntu, or Windows (running Ubuntu via WS
 
 - Python 3.12 or higher
 - Node.js 18 or higher
+- pnpm 9 or higher
 - MySQL 8.0 or higher
 - pip and virtualenv
 
@@ -42,14 +43,17 @@ cd serve
 python3 -m venv .venv
 source .venv/bin/activate       # macOS / Linux / WSL
 # .venv\Scripts\activate        # Windows (native, not WSL)
-pip install -r backend/requirements/dev.txt
+pip install -r requirements/dev.txt
 ```
 
 ## 3. Install frontend dependencies
 
+The frontend uses [pnpm](https://pnpm.io/). Enable it via corepack (bundled with Node.js), then install dependencies:
+
 ```bash
+corepack enable
 cd frontend
-npm install
+pnpm install
 cd ..
 ```
 
@@ -64,7 +68,7 @@ sh scripts/install-hooks.sh
 <details>
 <summary>What the hooks do</summary>
 
-- **protect_main.py** — blocks commits directly to `main`, enforcing the PR workflow
+- **protect-main.py** — blocks commits directly to `main`, enforcing the PR workflow
 - **lint.py** — runs the appropriate linter only on staged files:
   - `frontend/src/**/*.{ts,tsx}` → ESLint
   - `backend/**/*.{py,pyi}` → ruff format + ruff check
@@ -267,7 +271,7 @@ python manage.py runserver
 Frontend (from `frontend/`):
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 The API is available at `http://localhost:8000` and the frontend at `http://localhost:5173`.
@@ -287,7 +291,7 @@ Frontend:
 
 ```bash
 cd frontend
-npm run test
+pnpm test
 ```
 
 ---

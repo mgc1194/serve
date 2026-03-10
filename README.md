@@ -6,7 +6,7 @@ Spending, Earnings, & Resources View Engine — a Django + React web application
 
 1. Follow the [setup guide](./SETUP.md) to configure your workstation.
 2. `cd backend && python manage.py runserver` to start the API server.
-3. `cd frontend && npm run dev` to start the frontend.
+3. `cd frontend && pnpm dev` to start the frontend.
 4. Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## How to help
@@ -53,13 +53,13 @@ serve/
 ├── backend/
 │   ├── config/               # Django settings and URL routing
 │   ├── users/                # CustomUser and Household models
-│   ├── transactions/         # Core transaction logic, API, handlers
-│   └── requirements/         # Python dependencies
+│   └── transactions/         # Core transaction logic, API, handlers
 ├── frontend/
 │   └── src/                  # React + TypeScript application
+├── requirements/             # Python dependencies
 └── scripts/                  # Git hooks and dev tooling
 ```
 
 ## License
 
-This project is provided as-is for personal use.
+Licensed under [CC BY-NC 4.0](./LICENSE). You are free to use, modify, and share this project with attribution, provided it is not used for commercial purposes.
