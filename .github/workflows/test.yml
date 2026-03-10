@@ -20,6 +20,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements/dev.txt
 
+      - name: Lint
+        working-directory: backend
+        run: ruff check .
+
       - name: Start MySQL
         run: sudo /etc/init.d/mysql start
 
