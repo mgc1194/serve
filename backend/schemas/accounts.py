@@ -1,7 +1,5 @@
 from datetime import datetime
 
-from typing import List
-
 from ninja import Schema
 
 
@@ -29,7 +27,7 @@ class BankSchema(Schema):
 
     id: int
     name: str
-    account_types: List[AccountTypeSchema]
+    account_types: list[AccountTypeSchema]
 
 
 class AccountCreateRequest(Schema):

@@ -66,8 +66,8 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+
 import pandas as pd
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +84,11 @@ class BaseHandler:
     encoding: str = 'latin1'  # CSV file encoding
     negate_amount: bool = False  # Set True if the bank inverts sign (e.g. Amex, Discover)
     csv_names: list = None  # Column names to assign (for headerless CSVs e.g. Wells Fargo)
-    csv_header: Optional[int] = 0  # Row number of header; None for headerless CSVs
+    csv_header: int | None = 0  # Row number of header; None for headerless CSVs
 
     # ── Public entry point ─────────────────────────────────────────────────
 
-    def process(self, file_path: str | io.BytesIO) -> Optional[pd.DataFrame]:
+    def process(self, file_path: str | io.BytesIO) -> pd.DataFrame | None:
         """
         Parse, clean, and return a normalized DataFrame for this account.
         Returns None and logs the error if anything goes wrong.
@@ -123,16 +123,18 @@ class BaseHandler:
 
         amount = -raw_df[self.col_amount] if self.negate_amount else raw_df[self.col_amount]
 
-        clean_df = pd.DataFrame({
-            'ID': raw_df.apply(self._generate_id, axis=1),
-            'Date': pd.to_datetime(raw_df[self.col_date], format=self.date_format),
-            'Concept': raw_df[self.col_concept],
-            'Account': self.account,
-            'Amount': amount,
-            'Label': None,
-            'Category': None,
-            'Additional Labels': None,
-        })
+        clean_df = pd.DataFrame(
+            {
+                'ID': raw_df.apply(self._generate_id, axis=1),
+                'Date': pd.to_datetime(raw_df[self.col_date], format=self.date_format),
+                'Concept': raw_df[self.col_concept],
+                'Account': self.account,
+                'Amount': amount,
+                'Label': None,
+                'Category': None,
+                'Additional Labels': None,
+            }
+        )
 
         return clean_df
 

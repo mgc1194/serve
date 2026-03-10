@@ -2,28 +2,29 @@
 tests/unit/handlers/test_accounts.py — Unit tests for each account handler.
 """
 
-import pytest
-import pandas as pd
 from io import StringIO
 
+import pandas as pd
+import pytest
+
 from transactions.handlers.accounts import (
-    SoFiSavingsHandler,
-    SoFiCheckingHandler,
-    CapitalOneCheckingHandler,
-    CapitalOneSavingsHandler,
-    CapitalOneQuicksilverHandler,
     AmexHandler,
+    CapitalOneCheckingHandler,
+    CapitalOneQuicksilverHandler,
+    CapitalOneSavingsHandler,
     ChaseHandler,
     DiscoverHandler,
+    SoFiCheckingHandler,
+    SoFiSavingsHandler,
     WellsFargoCheckingHandler,
     WellsFargoSavingsHandler,
 )
 
-
 # ── SoFi Savings ──────────────────────────────────────────────────────────────
 
+
 class TestSoFiSavingsHandler:
-    CSV = "Date,Description,Amount\n2026-01-15,VENMO PAYMENT,-180.00\n"
+    CSV = 'Date,Description,Amount\n2026-01-15,VENMO PAYMENT,-180.00\n'
 
     @pytest.fixture
     def subject(self, mocker):
@@ -48,8 +49,9 @@ class TestSoFiSavingsHandler:
 
 # ── SoFi Checking ─────────────────────────────────────────────────────────────
 
+
 class TestSoFiCheckingHandler:
-    CSV = "Date,Description,Amount\n2026-02-01,DIRECT DEPOSIT,2500.00\n"
+    CSV = 'Date,Description,Amount\n2026-02-01,DIRECT DEPOSIT,2500.00\n'
 
     @pytest.fixture
     def subject(self, mocker):
@@ -74,14 +76,15 @@ class TestSoFiCheckingHandler:
 
 # ── Capital One Checking ──────────────────────────────────────────────────────
 
+
 class TestCapitalOneCheckingHandler:
     DEBIT_CSV = (
-        "Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n"
-        "01/15/26,TRADER JOES,45.50,Debit\n"
+        'Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n'
+        '01/15/26,TRADER JOES,45.50,Debit\n'
     )
     CREDIT_CSV = (
-        "Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n"
-        "01/15/26,MOBILE PAYMENT,1152.91,Credit\n"
+        'Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n'
+        '01/15/26,MOBILE PAYMENT,1152.91,Credit\n'
     )
 
     @pytest.fixture
@@ -115,14 +118,15 @@ class TestCapitalOneCheckingHandler:
 
 # ── Capital One Savings ───────────────────────────────────────────────────────
 
+
 class TestCapitalOneSavingsHandler:
     DEBIT_CSV = (
-        "Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n"
-        "01/15/26,TRANSFER OUT,500.00,Debit\n"
+        'Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n'
+        '01/15/26,TRANSFER OUT,500.00,Debit\n'
     )
     CREDIT_CSV = (
-        "Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n"
-        "01/15/26,TRANSFER IN,500.00,Credit\n"
+        'Transaction Date,Transaction Description,Transaction Amount,Transaction Type\n'
+        '01/15/26,TRANSFER IN,500.00,Credit\n'
     )
 
     @pytest.fixture
@@ -153,15 +157,10 @@ class TestCapitalOneSavingsHandler:
 
 # ── Capital One Quicksilver ───────────────────────────────────────────────────
 
+
 class TestCapitalOneQuicksilverHandler:
-    PURCHASE_CSV = (
-        "Transaction Date,Description,Credit,Debit\n"
-        "2026-01-15,TRADER JOES,,45.50\n"
-    )
-    PAYMENT_CSV = (
-        "Transaction Date,Description,Credit,Debit\n"
-        "2026-01-15,MOBILE PAYMENT,1152.91,\n"
-    )
+    PURCHASE_CSV = 'Transaction Date,Description,Credit,Debit\n2026-01-15,TRADER JOES,,45.50\n'
+    PAYMENT_CSV = 'Transaction Date,Description,Credit,Debit\n2026-01-15,MOBILE PAYMENT,1152.91,\n'
 
     @pytest.fixture
     def purchase(self, mocker):
@@ -194,8 +193,9 @@ class TestCapitalOneQuicksilverHandler:
 
 # ── Amex ──────────────────────────────────────────────────────────────────────
 
+
 class TestAmexHandler:
-    CSV = "Date,Description,Amount\n02/04/2026,METRO FARE,2.45\n"
+    CSV = 'Date,Description,Amount\n02/04/2026,METRO FARE,2.45\n'
 
     @pytest.fixture
     def subject(self, mocker):
@@ -220,8 +220,9 @@ class TestAmexHandler:
 
 # ── Chase ─────────────────────────────────────────────────────────────────────
 
+
 class TestChaseHandler:
-    CSV = "Transaction Date,Description,Amount\n02/15/2026,WHOLEFDS,-67.89\n"
+    CSV = 'Transaction Date,Description,Amount\n02/15/2026,WHOLEFDS,-67.89\n'
 
     @pytest.fixture
     def subject(self, mocker):
@@ -246,8 +247,9 @@ class TestChaseHandler:
 
 # ── Discover ──────────────────────────────────────────────────────────────────
 
+
 class TestDiscoverHandler:
-    CSV = "Trans. Date,Description,Amount\n02/04/2026,AMAZON,29.99\n"
+    CSV = 'Trans. Date,Description,Amount\n02/04/2026,AMAZON,29.99\n'
 
     @pytest.fixture
     def subject(self, mocker):
@@ -272,15 +274,14 @@ class TestDiscoverHandler:
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
 
+
 class TestWellsFargoCheckingHandler:
-    CSV = "02/15/2026,-45.50,*,_,GROCERY STORE\n"
+    CSV = '02/15/2026,-45.50,*,_,GROCERY STORE\n'
 
     @pytest.fixture
     def subject(self, mocker):
         raw_df = pd.read_csv(
-            StringIO(self.CSV),
-            names=['Date', 'Amount', '*', '_', 'Description'],
-            header=None
+            StringIO(self.CSV), names=['Date', 'Amount', '*', '_', 'Description'], header=None
         )
         mocker.patch('pandas.read_csv', return_value=raw_df)
         return WellsFargoCheckingHandler().process('fake.csv')
@@ -303,15 +304,14 @@ class TestWellsFargoCheckingHandler:
 
 # ── Wells Fargo Savings ───────────────────────────────────────────────────────
 
+
 class TestWellsFargoSavingsHandler:
-    CSV = "02/15/2026,500.00,*,_,TRANSFER IN\n"
+    CSV = '02/15/2026,500.00,*,_,TRANSFER IN\n'
 
     @pytest.fixture
     def subject(self, mocker):
         raw_df = pd.read_csv(
-            StringIO(self.CSV),
-            names=['Date', 'Amount', '*', '_', 'Description'],
-            header=None
+            StringIO(self.CSV), names=['Date', 'Amount', '*', '_', 'Description'], header=None
         )
         mocker.patch('pandas.read_csv', return_value=raw_df)
         return WellsFargoSavingsHandler().process('fake.csv')

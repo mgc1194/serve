@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -16,9 +15,32 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='AccountType',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    'id',
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
+                    ),
+                ),
                 ('name', models.CharField(max_length=255)),
-                ('handler_key', models.CharField(choices=[('sofi-savings', 'SoFi Savings'), ('sofi-checking', 'SoFi Checking'), ('co-checking', '360 Checking'), ('co-savings', '360 Performance Savings'), ('co-quicksilver', 'Quicksilver Credit Card'), ('wf-checking', 'Checking'), ('wf-savings', 'Savings'), ('chase', 'Chase Card'), ('discover', 'Discover Card'), ('amex-delta', 'Delta SkyMiles Card')], max_length=255, unique=True)),
+                (
+                    'handler_key',
+                    models.CharField(
+                        choices=[
+                            ('sofi-savings', 'SoFi Savings'),
+                            ('sofi-checking', 'SoFi Checking'),
+                            ('co-checking', '360 Checking'),
+                            ('co-savings', '360 Performance Savings'),
+                            ('co-quicksilver', 'Quicksilver Credit Card'),
+                            ('wf-checking', 'Checking'),
+                            ('wf-savings', 'Savings'),
+                            ('chase', 'Chase Card'),
+                            ('discover', 'Discover Card'),
+                            ('amex-delta', 'Delta SkyMiles Card'),
+                        ],
+                        max_length=255,
+                        unique=True,
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
             ],
@@ -29,7 +51,12 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Bank',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    'id',
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
+                    ),
+                ),
                 ('name', models.CharField(max_length=255, unique=True)),
                 ('logo', models.ImageField(blank=True, null=True, upload_to='banks/')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
@@ -42,12 +69,31 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Account',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                (
+                    'id',
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name='ID'
+                    ),
+                ),
                 ('name', models.CharField(max_length=255)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('household', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='accounts', to='users.household')),
-                ('account_type', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='accounts', to='transactions.accounttype')),
+                (
+                    'household',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='accounts',
+                        to='users.household',
+                    ),
+                ),
+                (
+                    'account_type',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='accounts',
+                        to='transactions.accounttype',
+                    ),
+                ),
             ],
             options={
                 'db_table': 'accounts',
@@ -57,7 +103,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='accounttype',
             name='bank',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='account_types', to='transactions.bank'),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='account_types',
+                to='transactions.bank',
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='accounttype',
@@ -74,11 +124,22 @@ class Migration(migrations.Migration):
                 ('category', models.CharField(blank=True, max_length=255, null=True)),
                 ('additional_labels', models.TextField(blank=True, null=True)),
                 ('imported_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='transactions', to='transactions.account')),
+                (
+                    'account',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='transactions',
+                        to='transactions.account',
+                    ),
+                ),
             ],
             options={
                 'db_table': 'transactions',
-                'indexes': [models.Index(fields=['date'], name='idx_transactions_date'), models.Index(fields=['label'], name='idx_transactions_label'), models.Index(fields=['category'], name='idx_transactions_category')],
+                'indexes': [
+                    models.Index(fields=['date'], name='idx_transactions_date'),
+                    models.Index(fields=['label'], name='idx_transactions_label'),
+                    models.Index(fields=['category'], name='idx_transactions_category'),
+                ],
             },
         ),
     ]

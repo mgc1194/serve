@@ -10,9 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from pathlib import Path
-from dotenv import load_dotenv
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 
 # ── Environment ───────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 
 if not SECRET_KEY:
-    raise ValueError("DJANGO_SECRET_KEY must be set in .env")
+    raise ValueError('DJANGO_SECRET_KEY must be set in .env')
 
 DEBUG = os.getenv('DJANGO_DEBUG', 'False') == 'True'
 
@@ -48,7 +49,6 @@ INSTALLED_APPS = [
     # Third party
     'corsheaders',
     'ninja',
-
     # Local
     'users',
     'transactions',

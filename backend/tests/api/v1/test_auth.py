@@ -1,11 +1,11 @@
 import pytest
-
 from ninja.testing import TestClient
+
 from api.v1.auth import router
 from users.models import CustomUser
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def client():
@@ -36,9 +36,9 @@ def registered_user(db, valid_payload):
 
 # ── POST /api/auth/register ───────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAuthRegister:
-
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
@@ -58,7 +58,9 @@ class TestAuthRegister:
         assert response.status_code == 200
         assert response.json()['username'] == 'john'
 
-    def test_username_gets_suffix_when_local_part_taken(self, client, valid_payload, registered_user):
+    def test_username_gets_suffix_when_local_part_taken(
+        self, client, valid_payload, registered_user
+    ):
         new_payload = valid_payload.copy()
         new_payload['email'] = 'john@otherdomain.com'
         response = client.post('/auth/register', json=new_payload)
@@ -132,7 +134,9 @@ class TestAuthRegister:
         assert response.status_code == 200
         assert response.json()['email'] == 'john@example.com'
 
-    def test_duplicate_email_case_insensitive_returns_400(self, client, valid_payload, registered_user):
+    def test_duplicate_email_case_insensitive_returns_400(
+        self, client, valid_payload, registered_user
+    ):
         valid_payload['email'] = 'JOHN@EXAMPLE.COM'
         response = client.post('/auth/register', json=valid_payload)
         assert response.status_code == 400
@@ -140,62 +144,82 @@ class TestAuthRegister:
 
 # ── POST /api/auth/login ──────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAuthLogin:
-
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
         return mocker.patch('api.v1.auth.login')
 
     def test_successful_login_returns_user(self, client, valid_payload, registered_user):
-        response = client.post('/auth/login', json={
-            'email': valid_payload['email'],
-            'password': valid_payload['password'],
-        })
+        response = client.post(
+            '/auth/login',
+            json={
+                'email': valid_payload['email'],
+                'password': valid_payload['password'],
+            },
+        )
         assert response.status_code == 200
         assert response.json()['email'] == valid_payload['email']
 
     def test_wrong_password_returns_401(self, client, registered_user, valid_payload):
-        response = client.post('/auth/login', json={
-            'email': valid_payload['email'],
-            'password': 'WrongPassword1!',
-        })
+        response = client.post(
+            '/auth/login',
+            json={
+                'email': valid_payload['email'],
+                'password': 'WrongPassword1!',
+            },
+        )
         assert response.status_code == 401
 
     def test_unknown_email_returns_401(self, client):
-        response = client.post('/auth/login', json={
-            'email': 'nobody@example.com',
-            'password': 'SomePassword1!',
-        })
+        response = client.post(
+            '/auth/login',
+            json={
+                'email': 'nobody@example.com',
+                'password': 'SomePassword1!',
+            },
+        )
         assert response.status_code == 401
 
     def test_login_email_is_case_insensitive(self, client, valid_payload, registered_user):
-        response = client.post('/auth/login', json={
-            'email': valid_payload['email'].upper(),
-            'password': valid_payload['password'],
-        })
+        response = client.post(
+            '/auth/login',
+            json={
+                'email': valid_payload['email'].upper(),
+                'password': valid_payload['password'],
+            },
+        )
         assert response.status_code == 200
 
-    def test_error_message_does_not_distinguish_email_from_password(self, client, registered_user, valid_payload):
+    def test_error_message_does_not_distinguish_email_from_password(
+        self, client, registered_user, valid_payload
+    ):
         """Ensures identical error messages for wrong email vs wrong password
         to prevent user enumeration attacks."""
-        wrong_email_response = client.post('/auth/login', json={
-            'email': 'nobody@example.com',
-            'password': valid_payload['password'],
-        })
-        wrong_password_response = client.post('/auth/login', json={
-            'email': valid_payload['email'],
-            'password': 'WrongPassword1!',
-        })
+        wrong_email_response = client.post(
+            '/auth/login',
+            json={
+                'email': 'nobody@example.com',
+                'password': valid_payload['password'],
+            },
+        )
+        wrong_password_response = client.post(
+            '/auth/login',
+            json={
+                'email': valid_payload['email'],
+                'password': 'WrongPassword1!',
+            },
+        )
         assert wrong_email_response.json()['detail'] == wrong_password_response.json()['detail']
 
 
 # ── POST /api/auth/logout ─────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAuthLogout:
-
     @pytest.fixture(autouse=True)
     def mock_login(self, mocker):
         """Patch Django's login() to avoid session handling in tests."""
@@ -212,9 +236,9 @@ class TestAuthLogout:
 
 # ── GET /api/auth/me ──────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAuthMe:
-
     def test_unauthenticated_me_returns_401(self, client):
         response = client.get('/auth/me')
         assert response.status_code == 401
