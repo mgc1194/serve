@@ -3,22 +3,20 @@ tests/api/v1/test_transactions.py — Tests for transaction management endpoints
 """
 
 import hashlib
-
-import pytest
 from unittest.mock import Mock
+
 import pandas as pd
-
+import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-
 from ninja.testing import TestClient
 
 from api.v1.transactions import router
 from transactions.constants import HandlerKeys
-from transactions.models import AccountType, Account, Transaction
+from transactions.models import Account, AccountType, Transaction
 from users.models import CustomUser, Household
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def client():
@@ -95,19 +93,23 @@ def csv_file():
 
 @pytest.fixture
 def sample_dataframe():
-    return pd.DataFrame([{
-        'ID': 'abc123' * 5 + 'ab',
-        'Date': pd.Timestamp('2026-01-15'),
-        'Concept': 'TRADER JOES',
-        'Amount': -45.50,
-    }])
+    return pd.DataFrame(
+        [
+            {
+                'ID': 'abc123' * 5 + 'ab',
+                'Date': pd.Timestamp('2026-01-15'),
+                'Concept': 'TRADER JOES',
+                'Amount': -45.50,
+            }
+        ]
+    )
 
 
 # ── GET /transactions/ ────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestListTransactions:
-
     def test_returns_transactions_for_household(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
         assert response.status_code == 200
@@ -120,7 +122,9 @@ class TestListTransactions:
         assert response.status_code == 200
         assert response.json() == []
 
-    def test_filters_by_account_id(self, client, alice, transaction, account, household, account_type):
+    def test_filters_by_account_id(
+        self, client, alice, transaction, account, household, account_type
+    ):
         second_account = Account.objects.create(
             name='Second Account',
             account_type=account_type,
@@ -176,9 +180,9 @@ class TestListTransactions:
 
 # ── POST /transactions/ ───────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestCreateTransaction:
-
     def test_creates_transaction_successfully(self, client, alice, account):
         response = client.post(
             '/transactions/',
@@ -307,13 +311,13 @@ class TestCreateTransaction:
 
 # ── PATCH /transactions/{id}/ ─────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestUpdateTransaction:
-
     def test_updates_concept_successfully(self, client, alice, transaction):
         response = client.patch(
             f'/transactions/{transaction.id}/',
-            json={'concept': 'TRADER JOE\'S'},
+            json={'concept': "TRADER JOE'S"},
             user=alice,
         )
         assert response.status_code == 200
@@ -387,9 +391,9 @@ class TestUpdateTransaction:
 
 # ── DELETE /transactions/{id}/ ────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestDeleteTransaction:
-
     def test_deletes_transaction_successfully(self, client, alice, transaction):
         response = client.delete(
             f'/transactions/{transaction.id}/',
@@ -424,9 +428,9 @@ class TestDeleteTransaction:
 
 # ── POST /api/v1/transactions/import ─────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestImportTransactions:
-
     def test_successful_import(self, client, alice, account, csv_file, sample_dataframe, mocker):
         mock_handler = Mock()
         mock_handler.process.return_value = sample_dataframe
@@ -516,4 +520,3 @@ class TestImportTransactions:
 
         assert response.status_code == 200
         assert 'Handler error' in response.json()['error']
-        

@@ -3,15 +3,14 @@ tests/api/v1/test_households.py — Tests for household management endpoints.
 """
 
 import pytest
-
 from ninja.testing import TestClient
 
 from api.v1.households import router
-from users.models import CustomUser, Household
 from transactions.models import Account, AccountType, Bank
-
+from users.models import CustomUser, Household
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def client():
@@ -54,9 +53,9 @@ def shared_household(db, alice, bob):
 
 # ── GET /households/ ──────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestListHouseholds:
-
     def test_returns_only_users_households(self, client, alice, bob, household):
         bob_household = Household.objects.create(name="Bob's Place")
         bob_household.users.add(bob)
@@ -86,9 +85,9 @@ class TestListHouseholds:
 
 # ── POST /households/ ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestCreateHousehold:
-
     def test_creates_household_and_adds_creator(self, client, alice):
         response = client.post('/households/', json={'name': 'My Home'}, user=alice)
 
@@ -105,7 +104,6 @@ class TestCreateHousehold:
         response = client.post('/households/', json={'name': '   '}, user=alice)
         assert response.status_code == 400
         assert 'blank' in response.json()['detail'].lower()
-
 
     def test_name_is_normalized(self, client, alice):
         response = client.post('/households/', json={'name': 'smith household'}, user=alice)
@@ -127,6 +125,7 @@ class TestCreateHousehold:
         client.post('/households/', json={'name': 'My Home'}, user=alice)
         response = client.post('/households/', json={'name': 'My Home'}, user=bob)
         assert response.status_code == 200
+
     def test_unauthenticated_returns_401(self, client):
         response = client.post('/households/', json={'name': 'My Home'})
         assert response.status_code == 401
@@ -134,9 +133,9 @@ class TestCreateHousehold:
 
 # ── GET /households/{id}/ ─────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestGetHousehold:
-
     def test_returns_household(self, client, alice, household):
         response = client.get(f'/households/{household.id}/', user=alice)
         assert response.status_code == 200
@@ -163,9 +162,9 @@ class TestGetHousehold:
 
 # ── PATCH /households/{id}/ ───────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestRenameHousehold:
-
     def test_renames_household(self, client, alice, household):
         response = client.patch(
             f'/households/{household.id}/',
@@ -187,7 +186,6 @@ class TestRenameHousehold:
             user=alice,
         )
         assert response.status_code == 400
-
 
     def test_name_is_normalized_on_rename(self, client, alice, household):
         response = client.patch(
@@ -216,6 +214,7 @@ class TestRenameHousehold:
             user=alice,
         )
         assert response.status_code == 200
+
     def test_non_member_returns_403(self, client, bob, household):
         response = client.patch(
             f'/households/{household.id}/',
@@ -231,9 +230,9 @@ class TestRenameHousehold:
 
 # ── DELETE /households/{id}/ ──────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestDeleteHousehold:
-
     def test_deletes_household(self, client, alice, household):
         response = client.delete(f'/households/{household.id}/', user=alice)
         assert response.status_code == 204
@@ -272,9 +271,9 @@ class TestDeleteHousehold:
 
 # ── POST /households/{id}/members/ ────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAddMember:
-
     def test_adds_member_by_email(self, client, alice, bob, household):
         response = client.post(
             f'/households/{household.id}/members/',
@@ -330,9 +329,9 @@ class TestAddMember:
 
 # ── DELETE /households/{id}/members/{user_id}/ ────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestRemoveMember:
-
     def test_removes_member(self, client, alice, bob, shared_household):
         response = client.delete(
             f'/households/{shared_household.id}/members/{bob.id}/',
@@ -382,4 +381,3 @@ class TestRemoveMember:
     def test_nonexistent_household_returns_404(self, client, alice):
         response = client.delete(f'/households/99999/members/{alice.id}/', user=alice)
         assert response.status_code == 404
-        

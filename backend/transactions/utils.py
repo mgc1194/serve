@@ -19,12 +19,12 @@ the model layer.
 """
 
 import logging
-from typing import Optional
 
 import pandas as pd
 
-from .models import Account, Transaction
 from transactions.constants import HandlerKeys
+
+from .models import Account, Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ FILE_DETECTION_MAP = {
 }
 
 
-def detect_account_type(filename: str) -> Optional[str]:
+def detect_account_type(filename: str) -> str | None:
     """
     Attempt to detect the account type from a CSV filename.
 
@@ -61,6 +61,7 @@ def detect_account_type(filename: str) -> Optional[str]:
 
 
 # ── Transaction upsert ────────────────────────────────────────────────────────
+
 
 def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     """
@@ -81,9 +82,7 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     incoming_ids = df['ID'].tolist()
 
     # Fetch existing transaction IDs in one query
-    existing_ids = set(
-        Transaction.objects.filter(id__in=incoming_ids).values_list('id', flat=True)
-    )
+    existing_ids = set(Transaction.objects.filter(id__in=incoming_ids).values_list('id', flat=True))
 
     # Build list of new transactions to insert
     new_transactions = []
@@ -112,7 +111,7 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
 
     logger.info(
         f"Upsert complete for account '{account.name}' — "
-        f"inserted: {inserted}, skipped: {skipped}, total: {total}"
+        f'inserted: {inserted}, skipped: {skipped}, total: {total}'
     )
 
     return {'inserted': inserted, 'skipped': skipped, 'total': total}

@@ -2,13 +2,13 @@ import pytest
 from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
 
-from users.models import Household
 from transactions.constants import HandlerKeys
-from transactions.models import Bank, AccountType, Account, Transaction
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
-
+from transactions.models import Account, AccountType, Bank, Transaction
+from users.models import Household
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture
 def household(db):
@@ -18,7 +18,7 @@ def household(db):
 @pytest.fixture
 def bank(db):
     # Use seeded bank for system-defined data
-    return Bank.objects.get(name="SoFi")
+    return Bank.objects.get(name='SoFi')
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def account_type(db, bank):
 def account(db, account_type, household):
     # Create a test-only account for CRUD tests
     return Account.objects.create(
-        name="Account Test Savings",
+        name='Account Test Savings',
         account_type=account_type,
         household=household,
     )
@@ -50,21 +50,21 @@ def transaction(db, account):
 
 # ── Bank ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestBank:
-
     def test_can_be_retrieved(self, bank):
         assert bank.pk is not None
 
     def test_string_representation(self, bank):
-        assert str(bank) == "SoFi"
+        assert str(bank) == 'SoFi'
 
     def test_name_must_be_unique(self, bank):
         with pytest.raises(IntegrityError):
-            Bank.objects.create(name="SoFi")
+            Bank.objects.create(name='SoFi')
 
     def test_logo_is_optional(self):
-        bank = Bank.objects.create(name="Test Bank")
+        bank = Bank.objects.create(name='Test Bank')
         assert not bank.logo
 
     def test_cannot_be_deleted_with_account_types(self):
@@ -75,14 +75,14 @@ class TestBank:
 
 # ── AccountType ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAccountType:
-
     def test_can_be_retrieved(self, account_type):
         assert account_type.pk is not None
 
     def test_string_representation(self, account_type):
-        assert str(account_type) == "SoFi — SoFi Savings"
+        assert str(account_type) == 'SoFi — SoFi Savings'
 
     def test_belongs_to_a_bank(self, account_type, bank):
         assert account_type.bank == bank
@@ -91,7 +91,7 @@ class TestAccountType:
         # Attempting to create a duplicate raises IntegrityError
         with pytest.raises(IntegrityError):
             AccountType.objects.create(
-                name="Duplicate",
+                name='Duplicate',
                 handler_key=account_type.handler_key,
                 bank=bank,
             )
@@ -100,7 +100,7 @@ class TestAccountType:
         with pytest.raises(IntegrityError):
             AccountType.objects.create(
                 name=account_type.name,
-                handler_key="some-other-key",
+                handler_key='some-other-key',
                 bank=bank,
             )
 
@@ -113,14 +113,14 @@ class TestAccountType:
 
 # ── Account ───────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestAccount:
-
     def test_can_be_created(self, account):
         assert account.pk is not None
 
     def test_string_representation(self, account):
-        assert str(account) == "SoFi — Account Test Savings"
+        assert str(account) == 'SoFi — Account Test Savings'
 
     def test_belongs_to_an_account_type(self, account, account_type):
         assert account.account_type == account_type
@@ -150,7 +150,7 @@ class TestAccount:
 
     def test_two_accounts_of_same_type_allowed_in_household(self, account_type, household):
         Account.objects.create(
-            name="Account 360 Savings",
+            name='Account 360 Savings',
             account_type=account_type,
             household=household,
         )
@@ -168,9 +168,9 @@ class TestAccount:
 
 # ── Transaction ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 class TestTransaction:
-
     def test_can_be_created(self, transaction):
         assert transaction.pk is not None
 
@@ -201,7 +201,7 @@ class TestTransaction:
                 'concept': transaction.concept,
                 'amount': transaction.amount,
                 'account': transaction.account,
-            }
+            },
         )
         assert not created
         transaction.refresh_from_db()
@@ -216,6 +216,7 @@ class TestTransaction:
 
 # ── Smoke Test ──────────────────────────────────────────────────────────
 
+
 @pytest.mark.django_db
 def test_all_seeded_account_types_have_handlers():
     """
@@ -223,5 +224,5 @@ def test_all_seeded_account_types_have_handlers():
     """
     for account_type in AccountType.objects.all():
         assert account_type.handler_key in ACCOUNT_HANDLERS, (
-            f"{account_type.handler_key} has no corresponding handler!"
+            f'{account_type.handler_key} has no corresponding handler!'
         )

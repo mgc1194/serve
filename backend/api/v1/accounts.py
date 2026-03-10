@@ -9,8 +9,7 @@ Endpoints:
 """
 
 import logging
-from enum import Enum
-from typing import List, Optional
+from enum import StrEnum
 
 from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
@@ -19,9 +18,9 @@ from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
+from schemas.accounts import AccountCreateRequest, AccountDetailSchema, AccountRenameRequest
 from transactions.models import Account, AccountType
 from users.models import Household
-from schemas.accounts import AccountCreateRequest, AccountDetailSchema, AccountRenameRequest
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ def _get_household_for_member(household_id: int, user) -> Household:
     return household
 
 
-class SortField(str, Enum):
+class SortField(StrEnum):
     bank = 'bank'
     name = 'name'
     household = 'household'
@@ -63,11 +62,11 @@ _SORT_MAP = {
 }
 
 
-@router.get('/accounts/', response=List[AccountDetailSchema])
+@router.get('/accounts/', response=list[AccountDetailSchema])
 def list_accounts(
     request,
-    household_id: Optional[int] = None,
-    bank_id: Optional[int] = None,
+    household_id: int | None = None,
+    bank_id: int | None = None,
     sort: SortField = SortField.bank,
 ):
     """Lists accounts across all of the user's households.
@@ -93,10 +92,8 @@ def list_accounts(
     if household_id is not None:
         _get_household_for_member(household_id, request.user)
 
-    qs = (
-        Account.objects
-        .filter(household__users=request.user)
-        .select_related('account_type__bank', 'household')
+    qs = Account.objects.filter(household__users=request.user).select_related(
+        'account_type__bank', 'household'
     )
 
     if household_id is not None:
@@ -149,7 +146,9 @@ def create_account(request, payload: AccountCreateRequest):
             household=household,
         )
     except IntegrityError:
-        raise HttpError(400, f'An account named "{name}" already exists in this household.')
+        raise HttpError(
+            400, f'An account named "{name}" already exists in this household.'
+        ) from None
 
     logger.info(
         f'User {request.user.email} created account '
@@ -198,7 +197,9 @@ def rename_account(request, account_id: int, payload: AccountRenameRequest):
         account.name = name
         account.save(update_fields=['name', 'updated_at'])
     except IntegrityError:
-        raise HttpError(400, f'An account named "{name}" already exists in this household.')
+        raise HttpError(
+            400, f'An account named "{name}" already exists in this household.'
+        ) from None
 
     logger.info(
         f'User {request.user.email} renamed account '
@@ -237,7 +238,7 @@ def delete_account(request, account_id: int):
     try:
         account.delete()
     except ProtectedError:
-        raise HttpError(409, 'This account has transactions and cannot be deleted.')
+        raise HttpError(409, 'This account has transactions and cannot be deleted.') from None
 
     logger.info(
         f'User {request.user.email} deleted account '

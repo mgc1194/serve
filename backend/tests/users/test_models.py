@@ -12,7 +12,6 @@ User = get_user_model()
 
 @pytest.mark.django_db
 class TestHousehold:
-
     @pytest.fixture
     def subject(self):
         return Household.objects.create(name='Smith Family')
@@ -31,7 +30,6 @@ class TestHousehold:
 
 @pytest.mark.django_db
 class TestCustomUser:
-
     @pytest.fixture
     def household(self):
         return Household.objects.create(name='Smith Family')

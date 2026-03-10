@@ -3,11 +3,10 @@ tests/api/v1/test_accounts.py — Tests for account management endpoints.
 """
 
 import pytest
-
 from ninja.testing import TestClient
 
 from api.v1.accounts import router
-from transactions.models import Account, AccountType, Bank, Transaction
+from transactions.models import Account, AccountType, Transaction
 from users.models import CustomUser, Household
 
 
@@ -66,7 +65,6 @@ def account(db, account_type, household):
 
 @pytest.mark.django_db
 class TestListAccounts:
-
     @pytest.fixture
     def second_household(self, db, alice):
         """A second household also belonging to alice."""
@@ -77,7 +75,9 @@ class TestListAccounts:
     @pytest.fixture
     def co_account(self, db, second_household):
         at = AccountType.objects.get(handler_key='co-savings')
-        return Account.objects.create(name='CO Savings', account_type=at, household=second_household)
+        return Account.objects.create(
+            name='CO Savings', account_type=at, household=second_household
+        )
 
     def test_returns_all_accounts_across_user_households(self, client, alice, account, co_account):
         response = client.get('/accounts/', user=alice)
@@ -86,8 +86,12 @@ class TestListAccounts:
         assert account.id in ids
         assert co_account.id in ids
 
-    def test_does_not_return_accounts_from_other_users_households(self, client, alice, bob, other_household, account_type):
-        Account.objects.create(name='Bob Only', account_type=account_type, household=other_household)
+    def test_does_not_return_accounts_from_other_users_households(
+        self, client, alice, bob, other_household, account_type
+    ):
+        Account.objects.create(
+            name='Bob Only', account_type=account_type, household=other_household
+        )
         response = client.get('/accounts/', user=alice)
         names = {a['name'] for a in response.json()}
         assert 'Bob Only' not in names
@@ -107,9 +111,13 @@ class TestListAccounts:
         assert bank_names == {'SoFi'}
         assert co_account.id not in {a['id'] for a in response.json()}
 
-    def test_filters_by_household_and_bank_combined(self, client, alice, account, co_account, household):
+    def test_filters_by_household_and_bank_combined(
+        self, client, alice, account, co_account, household
+    ):
         sofi_bank_id = account.account_type.bank.id
-        response = client.get(f'/accounts/?household_id={household.id}&bank_id={sofi_bank_id}', user=alice)
+        response = client.get(
+            f'/accounts/?household_id={household.id}&bank_id={sofi_bank_id}', user=alice
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 1
@@ -155,17 +163,22 @@ class TestListAccounts:
         response = client.get('/accounts/', user=alice)
         item = response.json()[0]
         assert set(item.keys()) == {
-            'id', 'name', 'handler_key',
-            'account_type_id', 'account_type',
-            'bank_id', 'bank_name',
-            'household_id', 'household_name',
-            'created_at', 'updated_at',
+            'id',
+            'name',
+            'handler_key',
+            'account_type_id',
+            'account_type',
+            'bank_id',
+            'bank_name',
+            'household_id',
+            'household_name',
+            'created_at',
+            'updated_at',
         }
 
 
 @pytest.mark.django_db
 class TestCreateAccount:
-
     def test_creates_account_successfully(self, client, alice, household, account_type):
         response = client.post(
             '/accounts/',
@@ -224,7 +237,9 @@ class TestCreateAccount:
         assert response.status_code == 400
         assert 'blank' in response.json()['detail'].lower()
 
-    def test_returns_400_for_duplicate_name_in_household(self, client, alice, household, account_type, account):
+    def test_returns_400_for_duplicate_name_in_household(
+        self, client, alice, household, account_type, account
+    ):
         response = client.post(
             '/accounts/',
             json={
@@ -237,7 +252,9 @@ class TestCreateAccount:
         assert response.status_code == 400
         assert 'already exists' in response.json()['detail'].lower()
 
-    def test_allows_same_name_in_different_households(self, client, alice, bob, household, other_household, account_type):
+    def test_allows_same_name_in_different_households(
+        self, client, alice, bob, household, other_household, account_type
+    ):
         # Create account with same name in other_household
         Account.objects.create(
             name='Shared Name',
@@ -314,7 +331,6 @@ class TestCreateAccount:
 
 @pytest.mark.django_db
 class TestRenameAccount:
-
     def test_renames_account_successfully(self, client, alice, account):
         response = client.patch(f'/accounts/{account.id}/', json={'name': 'New Name'}, user=alice)
         assert response.status_code == 200
@@ -326,7 +342,9 @@ class TestRenameAccount:
         assert account.name == 'Persisted Rename'
 
     def test_trims_whitespace_from_name(self, client, alice, account):
-        response = client.patch(f'/accounts/{account.id}/', json={'name': '  Trimmed  '}, user=alice)
+        response = client.patch(
+            f'/accounts/{account.id}/', json={'name': '  Trimmed  '}, user=alice
+        )
         assert response.status_code == 200
         assert response.json()['name'] == 'Trimmed'
 
@@ -334,11 +352,17 @@ class TestRenameAccount:
         response = client.patch(f'/accounts/{account.id}/', json={'name': 'Renamed'}, user=alice)
         data = response.json()
         assert set(data.keys()) == {
-            'id', 'name', 'handler_key',
-            'account_type_id', 'account_type',
-            'bank_id', 'bank_name',
-            'household_id', 'household_name',
-            'created_at', 'updated_at',
+            'id',
+            'name',
+            'handler_key',
+            'account_type_id',
+            'account_type',
+            'bank_id',
+            'bank_name',
+            'household_id',
+            'household_name',
+            'created_at',
+            'updated_at',
         }
 
     def test_returns_400_for_blank_name(self, client, alice, account):
@@ -346,9 +370,13 @@ class TestRenameAccount:
         assert response.status_code == 400
         assert 'blank' in response.json()['detail'].lower()
 
-    def test_returns_400_for_duplicate_name_in_household(self, client, alice, household, account, account_type):
+    def test_returns_400_for_duplicate_name_in_household(
+        self, client, alice, household, account, account_type
+    ):
         Account.objects.create(name='Other Account', account_type=account_type, household=household)
-        response = client.patch(f'/accounts/{account.id}/', json={'name': 'Other Account'}, user=alice)
+        response = client.patch(
+            f'/accounts/{account.id}/', json={'name': 'Other Account'}, user=alice
+        )
         assert response.status_code == 400
         assert 'already exists' in response.json()['detail'].lower()
 
@@ -365,9 +393,9 @@ class TestRenameAccount:
         response = client.patch('/accounts/9999/', json={'name': 'Does Not Exist'}, user=alice)
         assert response.status_code == 404
 
+
 @pytest.mark.django_db
 class TestDeleteAccount:
-
     def test_deletes_account_successfully(self, client, alice, account):
         response = client.delete(f'/accounts/{account.id}/', user=alice)
         assert response.status_code == 204
@@ -394,4 +422,3 @@ class TestDeleteAccount:
         assert response.status_code == 409
         assert 'transactions' in response.json()['detail'].lower()
         assert Account.objects.filter(pk=account.id).exists()
-        

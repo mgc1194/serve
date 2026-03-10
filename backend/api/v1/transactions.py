@@ -12,26 +12,24 @@ Endpoints:
 import hashlib
 import io
 import logging
-from typing import List, Optional
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from ninja import Router, File
+from ninja import File, Router
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 from ninja.security import django_auth
 
-from transactions.models import Account, Transaction
-from transactions.utils import upsert_transactions
-from transactions.handlers.accounts import ACCOUNT_HANDLERS
 from schemas.transactions import (
     FileImportResult,
     TransactionCreateRequest,
     TransactionSchema,
     TransactionUpdateRequest,
 )
+from transactions.handlers.accounts import ACCOUNT_HANDLERS
+from transactions.models import Account, Transaction
+from transactions.utils import upsert_transactions
 from users.models import Household
-
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +37,7 @@ router = Router(tags=['Transactions'], auth=django_auth)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _get_transaction_for_household_member(transaction_id: str, user) -> Transaction:
     """Fetches a transaction and verifies the user is a member of its household.
@@ -102,11 +101,12 @@ def _make_transaction_id(account_id: int, date: str, concept: str, amount: str) 
 
 # ── GET /transactions/ ────────────────────────────────────────────────────────
 
-@router.get('/transactions/', response=List[TransactionSchema])
+
+@router.get('/transactions/', response=list[TransactionSchema])
 def list_transactions(
     request,
     household_id: int,
-    account_id: Optional[int] = None,
+    account_id: int | None = None,
 ):
     """Lists all transactions for a household.
 
@@ -131,8 +131,7 @@ def list_transactions(
         raise HttpError(403, 'You are not a member of this household.')
 
     qs = (
-        Transaction.objects
-        .filter(account__household_id=household_id)
+        Transaction.objects.filter(account__household_id=household_id)
         .select_related('account__account_type__bank')
         .order_by('-date', '-imported_at')
     )
@@ -144,6 +143,7 @@ def list_transactions(
 
 
 # ── POST /transactions/ ───────────────────────────────────────────────────────
+
 
 @router.post('/transactions/', response=TransactionSchema)
 def create_transaction(request, payload: TransactionCreateRequest):
@@ -199,7 +199,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
             },
         )
     except IntegrityError:
-        raise HttpError(400, 'An identical transaction already exists.')
+        raise HttpError(400, 'An identical transaction already exists.') from None
 
     if not created:
         raise HttpError(400, 'An identical transaction already exists.')
@@ -213,6 +213,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
 
 # ── PATCH /transactions/{id}/ ─────────────────────────────────────────────────
+
 
 @router.patch('/transactions/{transaction_id}/', response=TransactionSchema)
 def update_transaction(request, transaction_id: str, payload: TransactionUpdateRequest):
@@ -255,6 +256,7 @@ def update_transaction(request, transaction_id: str, payload: TransactionUpdateR
 
 # ── DELETE /transactions/{id}/ ────────────────────────────────────────────────
 
+
 @router.delete('/transactions/{transaction_id}/', response={204: None})
 def delete_transaction(request, transaction_id: str):
     """Deletes a transaction.
@@ -285,11 +287,12 @@ def delete_transaction(request, transaction_id: str):
 
 # ── POST /transactions/import ─────────────────────────────────────────────────
 
+
 @router.post('/transactions/import', response=FileImportResult)
 def import_transactions(
     request,
     account_id: int,
-    file: UploadedFile = File(...),
+    file: UploadedFile = File(...),  # noqa: B008
 ):
     """Imports a single CSV file into the database.
 
@@ -352,4 +355,3 @@ def import_transactions(
             total=0,
             error=str(e),
         )
-    

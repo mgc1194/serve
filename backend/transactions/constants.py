@@ -12,6 +12,7 @@ class HandlerKeys:
     These values are treated as system configuration and are expected
     to be kept in sync with data migrations that seed AccountTypes.
     """
+
     SOFI_SAVINGS = 'sofi-savings'
     SOFI_CHECKING = 'sofi-checking'
     CO_CHECKING = 'co-checking'

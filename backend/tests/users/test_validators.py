@@ -1,19 +1,17 @@
 import pytest
-
 from django.core.exceptions import ValidationError
 
 from users.validators import (
-    validate_email_format,
-    MinimumLengthValidator,
-    UppercaseLetterValidator,
     LowercaseLetterValidator,
+    MinimumLengthValidator,
     NumericCharacterValidator,
     SpecialCharacterValidator,
+    UppercaseLetterValidator,
+    validate_email_format,
 )
 
 
 class TestValidateEmailFormat:
-
     def test_valid_email_returns_none(self):
         assert validate_email_format('john@example.com') is None
 
@@ -37,7 +35,6 @@ class TestValidateEmailFormat:
 
 
 class TestMinimumLengthValidator:
-
     def setup_method(self):
         self.validator = MinimumLengthValidator(min_length=14)
 
@@ -63,7 +60,6 @@ class TestMinimumLengthValidator:
 
 
 class TestUppercaseLetterValidator:
-
     def setup_method(self):
         self.validator = UppercaseLetterValidator()
 
@@ -80,7 +76,6 @@ class TestUppercaseLetterValidator:
 
 
 class TestLowercaseLetterValidator:
-
     def setup_method(self):
         self.validator = LowercaseLetterValidator()
 
@@ -97,7 +92,6 @@ class TestLowercaseLetterValidator:
 
 
 class TestNumericCharacterValidator:
-
     def setup_method(self):
         self.validator = NumericCharacterValidator()
 
@@ -114,7 +108,6 @@ class TestNumericCharacterValidator:
 
 
 class TestSpecialCharacterValidator:
-
     def setup_method(self):
         self.validator = SpecialCharacterValidator(min_count=1)
 

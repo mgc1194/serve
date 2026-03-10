@@ -18,13 +18,13 @@ from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
-from users.models import CustomUser, Household
 from schemas.households import (
     HouseholdDetailSchema,
-    HouseholdRequest,
     HouseholdRenameRequest,
+    HouseholdRequest,
     MemberRequest,
 )
+from users.models import CustomUser, Household
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +68,11 @@ def _name_exists_for_user(name: str, user, exclude_household_id: int | None = No
     return qs.exists()
 
 
-
 router = Router(tags=['Households'], auth=django_auth)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _get_household_for_member(household_id: int, user: CustomUser) -> Household:
     """Fetches a household and verifies the user is a member.
@@ -127,6 +127,7 @@ def _serialize(household: Household) -> dict:
 
 # ── List ──────────────────────────────────────────────────────────────────────
 
+
 @router.get('/households/', response=list[HouseholdDetailSchema])
 def list_households(request):
     """Returns all households the current user belongs to.
@@ -138,15 +139,13 @@ def list_households(request):
         A list of HouseholdDetailSchema schemas.
     """
     households = (
-        Household.objects
-        .filter(users=request.user)
-        .prefetch_related('users')
-        .order_by('name')
+        Household.objects.filter(users=request.user).prefetch_related('users').order_by('name')
     )
     return [_serialize(h) for h in households]
 
 
 # ── Create ────────────────────────────────────────────────────────────────────
+
 
 @router.post('/households/', response=HouseholdDetailSchema)
 def create_household(request, payload: HouseholdRequest):
@@ -173,8 +172,7 @@ def create_household(request, payload: HouseholdRequest):
     household.users.add(request.user)
 
     logger.info(
-        f'User {request.user.email} created household '
-        f'"{household.name}" (id={household.id}).'
+        f'User {request.user.email} created household "{household.name}" (id={household.id}).'
     )
 
     household = Household.objects.prefetch_related('users').get(pk=household.pk)
@@ -182,6 +180,7 @@ def create_household(request, payload: HouseholdRequest):
 
 
 # ── Detail ────────────────────────────────────────────────────────────────────
+
 
 @router.get('/households/{household_id}/', response=HouseholdDetailSchema)
 def get_household(request, household_id: int):
@@ -203,6 +202,7 @@ def get_household(request, household_id: int):
 
 
 # ── Rename ────────────────────────────────────────────────────────────────────
+
 
 @router.patch('/households/{household_id}/', response=HouseholdDetailSchema)
 def rename_household(request, household_id: int, payload: HouseholdRenameRequest):
@@ -234,8 +234,7 @@ def rename_household(request, household_id: int, payload: HouseholdRenameRequest
     household.save(update_fields=['name', 'updated_at'])
 
     logger.info(
-        f'User {request.user.email} renamed household '
-        f'(id={household.id}) to "{household.name}".'
+        f'User {request.user.email} renamed household (id={household.id}) to "{household.name}".'
     )
 
     household = Household.objects.prefetch_related('users').get(pk=household.pk)
@@ -243,6 +242,7 @@ def rename_household(request, household_id: int, payload: HouseholdRenameRequest
 
 
 # ── Delete ────────────────────────────────────────────────────────────────────
+
 
 @router.delete('/households/{household_id}/', response={204: None})
 def delete_household(request, household_id: int):
@@ -273,18 +273,16 @@ def delete_household(request, household_id: int):
     except ProtectedError:
         raise HttpError(
             409,
-            'This household still has accounts. '
-            'Remove all accounts before deleting the household.',
-        )
+            'This household still has accounts. Remove all accounts before deleting the household.',
+        ) from None
 
-    logger.info(
-        f'User {request.user.email} deleted household (id={household_id}).'
-    )
+    logger.info(f'User {request.user.email} deleted household (id={household_id}).')
 
     return 204, None
 
 
 # ── Add member ────────────────────────────────────────────────────────────────
+
 
 @router.post('/households/{household_id}/members/', response=HouseholdDetailSchema)
 def add_member(request, household_id: int, payload: MemberRequest):
@@ -311,7 +309,7 @@ def add_member(request, household_id: int, payload: MemberRequest):
     try:
         new_member = CustomUser.objects.get(email=email)
     except CustomUser.DoesNotExist:
-        raise HttpError(400, 'No account found with that email address.')
+        raise HttpError(400, 'No account found with that email address.') from None
 
     if household.users.filter(pk=new_member.pk).exists():
         raise HttpError(400, 'This user is already a member of the household.')
@@ -319,8 +317,7 @@ def add_member(request, household_id: int, payload: MemberRequest):
     household.users.add(new_member)
 
     logger.info(
-        f'User {request.user.email} added {new_member.email} '
-        f'to household (id={household.id}).'
+        f'User {request.user.email} added {new_member.email} to household (id={household.id}).'
     )
 
     household = Household.objects.prefetch_related('users').get(pk=household.pk)
@@ -328,6 +325,7 @@ def add_member(request, household_id: int, payload: MemberRequest):
 
 
 # ── Remove member ─────────────────────────────────────────────────────────────
+
 
 @router.delete('/households/{household_id}/members/{user_id}/', response=HouseholdDetailSchema)
 def remove_member(request, household_id: int, user_id: int):
@@ -356,7 +354,7 @@ def remove_member(request, household_id: int, user_id: int):
     try:
         target = CustomUser.objects.get(pk=user_id)
     except CustomUser.DoesNotExist:
-        raise HttpError(400, 'User not found.')
+        raise HttpError(400, 'User not found.') from None
 
     if not household.users.filter(pk=target.pk).exists():
         raise HttpError(400, 'This user is not a member of the household.')
@@ -370,8 +368,7 @@ def remove_member(request, household_id: int, user_id: int):
     household.users.remove(target)
 
     logger.info(
-        f'User {request.user.email} removed {target.email} '
-        f'from household (id={household.id}).'
+        f'User {request.user.email} removed {target.email} from household (id={household.id}).'
     )
 
     household = Household.objects.prefetch_related('users').get(pk=household.pk)
