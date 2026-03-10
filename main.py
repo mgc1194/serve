@@ -1,9 +1,8 @@
-import calendar
 import os
 import pandas as pd
 import logging
 import gspread
-from db import Database, DBConfig
+from db import Database
 from google.oauth2.service_account import Credentials
 from handlers.accounts import ACCOUNT_HANDLERS
 

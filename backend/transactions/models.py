@@ -113,9 +113,9 @@ class Transaction(models.Model):
     date = models.DateField()
     concept = models.TextField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    label = models.CharField(max_length=255, blank=True)
-    category = models.CharField(max_length=255, blank=True)
-    additional_labels = models.TextField(blank=True)
+    label = models.CharField(max_length=255, blank=True, null=True)  # noqa: DJ001
+    category = models.CharField(max_length=255, blank=True, null=True)  # noqa: DJ001
+    additional_labels = models.TextField(blank=True, null=True)  # noqa: DJ001
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='transactions')
     imported_at = models.DateTimeField(auto_now_add=True)
 

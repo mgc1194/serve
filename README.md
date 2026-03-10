@@ -78,7 +78,32 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements/dev.txt
 ```
 
-### 3. Install and configure MySQL
+### 3. Install Git Hooks
+
+The repository includes pre-commit hooks that run ESLint on staged frontend files and ruff on staged backend files, and prevent direct commits to `main`.
+
+After setting up your Python virtual environment and installing dependencies, run once:
+
+```bash
+sh scripts/install-hooks.sh
+```
+<details>
+<summary>What the hooks do</summary>
+- **protect_main.py** — blocks commits directly to `main`, enforcing the PR workflow
+- **lint.py** — runs the appropriate linter only on staged files:
+  - `frontend/src/**/*.{ts,tsx}` → ESLint
+  - `backend/**/*.{py,pyi}` → ruff format + ruff check
+</details>
+<details>
+<summary>Bypassing hooks</summary>
+If you need to skip the hooks in an exceptional case:
+
+```bash
+git commit --no-verify -m "your message"
+```
+</details> 
+
+### 4. Install and configure MySQL
 
 On Ubuntu or Debian systems:
 ```bash
@@ -94,7 +119,7 @@ brew install mysql
 brew services start mysql
 ```
 
-### 4. Run the setup script
+### 5. Run the setup script
 
 The setup script creates the databases, user, and generates secure passwords automatically:
 
@@ -111,7 +136,7 @@ This script will:
 
 **Note:** The script assumes you can connect to MySQL as root without a password (`mysql -u root`). If your MySQL installation requires a root password, you'll need to modify the script or run the SQL commands manually.
 
-### 5. Run migrations
+### 6. Run migrations
 
 Apply database migrations:
 ```bash
@@ -119,14 +144,14 @@ cd backend
 python manage.py migrate
 ```
 
-### 6. Create a superuser
+### 7. Create a superuser
 
 Create an admin account:
 ```bash
 python manage.py createsuperuser
 ```
 
-### 7. Run the development server
+### 8. Run the development server
 
 Start the Django development server:
 ```bash

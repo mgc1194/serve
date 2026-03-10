@@ -9,7 +9,7 @@ Endpoints:
 """
 
 import logging
-from enum import Enum, StrEnum
+from enum import StrEnum
 
 from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
@@ -47,7 +47,7 @@ def _get_household_for_member(household_id: int, user) -> Household:
     return household
 
 
-class SortField(StrEnum, Enum):
+class SortField(StrEnum):
     bank = 'bank'
     name = 'name'
     household = 'household'
