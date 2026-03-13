@@ -191,7 +191,7 @@ class TestUpsertTransactions:
         """Banks occasionally export the same row twice — only one should be inserted."""
         df = pd.DataFrame(
             {
-                'dedupe_hash': ['abc123' * 10 + 'abc1', 'abc123' * 10 + 'abc1'],  # duplicate
+                'dedupe_hash': ['abc123' * 10 + 'xxxx', 'abc123' * 10 + 'xxxx'],  # duplicate
                 'raw_data': [
                     json.dumps(
                         {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'}

@@ -80,10 +80,10 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     if df.empty:
         return {'inserted': 0, 'skipped': 0, 'total': 0}
 
+    total = len(df)
+
     # De-dupe within the incoming batch — banks occasionally export the same row twice
     df = df.drop_duplicates(subset=['dedupe_hash'])
-
-    total = len(df)
 
     # Extract all dedupe hashes from the DataFrame
     incoming_hashes = df['dedupe_hash'].tolist()
