@@ -20,7 +20,11 @@ class FileImportResult(Schema):
 
 
 class TransactionSchema(Schema):
-    """Output schema for a Transaction."""
+    """Output schema for a Transaction.
+    The ``id`` field is the auto-incrementing primary key from the database.
+    Deduplication is handled separately via a server-side ``dedupe_hash``
+    (SHA-256) that is computed from the normalized transaction data.
+    """
 
     id: int
     date: str
@@ -37,9 +41,21 @@ class TransactionSchema(Schema):
 
 class TransactionCreateRequest(Schema):
     """Request schema for manually creating a transaction.
+    The transaction will be deduplicated against existing transactions in the
+    same account using the same SHA-256 strategy as CSV imports — so if a
+    user manually creates a transaction that matches an existing one, it will
+    be skipped rather than duplicated.
 
-    The id is derived server-side from the field values, matching the
-    same MD5 hashing strategy used during CSV import.
+    The account_id must belong to an account within the user's household.
+    The response will include the created transaction's ID, which is useful
+    for confirming the deduplication behavior.
+
+    Example: If "Mario's 360 Savings" already has a transaction on 2026-01-15
+    for $45.50 with concept "TRADER JOES", then attempting to create another
+    transaction with those same values for that account will not create a new
+    record but will return the existing one instead.
+
+    This prevents both accidental duplicates and cross-tenant ID collisions.
     """
 
     account_id: int

@@ -27,7 +27,7 @@ The Django REST API, responsible for:
 - User accounts and household management
 - Bank, account type, and account configuration
 - CSV transaction imports with automatic bank detection
-- Duplicate prevention via MD5-based transaction IDs
+- Duplicate prevention via sha256-based transaction IDs
 - Label and category preservation across re-imports
 
 Built with [Django Ninja](https://django-ninja.dev/) for fast, type-safe endpoints, backed by MySQL.

@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 import pandas as pd
@@ -162,8 +163,12 @@ class TestUpsertTransactions:
             {
                 'dedupe_hash': ['abc123' * 10 + 'abc1', 'new999' * 10 + 'new0'],
                 'raw_data': [
-                    {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
-                    {'Date': '2026-01-20', 'Description': 'NEW TRANSACTION', 'Amount': '-10.00'},
+                    json.dumps(
+                        {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+                    ),
+                    json.dumps(
+                        {'Date': '2026-01-20', 'Description': 'NEW TRANSACTION', 'Amount': '-10.00'}
+                    ),
                 ],
                 'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
                 'Concept': ['TRADER JOES', 'NEW TRANSACTION'],

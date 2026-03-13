@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
@@ -41,7 +43,9 @@ def account(db, account_type, household):
 def transaction(db, account):
     return Transaction.objects.create(
         dedupe_hash='abc123' * 10 + 'ab',  # 64 chars
-        raw_data={'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
+        raw_data=json.dumps(
+            {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+        ),
         date='2026-01-15',
         concept='TRADER JOES',
         amount=-45.50,

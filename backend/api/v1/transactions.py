@@ -150,7 +150,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
     """Manually creates a single transaction.
 
     The transaction ID is derived from the field values using the same
-    MD5 strategy as CSV import, so re-importing a file that contains an
+    SHA256 strategy as CSV import, so re-importing a file that contains an
     identical transaction will skip it rather than duplicate it.
 
     The user must be a member of the household that owns the target account.
@@ -186,11 +186,11 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
     date_str = payload.date.isoformat()
     amount_str = f'{payload.amount:.2f}'
-    dedup_hash_id = _make_dedupe_hash(account.id, date_str, concept, amount_str)
+    dedupe_hash_id = _make_dedupe_hash(account.id, date_str, concept, amount_str)
 
     try:
         transaction, created = Transaction.objects.get_or_create(
-            dedupe_hash=dedup_hash_id,
+            dedupe_hash=dedupe_hash_id,
             account=account,
             defaults={
                 'date': payload.date,

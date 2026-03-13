@@ -2,6 +2,7 @@
 tests/unit/handlers/test_base.py — Unit tests for BaseHandler.
 """
 
+import json
 from io import StringIO
 
 import pandas as pd
@@ -45,7 +46,7 @@ BAD_CSV = 'Date,WrongColumn,Amount\n2026-01-15,TRADER JOES,-45.50\n'
 class TestGenerateDedupHash:
     @pytest.fixture
     def row(self):
-        return pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'})
+        return pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'})
 
     def test_produces_a_32_character_string(self, row):
         assert len(BaseHandler._generate_dedupe_hash(row)) == 64
@@ -57,7 +58,7 @@ class TestGenerateDedupHash:
         assert BaseHandler._generate_dedupe_hash(row) == BaseHandler._generate_dedupe_hash(row)
 
     def test_different_amounts_produce_different_ids(self):
-        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'})
+        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'})
         row2 = pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-2.45'})
         assert BaseHandler._generate_dedupe_hash(row1) != BaseHandler._generate_dedupe_hash(row2)
 
@@ -111,17 +112,17 @@ class TestOutputShape:
     def test_has_correct_row_count(self, subject):
         assert len(subject) == 1
 
-    def test_dedupe_hash_is_a_64_char_md5(self, subject):
+    def test_dedupe_hash_is_a_64_char_sha256(self, subject):
         assert subject['dedupe_hash'].str.len().eq(64).all()
 
-    def test_raw_data_is_a_dict(self, subject):
-        assert isinstance(subject['raw_data'].iloc[0], dict)
+    def test_raw_data_is_a_json_string(self, subject):
+        assert isinstance(subject['raw_data'].iloc[0], str)
 
-    def test_raw_data_contains_original_columns(self, subject):
-        assert subject['raw_data'].iloc[0] == {
+    def test_raw_data_is_deserializable(self, subject):
+        assert json.loads(subject['raw_data'].iloc[0]) == {
             'Date': '2026-01-15',
             'Description': 'TRADER JOES',
-            'Amount': -45.50,
+            'Amount': '-45.5',
         }
 
     def test_account_name_is_set(self, subject):

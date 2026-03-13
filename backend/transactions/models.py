@@ -113,7 +113,7 @@ class Transaction(models.Model):
     """
 
     dedupe_hash = models.CharField(max_length=64)  # SHA-256, 64 hex chars
-    raw_data = models.JSONField(null=True, blank=True)  # audit trail
+    raw_data = models.TextField(null=True, blank=True)  # noqa: DJ001 # audit trail
     date = models.DateField()
     concept = models.TextField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)

@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
 import logging
 
 import pandas as pd
@@ -126,7 +127,7 @@ class BaseHandler:
         clean_df = pd.DataFrame(
             {
                 'dedupe_hash': raw_df.apply(self._generate_dedupe_hash, axis=1),
-                'raw_data': raw_df.apply(lambda row: row.to_dict(), axis=1),
+                'raw_data': raw_df.apply(lambda row: json.dumps(row.astype(str).to_dict()), axis=1),
                 'Date': pd.to_datetime(raw_df[self.col_date], format=self.date_format),
                 'Concept': raw_df[self.col_concept],
                 'Account': self.account,
@@ -155,3 +156,17 @@ class BaseHandler:
         identical rows (e.g. two transactions with the same date and amount)."""
         unique_string = '_'.join(row.astype(str))
         return hashlib.sha256(unique_string.encode()).hexdigest()
+
+    @staticmethod
+    def _to_json_safe(row: pd.Series) -> dict:
+        result = {}
+        for k, v in row.items():
+            if pd.isna(v) if not isinstance(v, (list, dict)) else False:
+                result[k] = None
+            elif hasattr(v, 'item'):  # numpy scalar
+                result[k] = v.item()
+            elif isinstance(v, pd.Timestamp):
+                result[k] = v.isoformat()
+            else:
+                result[k] = v
+        return result
