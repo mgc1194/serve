@@ -80,6 +80,11 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     if df.empty:
         return {'inserted': 0, 'skipped': 0, 'total': 0}
 
+    # De-dupe within the incoming batch — banks occasionally export the same row twice
+    df = df.drop_duplicates(subset=['dedupe_hash'])
+
+    total = len(df)
+
     # Extract all dedupe hashes from the DataFrame
     incoming_hashes = df['dedupe_hash'].tolist()
 
@@ -112,8 +117,10 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     if new_transactions:
         Transaction.objects.bulk_create(new_transactions, ignore_conflicts=True)
 
-    inserted = len(new_transactions)
-    total = len(df)
+    inserted = Transaction.objects.filter(
+        account=account,
+        dedupe_hash__in=[t.dedupe_hash for t in new_transactions],
+    ).count()
     skipped = total - inserted
 
     logger.info(

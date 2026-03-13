@@ -85,8 +85,12 @@ class TestUpsertTransactions:
             {
                 'dedupe_hash': ['abc123' * 10 + 'abc1', 'def456' * 10 + 'def0'],
                 'raw_data': [
-                    {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
-                    {'Date': '2026-01-20', 'Description': 'METRO FARE', 'Amount': '-2.45'},
+                    json.dumps(
+                        {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+                    ),
+                    json.dumps(
+                        {'Date': '2026-01-20', 'Description': 'METRO FARE', 'Amount': '-2.45'}
+                    ),
                 ],
                 'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
                 'Concept': ['TRADER JOES', 'METRO FARE'],
@@ -183,6 +187,33 @@ class TestUpsertTransactions:
         assert result['skipped'] == 1
         assert result['total'] == 2
 
+    def test_deduplicates_within_incoming_batch(self, account):
+        """Banks occasionally export the same row twice — only one should be inserted."""
+        df = pd.DataFrame(
+            {
+                'dedupe_hash': ['abc123' * 10 + 'abc1', 'abc123' * 10 + 'abc1'],  # duplicate
+                'raw_data': [
+                    json.dumps(
+                        {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'}
+                    ),
+                    json.dumps(
+                        {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'}
+                    ),
+                ],
+                'Date': pd.to_datetime(['2026-01-15', '2026-01-15']),
+                'Concept': ['TRADER JOES', 'TRADER JOES'],
+                'Amount': [-45.50, -45.50],
+                'Label': [None, None],
+                'Category': [None, None],
+                'Additional Labels': [None, None],
+            }
+        )
+        result = upsert_transactions(df, account)
+        assert result['inserted'] == 1
+        assert result['skipped'] == 1
+        assert result['total'] == 2
+        assert Transaction.objects.count() == 1
+
     def test_links_transactions_to_correct_account(self, account, household, bank):
         # Create second account
         at2 = AccountType.objects.create(name='Other', handler_key='Other', bank=bank)
@@ -194,7 +225,9 @@ class TestUpsertTransactions:
             {
                 'dedupe_hash': ['abc123' * 10 + 'abc1'],
                 'raw_data': [
-                    {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+                    json.dumps(
+                        {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+                    )
                 ],
                 'Date': pd.to_datetime(['2026-01-15']),
                 'Concept': ['TXN 1'],
@@ -208,7 +241,9 @@ class TestUpsertTransactions:
             {
                 'dedupe_hash': ['new999' * 10 + 'new0'],
                 'raw_data': [
-                    {'Date': '2026-01-20', 'Description': 'NEW TRANSACTION', 'Amount': '-20.00'}
+                    json.dumps(
+                        {'Date': '2026-01-20', 'Description': 'NEW TRANSACTION', 'Amount': '-20.00'}
+                    )
                 ],
                 'Date': pd.to_datetime(['2026-01-20']),
                 'Concept': ['TXN 2'],

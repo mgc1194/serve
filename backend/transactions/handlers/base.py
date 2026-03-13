@@ -156,17 +156,3 @@ class BaseHandler:
         identical rows (e.g. two transactions with the same date and amount)."""
         unique_string = '_'.join(row.astype(str))
         return hashlib.sha256(unique_string.encode()).hexdigest()
-
-    @staticmethod
-    def _to_json_safe(row: pd.Series) -> dict:
-        result = {}
-        for k, v in row.items():
-            if pd.isna(v) if not isinstance(v, (list, dict)) else False:
-                result[k] = None
-            elif hasattr(v, 'item'):  # numpy scalar
-                result[k] = v.item()
-            elif isinstance(v, pd.Timestamp):
-                result[k] = v.isoformat()
-            else:
-                result[k] = v
-        return result
