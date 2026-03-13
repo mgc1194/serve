@@ -79,8 +79,8 @@ def _serialize(t: Transaction) -> dict:
     }
 
 
-def _make_transaction_id(account_id: int, date: str, concept: str, amount: str) -> str:
-    """Derives an MD5 transaction ID from its core fields.
+def _make_dedupe_hash(account_id: int, date: str, concept: str, amount: str) -> str:
+    """Derives a SHA256 dedupe hash from its core fields.
 
     Mirrors the hashing strategy used by CSV import handlers so that a
     manually added transaction and an imported one with identical fields
@@ -93,10 +93,10 @@ def _make_transaction_id(account_id: int, date: str, concept: str, amount: str) 
         amount: String representation of the amount.
 
     Returns:
-        A 32-character hex MD5 digest.
+        A 64-character hex SHA256 digest.
     """
     raw = f'{account_id}|{date}|{concept}|{amount}'
-    return hashlib.md5(raw.encode()).hexdigest()
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 # ── GET /transactions/ ────────────────────────────────────────────────────────
@@ -186,16 +186,21 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
     date_str = payload.date.isoformat()
     amount_str = f'{payload.amount:.2f}'
-    transaction_id = _make_transaction_id(account.id, date_str, concept, amount_str)
+    dedup_hash_id = _make_dedupe_hash(account.id, date_str, concept, amount_str)
 
     try:
         transaction, created = Transaction.objects.get_or_create(
-            id=transaction_id,
+            dedupe_hash=dedup_hash_id,
+            account=account,
             defaults={
                 'date': payload.date,
                 'concept': concept,
                 'amount': payload.amount,
-                'account': account,
+                'raw_data': {
+                    'date': date_str,
+                    'concept': concept,
+                    'amount': amount_str,
+                },
             },
         )
     except IntegrityError:

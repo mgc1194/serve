@@ -22,7 +22,7 @@ class FileImportResult(Schema):
 class TransactionSchema(Schema):
     """Output schema for a Transaction."""
 
-    id: str
+    id: int
     date: str
     concept: str
     amount: float

@@ -412,7 +412,8 @@ class TestDeleteAccount:
 
     def test_returns_409_if_account_has_transactions(self, client, alice, account):
         Transaction.objects.create(
-            id='a' * 32,
+            dedupe_hash='a' * 64,
+            raw_data={'Date': '2026-01-15', 'Description': 'TRANSACTION', 'Amount': '-45.50'},
             date='2026-01-15',
             concept='TRADER JOES',
             amount=-45.50,

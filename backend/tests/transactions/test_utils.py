@@ -82,7 +82,11 @@ class TestUpsertTransactions:
     def sample_df(self):
         return pd.DataFrame(
             {
-                'ID': ['abc123', 'def456'],
+                'dedupe_hash': ['abc123' * 10 + 'abc1', 'def456' * 10 + 'def0'],
+                'raw_data': [
+                    {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
+                    {'Date': '2026-01-20', 'Description': 'METRO FARE', 'Amount': '-2.45'},
+                ],
                 'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
                 'Concept': ['TRADER JOES', 'METRO FARE'],
                 'Amount': [-45.50, -2.45],
@@ -113,7 +117,7 @@ class TestUpsertTransactions:
         # First import
         upsert_transactions(sample_df, account)
         # Manually assign label
-        txn = Transaction.objects.get(id='abc123')
+        txn = Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1')
         txn.label = 'Essential'
         txn.save()
         # Re-import
@@ -123,7 +127,7 @@ class TestUpsertTransactions:
 
     def test_preserves_existing_category(self, account, sample_df):
         upsert_transactions(sample_df, account)
-        txn = Transaction.objects.get(id='abc123')
+        txn = Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1')
         txn.category = 'Groceries'
         txn.save()
         upsert_transactions(sample_df, account)
@@ -132,7 +136,7 @@ class TestUpsertTransactions:
 
     def test_stores_correct_values(self, account, sample_df):
         upsert_transactions(sample_df, account)
-        txn = Transaction.objects.get(id='abc123')
+        txn = Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1')
         assert txn.date == date(2026, 1, 15)
         assert txn.concept == 'TRADER JOES'
         assert float(txn.amount) == pytest.approx(-45.50)
@@ -147,7 +151,7 @@ class TestUpsertTransactions:
     def test_returns_correct_counts_for_mixed_batch(self, account):
         # Create one existing transaction
         Transaction.objects.create(
-            id='abc123',
+            dedupe_hash='abc123' * 10 + 'abc1',
             date='2026-01-15',
             concept='TRADER JOES',
             amount=-45.50,
@@ -156,7 +160,11 @@ class TestUpsertTransactions:
         # Import batch with one existing, one new
         df = pd.DataFrame(
             {
-                'ID': ['abc123', 'new999'],
+                'dedupe_hash': ['abc123' * 10 + 'abc1', 'new999' * 10 + 'new0'],
+                'raw_data': [
+                    {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
+                    {'Date': '2026-01-20', 'Description': 'NEW TRANSACTION', 'Amount': '-10.00'},
+                ],
                 'Date': pd.to_datetime(['2026-01-15', '2026-01-20']),
                 'Concept': ['TRADER JOES', 'NEW TRANSACTION'],
                 'Amount': [-45.50, -10.00],
@@ -179,7 +187,10 @@ class TestUpsertTransactions:
 
         df1 = pd.DataFrame(
             {
-                'ID': ['txn1'],
+                'dedupe_hash': ['abc123' * 10 + 'abc1'],
+                'raw_data': [
+                    {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+                ],
                 'Date': pd.to_datetime(['2026-01-15']),
                 'Concept': ['TXN 1'],
                 'Amount': [-10.00],
@@ -190,7 +201,10 @@ class TestUpsertTransactions:
         )
         df2 = pd.DataFrame(
             {
-                'ID': ['txn2'],
+                'dedupe_hash': ['new999' * 10 + 'new0'],
+                'raw_data': [
+                    {'Date': '2026-01-20', 'Description': 'NEW TRANSACTION', 'Amount': '-20.00'}
+                ],
                 'Date': pd.to_datetime(['2026-01-20']),
                 'Concept': ['TXN 2'],
                 'Amount': [-20.00],
@@ -203,5 +217,5 @@ class TestUpsertTransactions:
         upsert_transactions(df1, account)
         upsert_transactions(df2, account2)
 
-        assert Transaction.objects.get(id='txn1').account == account
-        assert Transaction.objects.get(id='txn2').account == account2
+        assert Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1').account == account
+        assert Transaction.objects.get(dedupe_hash='new999' * 10 + 'new0').account == account2

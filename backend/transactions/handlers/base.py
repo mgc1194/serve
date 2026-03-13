@@ -125,7 +125,8 @@ class BaseHandler:
 
         clean_df = pd.DataFrame(
             {
-                'ID': raw_df.apply(self._generate_id, axis=1),
+                'dedupe_hash': raw_df.apply(self._generate_dedupe_hash, axis=1),
+                'raw_data': raw_df.apply(lambda row: row.to_dict(), axis=1),
                 'Date': pd.to_datetime(raw_df[self.col_date], format=self.date_format),
                 'Concept': raw_df[self.col_concept],
                 'Account': self.account,
@@ -148,9 +149,9 @@ class BaseHandler:
         return df
 
     @staticmethod
-    def _generate_id(row: pd.Series) -> str:
-        """MD5 hash of all raw CSV columns — intentionally uses raw data
+    def _generate_dedupe_hash(row: pd.Series) -> str:
+        """SHA-256 hash of all raw CSV columns — intentionally uses raw data
         so that fields like 'current balance' or 'transaction id' disambiguate otherwise
         identical rows (e.g. two transactions with the same date and amount)."""
         unique_string = '_'.join(row.astype(str))
-        return hashlib.md5(unique_string.encode()).hexdigest()
+        return hashlib.sha256(unique_string.encode()).hexdigest()

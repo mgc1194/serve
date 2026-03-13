@@ -104,12 +104,16 @@ class Account(models.Model):
 class Transaction(models.Model):
     """
     Represents a single financial transaction.
-    ID is an MD5 hash of the raw CSV row — generated before cleaning
-    so that fields like balance disambiguate otherwise identical rows.
+    Primary key is a standard auto-incrementing integer. Deduplication is
+    handled by dedupe_hash (SHA-256 of the raw CSV row), scoped to the
+    account via a unique constraint on (account, dedupe_hash) — preventing
+    both accidental duplicates and cross-tenant ID collisions.
+    raw_data stores the original CSV row for auditing and hash re-derivation.
     Labels and category are manually assigned and never overwritten on re-import.
     """
 
-    id = models.CharField(max_length=32, primary_key=True)
+    dedupe_hash = models.CharField(max_length=64)  # SHA-256, 64 hex chars
+    raw_data = models.JSONField(null=True, blank=True)  # audit trail
     date = models.DateField()
     concept = models.TextField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -121,6 +125,11 @@ class Transaction(models.Model):
 
     class Meta:
         db_table = 'transactions'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['account', 'dedupe_hash'], name='unique_transaction_per_account'
+            )
+        ]
         indexes = [
             models.Index(fields=['date'], name='idx_transactions_date'),
             models.Index(fields=['label'], name='idx_transactions_label'),
