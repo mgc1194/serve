@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
@@ -40,7 +42,10 @@ def account(db, account_type, household):
 @pytest.fixture
 def transaction(db, account):
     return Transaction.objects.create(
-        id='abc123' * 5 + 'ab',  # 32 chars
+        dedupe_hash='abc123' * 10 + 'ab',  # 64 chars
+        raw_data=json.dumps(
+            {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
+        ),
         date='2026-01-15',
         concept='TRADER JOES',
         amount=-45.50,
@@ -194,13 +199,13 @@ class TestTransaction:
         transaction.label = 'Essential'
         transaction.save()
         _, created = Transaction.objects.get_or_create(
-            id=transaction.id,
+            account=transaction.account,
+            dedupe_hash=transaction.dedupe_hash,
             defaults={
                 'label': None,
                 'date': transaction.date,
                 'concept': transaction.concept,
                 'amount': transaction.amount,
-                'account': transaction.account,
             },
         )
         assert not created

@@ -2,7 +2,6 @@
 tests/api/v1/test_transactions.py — Tests for transaction management endpoints.
 """
 
-import hashlib
 from unittest.mock import Mock
 
 import pandas as pd
@@ -74,7 +73,8 @@ def account(db, account_type, household):
 @pytest.fixture
 def transaction(db, account):
     return Transaction.objects.create(
-        id='abc123' * 5 + 'ab',  # 32 chars
+        dedupe_hash='abc123' * 10 + 'abcd',  # 64 chars
+        raw_data={'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
         date='2026-01-15',
         concept='TRADER JOES',
         amount=-45.50,
@@ -96,7 +96,7 @@ def sample_dataframe():
     return pd.DataFrame(
         [
             {
-                'ID': 'abc123' * 5 + 'ab',
+                'dedupe_hash': 'abc123' * 10 + 'abcd',
                 'Date': pd.Timestamp('2026-01-15'),
                 'Concept': 'TRADER JOES',
                 'Amount': -45.50,
@@ -131,7 +131,8 @@ class TestListTransactions:
             household=household,
         )
         Transaction.objects.create(
-            id='def456' * 5 + 'de',
+            dedupe_hash='def456' * 10 + 'def4',
+            raw_data={'Date': '2026-01-16', 'Description': 'WHOLE FOODS', 'Amount': '-32.00'},
             date='2026-01-16',
             concept='WHOLE FOODS',
             amount=-32.00,
@@ -154,10 +155,18 @@ class TestListTransactions:
 
     def test_results_ordered_by_date_descending(self, client, alice, account, household):
         Transaction.objects.create(
-            id='t1' + 'x' * 30, date='2026-01-01', concept='OLDER', amount=-10.00, account=account
+            dedupe_hash='t1ab' + 'x' * 60,
+            date='2026-01-01',
+            concept='OLDER',
+            amount=-10.00,
+            account=account,
         )
         Transaction.objects.create(
-            id='t2' + 'x' * 30, date='2026-01-15', concept='NEWER', amount=-20.00, account=account
+            dedupe_hash='t2cd' + 'x' * 60,
+            date='2026-01-15',
+            concept='NEWER',
+            amount=-20.00,
+            account=account,
         )
 
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
@@ -213,22 +222,6 @@ class TestCreateTransaction:
         )
         assert response.status_code == 200
         assert Transaction.objects.filter(concept='COSTCO').exists()
-
-    def test_id_is_md5_of_fields(self, client, alice, account):
-        response = client.post(
-            '/transactions/',
-            json={
-                'account_id': account.id,
-                'date': '2026-02-15',
-                'concept': 'TARGET',
-                'amount': -30.00,
-            },
-            user=alice,
-        )
-        assert response.status_code == 200
-        raw = f'{account.id}|2026-02-15|TARGET|-30.00'
-        expected_id = hashlib.md5(raw.encode()).hexdigest()
-        assert response.json()['id'] == expected_id
 
     def test_strips_whitespace_from_concept(self, client, alice, account):
         response = client.post(
@@ -360,7 +353,7 @@ class TestUpdateTransaction:
 
     def test_returns_404_for_nonexistent_transaction(self, client, alice):
         response = client.patch(
-            '/transactions/nonexistent_id_000000000000000/',
+            '/transactions/999999/',
             json={'concept': 'X'},
             user=alice,
         )
@@ -372,6 +365,14 @@ class TestUpdateTransaction:
             json={'concept': 'X'},
         )
         assert response.status_code == 401
+
+    def test_returns_422_for_non_numeric_transaction_id(self, client, alice):
+        response = client.patch(
+            '/transactions/not-a-number/',
+            json={'concept': 'X'},
+            user=alice,
+        )
+        assert response.status_code == 422
 
     def test_other_fields_unchanged_after_update(self, client, alice, transaction):
         transaction.refresh_from_db()
@@ -416,10 +417,17 @@ class TestDeleteTransaction:
 
     def test_returns_404_for_nonexistent_transaction(self, client, alice):
         response = client.delete(
-            '/transactions/nonexistent_id_000000000000000/',
+            '/transactions/999999/',
             user=alice,
         )
         assert response.status_code == 404
+
+    def test_returns_422_for_non_numeric_transaction_id(self, client, alice):
+        response = client.delete(
+            '/transactions/not-a-number/',
+            user=alice,
+        )
+        assert response.status_code == 422
 
     def test_unauthenticated_returns_401(self, client, transaction):
         response = client.delete(f'/transactions/{transaction.id}/')

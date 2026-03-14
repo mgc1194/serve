@@ -66,6 +66,8 @@ def detect_account_type(filename: str) -> str | None:
 def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     """
     Insert new transactions from a DataFrame, skipping duplicates.
+    Deduplication is scoped to the account via dedupe_hash — preventing
+    both accidental duplicates and cross-tenant ID collisions.
     Labels, category, and additional_labels are never overwritten on re-import.
 
     Args:
@@ -78,19 +80,29 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     if df.empty:
         return {'inserted': 0, 'skipped': 0, 'total': 0}
 
-    # Extract all IDs from the DataFrame
-    incoming_ids = df['ID'].tolist()
+    total = len(df)
 
-    # Fetch existing transaction IDs in one query
-    existing_ids = set(Transaction.objects.filter(id__in=incoming_ids).values_list('id', flat=True))
+    # De-dupe within the incoming batch — banks occasionally export the same row twice
+    df = df.drop_duplicates(subset=['dedupe_hash'])
+
+    # Extract all dedupe hashes from the DataFrame
+    incoming_hashes = df['dedupe_hash'].tolist()
+
+    # Fetch existing transaction dedupe hashes in one query
+    existing_hashes = set(
+        Transaction.objects.filter(account=account, dedupe_hash__in=incoming_hashes).values_list(
+            'dedupe_hash', flat=True
+        )
+    )
 
     # Build list of new transactions to insert
     new_transactions = []
     for row in df.itertuples(index=False):
-        if row.ID not in existing_ids:
+        if row.dedupe_hash not in existing_hashes:
             new_transactions.append(
                 Transaction(
-                    id=row.ID,
+                    dedupe_hash=row.dedupe_hash,
+                    raw_data=row.raw_data,
                     date=row.Date.date() if hasattr(row.Date, 'date') else row.Date,
                     concept=row.Concept,
                     amount=row.Amount,
@@ -105,9 +117,11 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     if new_transactions:
         Transaction.objects.bulk_create(new_transactions, ignore_conflicts=True)
 
-    inserted = len(new_transactions)
-    skipped = len(df) - inserted
-    total = len(df)
+    inserted = Transaction.objects.filter(
+        account=account,
+        dedupe_hash__in=[t.dedupe_hash for t in new_transactions],
+    ).count()
+    skipped = total - inserted
 
     logger.info(
         f"Upsert complete for account '{account.name}' — "

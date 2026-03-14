@@ -2,6 +2,7 @@
 tests/unit/handlers/test_base.py — Unit tests for BaseHandler.
 """
 
+import json
 from io import StringIO
 
 import pandas as pd
@@ -42,24 +43,24 @@ BAD_CSV = 'Date,WrongColumn,Amount\n2026-01-15,TRADER JOES,-45.50\n'
 # ── ID generation ─────────────────────────────────────────────────────────────
 
 
-class TestGenerateId:
+class TestGenerateDedupHash:
     @pytest.fixture
     def row(self):
-        return pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'})
+        return pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'})
 
     def test_produces_a_32_character_string(self, row):
-        assert len(BaseHandler._generate_id(row)) == 32
+        assert len(BaseHandler._generate_dedupe_hash(row)) == 64
 
     def test_produces_a_valid_hex_string(self, row):
-        assert all(c in '0123456789abcdef' for c in BaseHandler._generate_id(row))
+        assert all(c in '0123456789abcdef' for c in BaseHandler._generate_dedupe_hash(row))
 
     def test_is_deterministic(self, row):
-        assert BaseHandler._generate_id(row) == BaseHandler._generate_id(row)
+        assert BaseHandler._generate_dedupe_hash(row) == BaseHandler._generate_dedupe_hash(row)
 
     def test_different_amounts_produce_different_ids(self):
-        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'})
+        row1 = pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.5'})
         row2 = pd.Series({'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-2.45'})
-        assert BaseHandler._generate_id(row1) != BaseHandler._generate_id(row2)
+        assert BaseHandler._generate_dedupe_hash(row1) != BaseHandler._generate_dedupe_hash(row2)
 
     def test_uses_all_raw_columns_including_dropped_ones(self):
         """Balance column disambiguates otherwise identical expenses."""
@@ -79,7 +80,7 @@ class TestGenerateId:
                 'Balance': '10500.00',
             }
         )
-        assert BaseHandler._generate_id(row1) != BaseHandler._generate_id(row2)
+        assert BaseHandler._generate_dedupe_hash(row1) != BaseHandler._generate_dedupe_hash(row2)
 
 
 # ── Output DataFrame shape ────────────────────────────────────────────────────
@@ -96,7 +97,8 @@ class TestOutputShape:
 
     def test_has_correct_columns(self, subject):
         expected = [
-            'ID',
+            'dedupe_hash',
+            'raw_data',
             'Date',
             'Concept',
             'Account',
@@ -110,8 +112,18 @@ class TestOutputShape:
     def test_has_correct_row_count(self, subject):
         assert len(subject) == 1
 
-    def test_id_is_a_32_char_md5(self, subject):
-        assert subject['ID'].str.len().eq(32).all()
+    def test_dedupe_hash_is_a_64_char_sha256(self, subject):
+        assert subject['dedupe_hash'].str.len().eq(64).all()
+
+    def test_raw_data_is_a_json_string(self, subject):
+        assert isinstance(subject['raw_data'].iloc[0], str)
+
+    def test_raw_data_is_deserializable(self, subject):
+        assert json.loads(subject['raw_data'].iloc[0]) == {
+            'Date': '2026-01-15',
+            'Description': 'TRADER JOES',
+            'Amount': '-45.5',
+        }
 
     def test_account_name_is_set(self, subject):
         assert subject['Account'].iloc[0] == 'Test Account'
@@ -141,8 +153,8 @@ class TestMultipleRows:
     def test_returns_correct_row_count(self, subject):
         assert len(subject) == 2
 
-    def test_all_ids_are_unique(self, subject):
-        assert subject['ID'].nunique() == 2
+    def test_all_dedupe_hashes_are_unique(self, subject):
+        assert subject['dedupe_hash'].nunique() == 2
 
 
 # ── Amount handling ───────────────────────────────────────────────────────────
