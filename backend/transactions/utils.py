@@ -109,6 +109,7 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
                     label=None,
                     category=None,
                     additional_labels=None,
+                    source=Transaction.Source.IMPORT,
                     account=account,
                 )
             )

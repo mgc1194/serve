@@ -34,6 +34,7 @@ class TransactionSchema(Schema):
     label: str | None
     category: str | None
     additional_labels: str | None
+    source: str
     account_id: int
     account_name: str
     bank_name: str

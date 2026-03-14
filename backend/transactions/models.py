@@ -109,11 +109,18 @@ class Transaction(models.Model):
     account via a unique constraint on (account, dedupe_hash) — preventing
     both accidental duplicates and cross-tenant ID collisions.
     raw_data stores the original CSV row for auditing and hash re-derivation.
-    Labels and category are manually assigned and never overwritten on re-import.
+    label and category are manually assigned and never overwritten on re-import.
+    source distinguishes CSV-imported transactions from manually created ones.
+    These are treated as distinct entry points with independent dedup scopes.
     """
+
+    class Source(models.TextChoices):
+        IMPORT = 'import', 'Import'
+        MANUAL = 'manual', 'Manual'
 
     dedupe_hash = models.CharField(max_length=64)  # SHA-256, 64 hex chars
     raw_data = models.TextField(null=True, blank=True)  # noqa: DJ001 # audit trail
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.IMPORT)
     date = models.DateField()
     concept = models.TextField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
