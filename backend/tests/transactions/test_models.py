@@ -1,5 +1,3 @@
-import json
-
 import pytest
 from django.db.models import ProtectedError
 from django.db.utils import IntegrityError
@@ -43,9 +41,8 @@ def account(db, account_type, household):
 def transaction(db, account):
     return Transaction.objects.create(
         dedupe_hash='abc123' * 10 + 'ab',  # 64 chars
-        raw_data=json.dumps(
-            {'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'}
-        ),
+        raw_data=None,
+        source=Transaction.Source.IMPORT,
         date='2026-01-15',
         concept='TRADER JOES',
         amount=-45.50,
@@ -217,6 +214,26 @@ class TestTransaction:
 
     def test_handler_key_accessible_through_transaction(self, transaction):
         assert transaction.account.handler_key == HandlerKeys.SOFI_SAVINGS
+
+    def test_source_defaults_to_import(self, transaction):
+        assert transaction.source == Transaction.Source.IMPORT
+
+    def test_source_is_not_overwritten_on_reimport(self, transaction):
+        transaction.source = Transaction.Source.MANUAL
+        transaction.save()
+        _, created = Transaction.objects.get_or_create(
+            account=transaction.account,
+            dedupe_hash=transaction.dedupe_hash,
+            defaults={
+                'source': Transaction.Source.IMPORT,
+                'date': transaction.date,
+                'concept': transaction.concept,
+                'amount': transaction.amount,
+            },
+        )
+        assert not created
+        transaction.refresh_from_db()
+        assert transaction.source == Transaction.Source.MANUAL
 
 
 # ── Smoke Test ──────────────────────────────────────────────────────────

@@ -74,7 +74,8 @@ def account(db, account_type, household):
 def transaction(db, account):
     return Transaction.objects.create(
         dedupe_hash='abc123' * 10 + 'abcd',  # 64 chars
-        raw_data={'Date': '2026-01-15', 'Description': 'TRADER JOES', 'Amount': '-45.50'},
+        raw_data=None,
+        source=Transaction.Source.IMPORT,
         date='2026-01-15',
         concept='TRADER JOES',
         amount=-45.50,
@@ -152,6 +153,10 @@ class TestListTransactions:
         data = response.json()[0]
         assert data['account_name'] == 'Test Account'
         assert data['bank_name'] == 'SoFi'
+
+    def test_response_includes_source(self, client, alice, transaction, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        assert response.json()[0]['source'] == 'import'
 
     def test_results_ordered_by_date_descending(self, client, alice, account, household):
         Transaction.objects.create(
@@ -236,6 +241,19 @@ class TestCreateTransaction:
         )
         assert response.status_code == 200
         assert response.json()['concept'] == 'AMAZON'
+
+    def test_manually_created_transaction_has_manual_source(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': 'NETFLIX',
+                'amount': -15.99,
+            },
+            user=alice,
+        )
+        assert response.json()['source'] == 'manual'
 
     def test_blank_concept_returns_400(self, client, alice, account):
         response = client.post(

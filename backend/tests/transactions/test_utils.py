@@ -259,3 +259,8 @@ class TestUpsertTransactions:
 
         assert Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1').account == account
         assert Transaction.objects.get(dedupe_hash='new999' * 10 + 'new0').account == account2
+
+    def test_imported_transactions_have_import_source(self, account, sample_df):
+        upsert_transactions(sample_df, account)
+        txn = Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1')
+        assert txn.source == Transaction.Source.IMPORT

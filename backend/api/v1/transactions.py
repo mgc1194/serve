@@ -11,7 +11,6 @@ Endpoints:
 
 import hashlib
 import io
-import json
 import logging
 
 from django.db import IntegrityError
@@ -73,6 +72,7 @@ def _serialize(t: Transaction) -> dict:
         'label': t.label,
         'category': t.category,
         'additional_labels': t.additional_labels,
+        'source': t.source,
         'account_id': t.account_id,
         'account_name': t.account.name,
         'bank_name': t.account.account_type.bank.name,
@@ -176,6 +176,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
     Note:
         Duplicate detection for manual creations is based on the derived
         ``dedupe_hash`` and uses get_or_create rather than a separate existence
+        check to avoid a TOCTOU race condition under concurrent requests.
     """
     concept = payload.concept.strip()
     if not concept:
@@ -200,13 +201,8 @@ def create_transaction(request, payload: TransactionCreateRequest):
                 'date': payload.date,
                 'concept': concept,
                 'amount': payload.amount,
-                'raw_data': json.dumps(
-                    {
-                        'date': date_str,
-                        'concept': concept,
-                        'amount': amount_str,
-                    }
-                ),
+                'raw_data': None,
+                'source': Transaction.Source.MANUAL,
             },
         )
     except IntegrityError:
