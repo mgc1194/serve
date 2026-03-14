@@ -11,6 +11,7 @@ Endpoints:
 
 import hashlib
 import io
+import json
 import logging
 
 from django.db import IntegrityError
@@ -39,7 +40,7 @@ router = Router(tags=['Transactions'], auth=django_auth)
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _get_transaction_for_household_member(transaction_id: str, user) -> Transaction:
+def _get_transaction_for_household_member(transaction_id: int, user) -> Transaction:
     """Fetches a transaction and verifies the user is a member of its household.
 
     Args:
@@ -80,11 +81,14 @@ def _serialize(t: Transaction) -> dict:
 
 
 def _make_dedupe_hash(account_id: int, date: str, concept: str, amount: str) -> str:
-    """Derives a SHA256 dedupe hash from its core fields.
+    """Derives a SHA256 dedupe hash from the core manual-transaction fields.
 
-    Mirrors the hashing strategy used by CSV import handlers so that a
-    manually added transaction and an imported one with identical fields
-    will collide and not be duplicated.
+        NOTE: This helper currently hashes only ``account_id``, ``date``,
+        ``concept``, and ``amount`` for manually created transactions. CSV
+        import handlers may use a different strategy (for example, hashing the
+        entire raw CSV row), so dedupe hashes for imported transactions are not
+        guaranteed to collide with those produced here, even for otherwise
+        identical transactions.
 
     Args:
         account_id: The account the transaction belongs to.
@@ -149,11 +153,11 @@ def list_transactions(
 def create_transaction(request, payload: TransactionCreateRequest):
     """Manually creates a single transaction.
 
-    The transaction ID is derived from the field values using the same
-    SHA256 strategy as CSV import, so re-importing a file that contains an
-    identical transaction will skip it rather than duplicate it.
+        A SHA256-based ``dedupe_hash`` is derived from the account, date,
+        normalized concept, and amount. This hash is used to detect and prevent
+        creation of identical manual transactions for the same account.
 
-    The user must be a member of the household that owns the target account.
+        The user must be a member of the household that owns the target account.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -165,13 +169,13 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
     Raises:
         HttpError: 400 if concept is blank.
-        HttpError: 400 if a transaction with the same derived ID already exists.
+        HttpError: 400 if a transaction with the same dedupe hash already exists.
         HttpError: 403 if the user is not a member of the account's household.
         HttpError: 404 if the account does not exist.
 
     Note:
-        Duplicate detection uses get_or_create rather than a separate existence
-        check to avoid a TOCTOU race condition under concurrent requests.
+        Duplicate detection for manual creations is based on the derived
+        ``dedupe_hash`` and uses get_or_create rather than a separate existence
     """
     concept = payload.concept.strip()
     if not concept:
@@ -196,11 +200,13 @@ def create_transaction(request, payload: TransactionCreateRequest):
                 'date': payload.date,
                 'concept': concept,
                 'amount': payload.amount,
-                'raw_data': {
-                    'date': date_str,
-                    'concept': concept,
-                    'amount': amount_str,
-                },
+                'raw_data': json.dumps(
+                    {
+                        'date': date_str,
+                        'concept': concept,
+                        'amount': amount_str,
+                    }
+                ),
             },
         )
     except IntegrityError:
@@ -221,7 +227,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
 
 @router.patch('/transactions/{transaction_id}/', response=TransactionSchema)
-def update_transaction(request, transaction_id: str, payload: TransactionUpdateRequest):
+def update_transaction(request, transaction_id: int, payload: TransactionUpdateRequest):
     """Edits a transaction's description (concept).
 
     Only the concept field is editable after creation. Date, amount, and
@@ -263,7 +269,7 @@ def update_transaction(request, transaction_id: str, payload: TransactionUpdateR
 
 
 @router.delete('/transactions/{transaction_id}/', response={204: None})
-def delete_transaction(request, transaction_id: str):
+def delete_transaction(request, transaction_id: int):
     """Deletes a transaction.
 
     The user must be a member of the household that owns the transaction.

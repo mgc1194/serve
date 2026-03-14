@@ -366,6 +366,14 @@ class TestUpdateTransaction:
         )
         assert response.status_code == 401
 
+    def test_returns_422_for_non_numeric_transaction_id(self, client, alice):
+        response = client.patch(
+            '/transactions/not-a-number/',
+            json={'concept': 'X'},
+            user=alice,
+        )
+        assert response.status_code == 422
+
     def test_other_fields_unchanged_after_update(self, client, alice, transaction):
         transaction.refresh_from_db()
         original_amount = transaction.amount
@@ -413,6 +421,13 @@ class TestDeleteTransaction:
             user=alice,
         )
         assert response.status_code == 404
+
+    def test_returns_422_for_non_numeric_transaction_id(self, client, alice):
+        response = client.delete(
+            '/transactions/not-a-number/',
+            user=alice,
+        )
+        assert response.status_code == 422
 
     def test_unauthenticated_returns_401(self, client, transaction):
         response = client.delete(f'/transactions/{transaction.id}/')
