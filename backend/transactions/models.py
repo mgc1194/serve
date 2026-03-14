@@ -104,14 +104,23 @@ class Account(models.Model):
 class Transaction(models.Model):
     """
     Represents a single financial transaction.
-    Primary key is a standard auto-incrementing integer. Deduplication is
-    handled by dedupe_hash (SHA-256 of the raw CSV row), scoped to the
-    account via a unique constraint on (account, dedupe_hash) — preventing
-    both accidental duplicates and cross-tenant ID collisions.
-    raw_data stores the original CSV row for auditing and hash re-derivation.
+
+    Primary key is a standard auto-incrementing integer.
+
+    Deduplication is handled by dedupe_hash (SHA-256), scoped to the account
+    via a unique constraint on (account, dedupe_hash). This prevents accidental
+    duplicates and cross-tenant ID collisions. Note that this constraint applies
+    regardless of source — a manual and an imported transaction with the same
+    hash cannot coexist in the same account.
+
+    raw_data stores the original CSV row as a JSON string for auditing and hash
+    re-derivation. It is None for manually created transactions.
+
+    source distinguishes CSV-imported transactions ('import') from manually
+    created ones ('manual'). These are treated as distinct entry points but
+    share the same dedup scope.
+
     label and category are manually assigned and never overwritten on re-import.
-    source distinguishes CSV-imported transactions from manually created ones.
-    These are treated as distinct entry points with independent dedup scopes.
     """
 
     class Source(models.TextChoices):

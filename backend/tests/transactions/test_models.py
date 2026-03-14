@@ -221,6 +221,17 @@ class TestTransaction:
     def test_source_is_not_overwritten_on_reimport(self, transaction):
         transaction.source = Transaction.Source.MANUAL
         transaction.save()
+        _, created = Transaction.objects.get_or_create(
+            account=transaction.account,
+            dedupe_hash=transaction.dedupe_hash,
+            defaults={
+                'source': Transaction.Source.IMPORT,
+                'date': transaction.date,
+                'concept': transaction.concept,
+                'amount': transaction.amount,
+            },
+        )
+        assert not created
         transaction.refresh_from_db()
         assert transaction.source == Transaction.Source.MANUAL
 
