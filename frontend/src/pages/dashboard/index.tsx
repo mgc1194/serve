@@ -6,6 +6,7 @@ import { useAuth } from '@context/auth-context';
 import { AppHeader } from '@layout/app-header';
 import { AccountsNavCard } from '@pages/dashboard/accounts-nav-card';
 import { HouseholdsNavCard } from '@pages/dashboard/households-nav-card';
+import { TransactionsNavCard } from '@pages/dashboard/transactions-nav-card';
 
 export function DashboardPage() {
   const { user } = useAuth();
@@ -25,6 +26,7 @@ export function DashboardPage() {
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <HouseholdsNavCard />
           <AccountsNavCard />
+          <TransactionsNavCard />
         </Box>
       </Container>
     </Box>
