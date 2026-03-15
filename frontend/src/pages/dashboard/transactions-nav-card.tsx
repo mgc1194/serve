@@ -1,5 +1,5 @@
-// Thin wrapper around NavCard with Account-specific title, description,
-// and icon. Navigates to /accounts on click.
+// Thin wrapper around NavCard with Transactions-specific title, description,
+// and icon. Navigates to /transactions on click.
 
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { useNavigate } from 'react-router';
