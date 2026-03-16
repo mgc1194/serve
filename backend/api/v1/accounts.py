@@ -18,8 +18,13 @@ from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
-from schemas.accounts import AccountCreateRequest, AccountDetailSchema, AccountRenameRequest
-from transactions.models import Account, AccountType
+from schemas.accounts import (
+    AccountCreateRequest,
+    AccountDetailSchema,
+    AccountRenameRequest,
+    BankSchema,
+)
+from transactions.models import Account, AccountType, Bank
 from users.models import Household
 
 logger = logging.getLogger(__name__)
@@ -263,3 +268,24 @@ def _serialize(account: Account) -> dict:
         'created_at': account.created_at,
         'updated_at': account.updated_at,
     }
+
+
+@router.get('/banks', response=list[BankSchema], auth=None)
+def list_banks(request):
+    """Lists all banks with their account types.
+    Used to group the account dropdown by bank in the UI.
+    Returns:
+        A list of BankSchema objects ordered by bank name.
+    """
+    banks = Bank.objects.prefetch_related('account_types').order_by('name')
+    return [
+        {
+            'id': bank.id,
+            'name': bank.name,
+            'account_types': [
+                {'id': at.id, 'name': at.name, 'handler_key': at.handler_key}
+                for at in bank.account_types.all()
+            ],
+        }
+        for bank in banks
+    ]
