@@ -43,7 +43,7 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['src/**/*.test.{ts,tsx}'],
-          environment: 'jsdom',
+          environment: 'happy-dom',
           server: {
             deps: {
               external: ['msw', '@mswjs/interceptors'],
@@ -56,7 +56,7 @@ export default defineConfig({
         test: {
           name: 'integration',
           include: ['tests/integration/**/*.test.{ts,tsx}'],
-          environment: 'jsdom',
+          environment: 'happy-dom',
           server: {
             deps: {
               external: ['msw', '@mswjs/interceptors'],

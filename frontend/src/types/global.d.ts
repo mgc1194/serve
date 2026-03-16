@@ -68,6 +68,29 @@ export interface Bank {
   account_types: AccountType[];
 }
 
+export interface Transaction {
+  id: number;
+  date: string;
+  concept: string;
+  amount: number;
+  label: string | null;
+  category: string | null;
+  additional_labels: string | null;
+  source: string;
+  account_id: number;
+  account_name: string;
+  bank_name: string;
+  imported_at: string;
+}
+ 
+export interface FileImportResult {
+  filename: string;
+  inserted: number;
+  skipped: number;
+  total: number;
+  error: string | null;
+}
+
 // Returned by the API on errors (Django Ninja's default error shape).
 export interface ApiError {
   detail: string;
