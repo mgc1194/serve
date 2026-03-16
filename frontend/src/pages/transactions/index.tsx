@@ -21,11 +21,11 @@ export function TransactionsPage() {
 
   // Filter stored in URL so it survives reload and is shareable
   const householdIdParam = searchParams.get('household_id');
-  const householdIdFilter = 
-    householdIdParam !== null
+  const householdIdFilter =
+    householdIdParam !== null && householdIdParam.trim() !== ''
       ? (() => {
         const parsed = Number(householdIdParam);
-        return isNaN(parsed) ? undefined : parsed;
+        return Number.isNaN(parsed) ? undefined : parsed;
       })()
       : undefined;
     
