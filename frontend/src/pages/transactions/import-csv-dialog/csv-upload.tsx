@@ -4,7 +4,6 @@
 
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import { Alert, Box, Typography } from '@mui/material';
-import { useRef } from 'react';
 
 import type { AccountDetail } from '@serve/types/global';
 
@@ -27,8 +26,6 @@ export function CsvUpload({
   uploadError,
   setUploadError,
 }: CsvUploadProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
@@ -51,12 +48,19 @@ export function CsvUpload({
         </Alert>
       )}
 
+      {/*
+        Fix 4: Use a <label> wrapping a visible drop zone and the hidden
+        <input>. The label is natively focusable and activates the file
+        picker on Enter/Space, with no need for tabIndex, role, or manual
+        key handlers.
+      */}
       <Box
-        onClick={() => fileInputRef.current?.click()}
+        component="label"
         onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleFileDrop}
         sx={{
+          display: 'block',
           border: 2,
           borderStyle: 'dashed',
           borderColor: isDragging ? 'primary.main' : 'divider',
@@ -67,6 +71,7 @@ export function CsvUpload({
           bgcolor: isDragging ? 'action.hover' : 'background.paper',
           transition: 'border-color 0.15s, background-color 0.15s',
           '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
+          '&:focus-within': { outline: 2, outlineStyle: 'solid', outlineColor: 'primary.main' },
         }}
       >
         <CloudUploadOutlinedIcon
@@ -80,14 +85,13 @@ export function CsvUpload({
             {(file.size / 1024).toFixed(1)} KB
           </Typography>
         )}
+        <input
+          type="file"
+          accept=".csv,text/csv"
+          style={{ display: 'none' }}
+          onChange={handleFileInput}
+        />
       </Box>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".csv,text/csv"
-        style={{ display: 'none' }}
-        onChange={handleFileInput}
-      />
 
       {uploadError && (
         <Alert severity="error" sx={{ mt: 2 }} onClose={() => setUploadError(null)}>

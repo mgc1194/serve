@@ -263,4 +263,74 @@ describe('ImportCsvDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('prevents backdrop close while uploading', async () => {
+  vi.mocked(transactionsService.importTransactionsCsv).mockReturnValue(
+    new Promise(() => {}), // never resolves
+  );
+  const onClose = vi.fn();
+  renderDialog({ onClose });
+
+  // Advance to step 2 and start an upload
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText('Smith Household'));
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+  await waitFor(() => screen.getByText(/choose the account/i));
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText("Alice's 360 Savings"));
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+  const file = new File([''], 'transactions.csv', { type: 'text/csv' });
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(screen.getByRole('button', { name: /import/i }));
+
+  // Simulate backdrop click while uploading
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+it('hides the stepper on the success screen', async () => {
+  renderDialog();
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText('Smith Household'));
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+  await waitFor(() => screen.getByText(/choose the account/i));
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText("Alice's 360 Savings"));
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+  const file = new File([''], 'transactions.csv', { type: 'text/csv' });
+  const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.click(screen.getByRole('button', { name: /import/i }));
+
+  await waitFor(() => screen.getByText('Import successful'));
+  expect(document.querySelector('.MuiStepper-root')).toBeNull();
+});
+
+it('resets account and file state when household changes', async () => {
+  renderDialog();
+
+  // Advance to step 1 and select an account
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText('Smith Household'));
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+
+  await waitFor(() => screen.getByText(/choose the account/i));
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText("Alice's 360 Savings"));
+
+  // Go back to step 0 and change household
+  fireEvent.click(screen.getByRole('button', { name: /back/i }));
+  fireEvent.mouseDown(screen.getByRole('combobox'));
+  fireEvent.click(screen.getByText('Johnson Household'));
+
+  // Advance to step 1 again — Next should be disabled (accountId was reset)
+  fireEvent.click(screen.getByRole('button', { name: /next/i }));
+  await waitFor(() => screen.getByText(/choose the account/i));
+  expect(screen.getByRole('button', { name: /next/i }).hasAttribute('disabled')).toBe(true);
+});
 });

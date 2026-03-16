@@ -118,6 +118,23 @@ describe('CsvUpload', () => {
     expect(screen.getByText('Upload failed. Please try again.')).toBeDefined();
   });
 
+  it('renders the drop zone as a label element', () => {
+    render(
+      <CsvUpload
+        selectedAccount={ACCOUNT}
+        file={null}
+        setFile={vi.fn()}
+        isDragging={false}
+        setIsDragging={vi.fn()}
+        uploadError={null}
+        setUploadError={vi.fn()}
+      />,
+    );
+    const label = document.querySelector('label');
+    expect(label).not.toBeNull();
+    expect(label?.querySelector('input[type="file"]')).not.toBeNull();
+  });
+
   it('calls setUploadError with null when the error alert is dismissed', () => {
     const setUploadError = vi.fn();
     render(

@@ -1,4 +1,4 @@
-// pages/transactions/import-csv-dialog.tsx — Multi-step CSV import dialog.
+// pages/transactions/import-csv-dialog/index.tsx — Multi-step CSV import dialog.
 //
 // Step 0 — Household selection: user picks which household to import into.
 // Step 1 — Account selection: user picks the account the CSV belongs to.
@@ -38,6 +38,7 @@ interface ImportCsvDialogProps {
   onClose: () => void;
 }
 
+// Step 3 is the success screen — excluded from the Stepper.
 const STEPS = ['Select household', 'Select account', 'Upload CSV'];
 
 export function ImportCsvDialog({
@@ -66,7 +67,7 @@ export function ImportCsvDialog({
   // Step 3
   const [importResult, setImportResult] = useState<FileImportResult | null>(null);
 
-  // Fetch accounts whenever the user advances to step 1
+  // Fetch accounts whenever the user advances to step 1.
   useEffect(() => {
     if (step !== 1 || householdId === '') return;
 
@@ -81,6 +82,16 @@ export function ImportCsvDialog({
       })
       .finally(() => setAccountsLoading(false));
   }, [step, householdId]);
+
+  useEffect(() => {
+    setAccounts([]);
+    setAccountsLoading(false);
+    setAccountsError(null);
+    setAccountId('');
+    setFile(null);
+    setUploadError(null);
+    setImportResult(null);
+  }, [householdId]);
 
   function reset() {
     setStep(0);
@@ -99,6 +110,13 @@ export function ImportCsvDialog({
   function handleClose() {
     reset();
     onClose();
+  }
+
+  function handleDialogClose(_: unknown, reason: 'backdropClick' | 'escapeKeyDown') {
+    if (isUploading) return;
+    if (reason === 'backdropClick' || reason === 'escapeKeyDown') {
+      handleClose();
+    }
   }
 
   async function handleUpload() {
@@ -130,24 +148,32 @@ export function ImportCsvDialog({
     accountId !== '' ? accounts.find(a => a.id === accountId) : undefined;
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={handleDialogClose}
+      disableEscapeKeyDown={isUploading}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>Import transactions from CSV</DialogTitle>
 
       <DialogContent>
-        <Stepper activeStep={step} sx={{ mb: 4 }}>
-          {STEPS.map(label => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
+        {step < 3 && (
+          <Stepper activeStep={step} sx={{ mb: 4 }}>
+            {STEPS.map(label => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        )}
 
         {/* ── Step 0: Household selection ───────────────────────────── */}
         {step === 0 && (
-          <HouseholdSelection 
-            households={households} 
-            householdId={householdId} 
-            setHouseholdId={setHouseholdId} 
+          <HouseholdSelection
+            households={households}
+            householdId={householdId}
+            setHouseholdId={setHouseholdId}
           />
         )}
 
@@ -179,7 +205,6 @@ export function ImportCsvDialog({
         {step === 3 && importResult && (
           <ImportSuccess result={importResult} />
         )}
-
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -195,7 +220,6 @@ export function ImportCsvDialog({
               </Button>
             )}
 
-            {/* Step 0 → 1 */}
             {step === 0 && (
               <Button
                 variant="contained"
@@ -206,7 +230,6 @@ export function ImportCsvDialog({
               </Button>
             )}
 
-            {/* Step 1 → 2 */}
             {step === 1 && (
               <Button
                 variant="contained"
@@ -217,7 +240,6 @@ export function ImportCsvDialog({
               </Button>
             )}
 
-            {/* Step 2: Import */}
             {step === 2 && (
               <Button
                 variant="contained"
