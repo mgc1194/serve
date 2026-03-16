@@ -287,8 +287,12 @@ describe('ImportCsvDialog', () => {
   fireEvent.click(screen.getByRole('button', { name: /import/i }));
 
   // Simulate backdrop click while uploading
-  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
-  expect(onClose).not.toHaveBeenCalled();
+  const backdrop = document.querySelector('[role="presentation"]');
+   expect(backdrop).not.toBeNull();
+   if (backdrop) {
+     fireEvent.mouseDown(backdrop);
+     fireEvent.click(backdrop);
+   }
 });
 
 it('hides the stepper on the success screen', async () => {

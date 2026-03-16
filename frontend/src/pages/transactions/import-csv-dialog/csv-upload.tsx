@@ -88,7 +88,17 @@ export function CsvUpload({
         <input
           type="file"
           accept=".csv,text/csv"
-          style={{ display: 'none' }}
+          style={{
+             position: 'absolute',
+             width: 1,
+             height: 1,
+             padding: 0,
+             margin: -1,
+             border: 0,
+             clip: 'rect(0 0 0 0)',
+             overflow: 'hidden',
+             whiteSpace: 'nowrap',
+           }}
           onChange={handleFileInput}
         />
       </Box>
