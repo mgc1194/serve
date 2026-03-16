@@ -184,21 +184,26 @@ export function TransactionsTable({
   // ── Keyboard reorder handlers (on the drag-handle IconButton) ───────────────
 
   function handleHandleKeyDown(e: React.KeyboardEvent, key: ColumnKey) {
-    // Enter or Space: pick up / drop
+    // Enter or Space: pick up (if nothing held) or drop (if this handle is held)
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       e.stopPropagation(); // don't also trigger the header's sort
       if (heldKey === null) {
+        // Pick up whichever handle was activated
         setHeldKey(key);
         setAnnouncement(
           `${COLUMN_LABELS[key]} column picked up. Use Left and Right arrow keys to move, Enter or Space to drop, Escape to cancel.`,
         );
-      } else {
+      } else if (key === heldKey) {
+        // Drop only when Enter/Space is pressed on the held column's own handle
+        const pos = columnOrder.indexOf(heldKey) + 1;
         setAnnouncement(
-          `${COLUMN_LABELS[heldKey]} column dropped at position ${columnOrder.indexOf(key) + 1}.`,
+          `${COLUMN_LABELS[heldKey]} column dropped at position ${pos} of ${columnOrder.length}.`,
         );
         setHeldKey(null);
       }
+      // Pressing Enter/Space on a *different* handle while one is held does nothing —
+      // the user must use arrow keys to move first, or Escape to cancel.
       return;
     }
 

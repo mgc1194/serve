@@ -48,13 +48,18 @@ export function TransactionsPage() {
       ? households.find(h => h.id === householdIdFilter)
       : undefined;
 
-  // The household to fetch transactions for: either the filtered one or the
-  // first one available (transactions require an explicit household_id).
-  const resolvedHouseholdId =
-    householdIdFilter ?? (households.length > 0 ? households[0].id : undefined);
+  // If no household_id is in the URL yet but the user has households, redirect
+  // to the first one immediately so the URL always reflects what's shown and
+  // the subtitle is never misleading.
+  useEffect(() => {
+    if (householdIdFilter === undefined && households.length > 0) {
+      setSearchParams({ household_id: String(households[0].id) }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [households]);
 
   function load() {
-    if (resolvedHouseholdId === undefined) {
+    if (householdIdFilter === undefined) {
       setIsLoading(false);
       return;
     }
@@ -63,8 +68,8 @@ export function TransactionsPage() {
     setError(null);
 
     Promise.all([
-      listTransactions({ household_id: resolvedHouseholdId }),
-      listAccounts({ household_id: resolvedHouseholdId }),
+      listTransactions({ household_id: householdIdFilter }),
+      listAccounts({ household_id: householdIdFilter }),
     ])
       .then(([txns, accts]) => {
         setTransactions(txns);
@@ -81,7 +86,7 @@ export function TransactionsPage() {
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load(); }, [resolvedHouseholdId]);
+  useEffect(() => { load(); }, [householdIdFilter]);
 
   function handleHouseholdChange(id: number | undefined) {
     if (id === undefined) {
@@ -137,7 +142,7 @@ export function TransactionsPage() {
             <Typography color="text.secondary">
               {activeHousehold
                 ? `Showing transactions in ${activeHousehold.name}`
-                : 'All transactions across your households.'}
+                : 'Select a household to view transactions.'}
             </Typography>
           </Box>
 

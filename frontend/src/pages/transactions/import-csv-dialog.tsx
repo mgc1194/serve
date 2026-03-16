@@ -30,7 +30,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import type { AccountDetail, FileImportResult, Household } from '@serve/types/global';
-import { listAccounts } from '@services/accounts';
+import { listAccounts, ApiError as AccountsApiError } from '@services/accounts';
 import { importTransactionsCsv, ApiError } from '@services/transactions';
 
 interface ImportCsvDialogProps {
@@ -78,7 +78,7 @@ export function ImportCsvDialog({
       .then(setAccounts)
       .catch(err => {
         setAccountsError(
-          err instanceof ApiError ? err.message : 'Could not load accounts.',
+          err instanceof AccountsApiError ? err.message : 'Could not load accounts.',
         );
       })
       .finally(() => setAccountsLoading(false));
