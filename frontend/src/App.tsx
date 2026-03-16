@@ -12,6 +12,7 @@ import { DashboardPage } from '@pages/dashboard';
 import { HouseholdsPage } from '@pages/households';
 import { LoginPage } from '@pages/login';
 import { RegisterPage } from '@pages/register';
+import { TransactionsPage } from '@pages/transactions';
 import theme from '@serve/theme';
 
 const queryClient = new QueryClient();
@@ -61,6 +62,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <AccountsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/transactions"
+                element={
+                  <ProtectedRoute>
+                    <TransactionsPage />
                   </ProtectedRoute>
                 }
               />
