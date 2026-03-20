@@ -4,7 +4,7 @@ from django.db.utils import IntegrityError
 
 from transactions.constants import HandlerKeys
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
-from transactions.models import Account, AccountType, Bank, Transaction
+from transactions.models import Account, AccountType, Bank, Label, Transaction
 from users.models import Household
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -13,6 +13,11 @@ from users.models import Household
 @pytest.fixture
 def household(db):
     return Household.objects.create(name='Smith Family')
+
+
+@pytest.fixture
+def other_household(db):
+    return Household.objects.create(name='Jones Family')
 
 
 @pytest.fixture
@@ -33,6 +38,15 @@ def account(db, account_type, household):
     return Account.objects.create(
         name='Account Test Savings',
         account_type=account_type,
+        household=household,
+    )
+
+
+@pytest.fixture
+def label(db, household):
+    return Label.objects.create(
+        name='Groceries',
+        color='#FF5733',
         household=household,
     )
 
@@ -168,6 +182,118 @@ class TestAccount:
             transaction.account.delete()
 
 
+# ── Label ─────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestLabel:
+    def test_can_be_created(self, label):
+        assert label.pk is not None
+
+    def test_string_representation(self, label, household):
+        assert str(label) == f'{household.name} — {label.name}'
+
+    def test_color_defaults_to_grey(self, household):
+        label = Label.objects.create(name='No Color', household=household)
+        assert label.color == '#6B7280'
+
+    def test_category_defaults_to_empty_string(self, household):
+        label = Label.objects.create(name='No Category', household=household)
+        assert label.category == ''
+
+    def test_belongs_to_household(self, label, household):
+        assert label.household == household
+
+    def test_name_must_be_unique_per_household(self, household):
+        Label.objects.create(name='Groceries', household=household)
+        with pytest.raises(IntegrityError):
+            Label.objects.create(name='Groceries', household=household)
+
+    def test_same_name_allowed_in_different_households(self, household, other_household):
+        Label.objects.create(name='Groceries', household=household)
+        label2 = Label.objects.create(name='Groceries', household=other_household)
+        assert label2.pk is not None
+
+    def test_ordered_by_category_then_name(self, household):
+        Label.objects.create(name='Groceries', category='Food', household=household)
+        Label.objects.create(name='Bars', category='Food', household=household)
+        Label.objects.create(name='Electricity', category='Utilities', household=household)
+
+        labels = list(Label.objects.filter(household=household))
+        names = [label.name for label in labels]
+
+        assert names.index('Bars') < names.index('Groceries')
+        assert names.index('Groceries') < names.index('Electricity')
+
+    def test_deleted_with_household(self, label, household):
+        label_id = label.pk
+        household.delete()
+        assert not Label.objects.filter(pk=label_id).exists()
+
+
+# ── Transaction.label FK ──────────────────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestTransactionLabel:
+    def test_transaction_can_have_a_label(self, account, label):
+        tx = Transaction.objects.create(
+            dedupe_hash='a' * 64,
+            date='2026-03-01',
+            concept='TRADER JOES',
+            amount=-42.57,
+            account=account,
+            label=label,
+        )
+        assert tx.label == label
+
+    def test_label_is_null_by_default(self, account):
+        tx = Transaction.objects.create(
+            dedupe_hash='b' * 64,
+            date='2026-03-01',
+            concept='AMAZON',
+            amount=-19.99,
+            account=account,
+        )
+        assert tx.label is None
+
+    def test_label_set_to_null_when_label_is_deleted(self, account, label):
+        tx = Transaction.objects.create(
+            dedupe_hash='c' * 64,
+            date='2026-03-01',
+            concept='TRADER JOES',
+            amount=-42.57,
+            account=account,
+            label=label,
+        )
+        label.delete()
+        tx.refresh_from_db()
+        assert tx.label is None
+
+    def test_transaction_is_preserved_when_label_is_deleted(self, account, label):
+        tx = Transaction.objects.create(
+            dedupe_hash='d' * 64,
+            date='2026-03-01',
+            concept='TRADER JOES',
+            amount=-42.57,
+            account=account,
+            label=label,
+        )
+        label.delete()
+        assert Transaction.objects.filter(pk=tx.pk).exists()
+
+    def test_label_accessible_through_reverse_relation(self, account, label):
+        tx = Transaction.objects.create(
+            dedupe_hash='e' * 64,
+            date='2026-03-01',
+            concept='TRADER JOES',
+            amount=-42.57,
+            account=account,
+            label=label,
+        )
+        assert tx in label.transactions.all()
+
+
 # ── Transaction ───────────────────────────────────────────────────────────────
 
 
@@ -192,8 +318,9 @@ class TestTransaction:
     def test_additional_labels_is_optional(self, transaction):
         assert transaction.additional_labels is None
 
-    def test_label_is_not_overwritten_on_reimport(self, transaction):
-        transaction.label = 'Essential'
+    def test_label_is_not_overwritten_on_reimport(self, transaction, household):
+        label = Label.objects.create(name='Essential', household=household)
+        transaction.label = label
         transaction.save()
         _, created = Transaction.objects.get_or_create(
             account=transaction.account,
@@ -207,7 +334,7 @@ class TestTransaction:
         )
         assert not created
         transaction.refresh_from_db()
-        assert transaction.label == 'Essential'
+        assert transaction.label == label
 
     def test_household_accessible_through_transaction(self, transaction, household):
         assert transaction.account.household == household
