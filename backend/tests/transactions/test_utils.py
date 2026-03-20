@@ -4,7 +4,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from transactions.models import Account, AccountType, Bank, Transaction
+from transactions.models import Account, AccountType, Bank, Label, Transaction
 from transactions.utils import detect_account_type, upsert_transactions
 from users.models import Household
 
@@ -118,17 +118,18 @@ class TestUpsertTransactions:
         assert result['total'] == 2
         assert Transaction.objects.count() == 2
 
-    def test_preserves_existing_labels(self, account, sample_df):
+    def test_preserves_existing_labels(self, household, account, sample_df):
         # First import
         upsert_transactions(sample_df, account)
         # Manually assign label
+        label = Label.objects.create(name='Essential', household=household)
         txn = Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1')
-        txn.label = 'Essential'
+        txn.label = label
         txn.save()
         # Re-import
         upsert_transactions(sample_df, account)
         txn.refresh_from_db()
-        assert txn.label == 'Essential'
+        assert txn.label == label
 
     def test_preserves_existing_category(self, account, sample_df):
         upsert_transactions(sample_df, account)
