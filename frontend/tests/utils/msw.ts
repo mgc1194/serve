@@ -22,6 +22,24 @@ export const mockDetailedHousehold = {
     { id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User' },
   ],
 };
+ 
+// Example transaction shape reflecting the updated TransactionSchema
+// (label_id + label_name instead of the legacy label string).
+export const mockTransaction = {
+  id: 1,
+  date: '2026-03-01',
+  concept: 'TRADER JOES',
+  amount: -42.57,
+  label_id: null,
+  label_name: null,
+  category: null,
+  additional_labels: null,
+  source: 'import',
+  account_id: 1,
+  account_name: 'My Savings',
+  bank_name: 'SoFi',
+  imported_at: '2026-03-10T08:00:00Z',
+};
 
 export const mockUser = {
   id: 1,

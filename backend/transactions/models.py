@@ -1,5 +1,5 @@
 """
-transactions/models.py — Bank, AccountType, Account, and Transaction models.
+transactions/models.py — Bank, AccountType, Account, Transaction, and Label models.
 """
 
 from django.db import models
@@ -101,6 +101,48 @@ class Account(models.Model):
         return self.account_type.handler_key
 
 
+class Label(models.Model):
+    """
+    A user-defined label that can be assigned to transactions within a household.
+
+    Labels have a name, an optional hex colour for UI
+    display, and an optional free-text category that groups related labels
+    together (e.g. "Groceries", "Transport").  Names are unique per household
+    so the same name can appear in different households without conflict.
+
+    Deleting a label nulls out the label FK on any associated transactions
+    rather than cascading — transactions are never removed implicitly.
+    """
+
+    name = models.CharField(max_length=100)
+    color = models.CharField(
+        max_length=7,
+        default='#6B7280',
+        help_text='Hex colour code, e.g. "#FF5733".  Used for UI display only.',
+    )
+    category = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Optional grouping for related labels (e.g. "Food", "Bills").',
+    )
+    household = models.ForeignKey(
+        Household,
+        on_delete=models.CASCADE,
+        related_name='labels',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'labels'
+        unique_together = [['household', 'name']]
+        ordering = ['category', 'name']
+
+    def __str__(self):
+        return f'{self.household.name} — {self.name}'
+
+
 class Transaction(models.Model):
     """
     Represents a single financial transaction.
@@ -120,7 +162,13 @@ class Transaction(models.Model):
     created ones ('manual'). These are treated as distinct entry points but
     share the same dedup scope.
 
-    label and category are manually assigned and never overwritten on re-import.
+     label links to a Label instance within the same household. When a Label is
+    deleted the FK is set to NULL (SET_NULL) so the transaction is preserved but
+    simply becomes unlabelled. Earlier versions of this model used a free-text
+    label field; that has now been replaced by the structured ForeignKey.
+
+    category and additional_labels are manually assigned and never overwritten
+    on re-import.
     """
 
     class Source(models.TextChoices):
@@ -133,7 +181,16 @@ class Transaction(models.Model):
     date = models.DateField()
     concept = models.TextField()
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    label = models.CharField(max_length=255, blank=True, null=True)  # noqa: DJ001
+
+    # Structured label FK — the primary way to label a transaction going forward.
+    label = models.ForeignKey(
+        Label,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transactions',
+    )
+
     category = models.CharField(max_length=255, blank=True, null=True)  # noqa: DJ001
     additional_labels = models.TextField(blank=True, null=True)  # noqa: DJ001
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='transactions')

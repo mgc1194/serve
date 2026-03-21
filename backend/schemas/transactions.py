@@ -31,7 +31,8 @@ class TransactionSchema(Schema):
     date: str
     concept: str
     amount: float
-    label: str | None
+    label_id: int | None
+    label_name: str | None
     category: str | None
     additional_labels: str | None
     source: str

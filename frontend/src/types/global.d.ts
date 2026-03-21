@@ -73,7 +73,8 @@ export interface Transaction {
   date: string;
   concept: string;
   amount: number;
-  label: string | null;
+  label_id: number | null;
+  label_name: string | null;
   category: string | null;
   additional_labels: string | null;
   source: string;
