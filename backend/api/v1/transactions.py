@@ -54,7 +54,9 @@ def _get_transaction_for_household_member(transaction_id: int, user) -> Transact
         HttpError: 403 if the user is not a member of the household.
     """
     transaction = get_object_or_404(
-        Transaction.objects.select_related('account__account_type__bank', 'account__household'),
+        Transaction.objects.select_related(
+            'account__account_type__bank', 'account__household', 'label'
+        ),
         pk=transaction_id,
     )
     if not transaction.account.household.users.filter(pk=user.pk).exists():
@@ -137,7 +139,7 @@ def list_transactions(
 
     qs = (
         Transaction.objects.filter(account__household_id=household_id)
-        .select_related('account__account_type__bank')
+        .select_related('account__account_type__bank', 'account__household', 'label')
         .order_by('-date', '-imported_at')
     )
 
