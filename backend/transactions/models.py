@@ -105,7 +105,7 @@ class Label(models.Model):
     """
     A user-defined label that can be assigned to transactions within a household.
 
-    Labels are GitHub-style: each has a name, an optional hex colour for UI
+    Labels have a name, an optional hex colour for UI
     display, and an optional free-text category that groups related labels
     together (e.g. "Groceries", "Transport").  Names are unique per household
     so the same name can appear in different households without conflict.
@@ -162,11 +162,10 @@ class Transaction(models.Model):
     created ones ('manual'). These are treated as distinct entry points but
     share the same dedup scope.
 
-    label links to a Label instance within the same household.  When a Label is
+     label links to a Label instance within the same household. When a Label is
     deleted the FK is set to NULL (SET_NULL) so the transaction is preserved but
-    simply becomes unlabelled.  The legacy label CharField is retained for
-    backward-compatibility with existing data and CSV imports; going forward new
-    assignments should use the FK.
+    simply becomes unlabelled. Earlier versions of this model used a free-text
+    label field; that has now been replaced by the structured ForeignKey.
 
     category and additional_labels are manually assigned and never overwritten
     on re-import.
