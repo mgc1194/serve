@@ -121,8 +121,10 @@ class TestCreateLabel:
             user=alice,
         )
         assert response.status_code == 200
-        assert len(response.json()['created']) == 1
-        assert response.json()['created'][0]['name'] == 'Restaurants'
+        data = response.json()
+        assert len(data['created']) == 1
+        assert data['created'][0]['name'] == 'Restaurants'
+        assert data['failed'] == []
 
     def test_creates_label_across_multiple_households(
         self, client, alice, household, second_household
@@ -135,6 +137,16 @@ class TestCreateLabel:
         data = response.json()
         assert len(data['created']) == 2
         assert data['failed'] == []
+
+    def test_deduplicates_household_ids(self, client, alice, household):
+        response = client.post(
+            '/labels/',
+            json={'name': 'Restaurants', 'household_ids': [household.id, household.id]},
+            user=alice,
+        )
+        data = response.json()
+        assert len(data['created']) == 1
+        assert Label.objects.filter(name='Restaurants', household=household).count() == 1
 
     def test_persists_to_database(self, client, alice, household):
         client.post(
@@ -186,12 +198,14 @@ class TestCreateLabel:
         data = response.json()
         assert len(data['created']) == 0
         assert len(data['failed']) == 1
+        assert data['failed'][0]['household_id'] == household.id
+        assert data['failed'][0]['household_name'] == household.name
         assert 'already exists' in data['failed'][0]['reason'].lower()
 
     def test_partial_success_across_households(
         self, client, alice, household, second_household, label
     ):
-        # label 'Groceries' already exists in household but not second_household
+        # 'Groceries' already exists in household but not second_household
         response = client.post(
             '/labels/',
             json={'name': 'Groceries', 'household_ids': [household.id, second_household.id]},
@@ -224,8 +238,19 @@ class TestCreateLabel:
         )
         data = response.json()
         assert len(data['created']) == 1
-        assert len(data['failed']) == 1
         assert data['failed'][0]['household_id'] == 9999
+        assert data['failed'][0]['household_name'] is None
+
+    def test_failed_entries_have_consistent_shape(self, client, alice, household, other_household):
+        response = client.post(
+            '/labels/',
+            json={'name': 'Groceries', 'household_ids': [other_household.id, 9999]},
+            user=alice,
+        )
+        for entry in response.json()['failed']:
+            assert 'household_id' in entry
+            assert 'household_name' in entry
+            assert 'reason' in entry
 
     def test_unauthenticated_returns_401(self, client, household):
         response = client.post(
@@ -281,6 +306,11 @@ class TestUpdateLabel:
         client.patch(f'/labels/{label.id}/', json={'name': 'Supermarket'}, user=alice)
         label.refresh_from_db()
         assert label.name == 'Supermarket'
+
+    def test_no_fields_provided_returns_400(self, client, alice, label):
+        response = client.patch(f'/labels/{label.id}/', json={}, user=alice)
+        assert response.status_code == 400
+        assert 'at least one field' in response.json()['detail'].lower()
 
     def test_blank_name_returns_400(self, client, alice, label):
         response = client.patch(
