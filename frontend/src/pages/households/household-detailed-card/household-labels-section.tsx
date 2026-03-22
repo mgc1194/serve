@@ -1,8 +1,7 @@
-// pages/households/household-detailed-card/household-label-section.tsx
+// pages/households/household-detailed-card/household-labels-section.tsx
 //
-// Displays up to 5 label chips for a household with an "Add label" button
-// that opens the label management dialog in create mode, and a "Manage"
-// button when there are labels to edit.
+// Displays up to 5 label chips for a household. "Add label" opens the
+// management dialog in create mode; "Manage" opens it in list mode.
 
 import AddIcon from '@mui/icons-material/Add';
 import { Box, Button, Chip, Typography } from '@mui/material';
@@ -27,9 +26,20 @@ export function HouseholdLabelsSection({
   onLabelsChanged,
 }: HouseholdLabelsSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogInitialMode, setDialogInitialMode] = useState<'list' | 'create'>('list');
 
   const preview = labels.slice(0, MAX_PREVIEW);
   const overflow = labels.length - MAX_PREVIEW;
+
+  function openManage() {
+    setDialogInitialMode('list');
+    setDialogOpen(true);
+  }
+
+  function openCreate() {
+    setDialogInitialMode('create');
+    setDialogOpen(true);
+  }
 
   return (
     <>
@@ -49,7 +59,7 @@ export function HouseholdLabelsSection({
                 key={label.id}
                 label={label.name}
                 size="small"
-                onClick={() => setDialogOpen(true)}
+                onClick={openManage}
                 sx={{
                   bgcolor: label.color,
                   color: '#fff',
@@ -64,7 +74,7 @@ export function HouseholdLabelsSection({
                 label={`+${overflow} more`}
                 size="small"
                 variant="outlined"
-                onClick={() => setDialogOpen(true)}
+                onClick={openManage}
                 sx={{ cursor: 'pointer' }}
               />
             )}
@@ -75,7 +85,7 @@ export function HouseholdLabelsSection({
           <Button
             size="small"
             startIcon={<AddIcon />}
-            onClick={() => setDialogOpen(true)}
+            onClick={openCreate}
             variant="outlined"
             sx={{ fontSize: '0.75rem', py: 0.5 }}
           >
@@ -84,7 +94,7 @@ export function HouseholdLabelsSection({
           {labels.length > 0 && (
             <Button
               size="small"
-              onClick={() => setDialogOpen(true)}
+              onClick={openManage}
               sx={{ fontSize: '0.75rem', py: 0.5, color: 'text.secondary' }}
             >
               Manage
@@ -97,10 +107,11 @@ export function HouseholdLabelsSection({
         open={dialogOpen}
         householdId={householdId}
         householdName={householdName}
+        initialMode={dialogInitialMode}
         onClose={() => setDialogOpen(false)}
         onLabelsChanged={updated => {
           onLabelsChanged(updated);
-          // Keep dialog open so user can continue managing
+          // Keep dialog open so the user can continue managing
         }}
       />
     </>

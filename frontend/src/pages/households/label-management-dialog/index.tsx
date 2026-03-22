@@ -20,6 +20,8 @@ interface LabelManagementDialogProps {
   open: boolean;
   householdId: number;
   householdName: string;
+  /** Open the dialog directly into create mode (e.g. from the "Add label" button). */
+  initialMode?: 'list' | 'create';
   onClose: () => void;
   onLabelsChanged: (labels: Label[]) => void;
 }
@@ -32,11 +34,12 @@ export function LabelManagementDialog({
   open,
   householdId,
   householdName,
+  initialMode = 'list',
   onClose,
   onLabelsChanged,
 }: LabelManagementDialogProps) {
   // ── Mode ──────────────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<Mode>('list');
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   // ── List state ────────────────────────────────────────────────────────────
   const [labels, setLabels] = useState<Label[]>([]);
@@ -51,18 +54,19 @@ export function LabelManagementDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ── Load on open ──────────────────────────────────────────────────────────
+  // ── Load on open; reset mode to initialMode each time ────────────────────
   useEffect(() => {
     if (!open) return;
+    setMode(initialMode);
     setIsLoading(true);
     setListError(null);
     listLabels(householdId)
       .then(setLabels)
       .catch(() => setListError('Could not load labels. Please try again.'))
       .finally(() => setIsLoading(false));
-  }, [open, householdId]);
+  }, [open, householdId, initialMode]);
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {
     setMode('list');
     setEditingLabel(null);
@@ -93,7 +97,6 @@ export function LabelManagementDialog({
     setFormError(null);
   }
 
-  // ── API actions ───────────────────────────────────────────────────────────
   async function handleSave() {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -165,7 +168,7 @@ export function LabelManagementDialog({
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
 
-      <DialogContent sx={{ pt: 2 }}>
+      <DialogContent>
         {mode === 'list' && (
           <ListLabels
             labels={labels}

@@ -65,7 +65,7 @@ export function ManageLabel({
   const previewColor = isValidColor ? color : DEFAULT_COLOR;
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
       {error && (
         <Alert severity="error" onClose={onDismissError}>
           {error}
@@ -77,10 +77,10 @@ export function ManageLabel({
         label="Name"
         value={name}
         onChange={e => onNameChange(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && onSave()}
+        onKeyDown={e => e.key === 'Enter' && !isSaving && !isDeleting && onSave()}
         size="small"
         fullWidth
-        disabled={isSaving}
+        disabled={isSaving || isDeleting}
       />
 
       {/* Colour: hex input + native colour picker swatch */}
@@ -91,8 +91,8 @@ export function ManageLabel({
           onChange={e => onColorChange(e.target.value)}
           size="small"
           fullWidth
-          disabled={isSaving}
-          inputProps={{ maxLength: 7 }}
+          disabled={isSaving || isDeleting}
+          slotProps={{ htmlInput: { maxLength: 7 } }}
         />
         <Box
           sx={{
@@ -110,8 +110,10 @@ export function ManageLabel({
         >
           <input
             type="color"
+            aria-label="Choose label color"
             value={previewColor}
             onChange={e => onColorChange(e.target.value)}
+            disabled={isSaving || isDeleting}
             style={{
               position: 'absolute',
               inset: 0,
