@@ -246,6 +246,7 @@ describe('ImportCsvDialog', () => {
       fireEvent.mouseDown(backdrop);
       fireEvent.click(backdrop);
     }
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('hides the stepper on the success screen', async () => {
