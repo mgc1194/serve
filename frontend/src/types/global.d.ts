@@ -68,6 +68,14 @@ export interface Bank {
   account_types: AccountType[];
 }
 
+export interface Label {
+  id: number;
+  name: string;
+  color: string;
+  category: string;
+  household_id: number;
+}
+
 export interface Transaction {
   id: number;
   date: string;
@@ -83,13 +91,24 @@ export interface Transaction {
   bank_name: string;
   imported_at: string;
 }
- 
+
 export interface FileImportResult {
   filename: string;
   inserted: number;
   skipped: number;
   total: number;
   error: string | null;
+}
+
+export interface LabelCreateFailure {
+  household_id: number;
+  household_name: string | null;
+  reason: string;
+}
+
+export interface LabelCreateResult {
+  created: Label[];
+  failed: LabelCreateFailure[];
 }
 
 // Returned by the API on errors (Django Ninja's default error shape).

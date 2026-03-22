@@ -22,9 +22,15 @@ export const mockDetailedHousehold = {
     { id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User' },
   ],
 };
+
+export const mockLabel = {
+  id: 1,
+  name: 'Groceries',
+  color: '#6B7280',
+  category: 'Food',
+  household_id: 1,
+};
  
-// Example transaction shape reflecting the updated TransactionSchema
-// (label_id + label_name instead of the legacy label string).
 export const mockTransaction = {
   id: 1,
   date: '2026-03-01',
@@ -126,7 +132,41 @@ export const handlers = [
   }),
 
   http.delete(`${API}/accounts/:id/`, () => new HttpResponse(null, { status: 204 })),
-
+  
+  http.get(`${API}/labels/`, ({ request }) => {
+    const url = new URL(request.url);
+    const householdId = url.searchParams.get('household_id');
+    if (!householdId) return HttpResponse.json([], { status: 400 });
+    return HttpResponse.json([mockLabel]);
+  }),
+ 
+  http.post(`${API}/labels/`, async ({ request }) => {
+    const body = await request.json() as {
+      name: string;
+      color: string;
+      category: string;
+      household_ids: number[];
+    };
+    const created = body.household_ids.map((hid, i) => ({
+      id: 99 + i,
+      name: body.name,
+      color: body.color,
+      category: body.category,
+      household_id: hid,
+    }));
+    return HttpResponse.json({ created, failed: [] });
+  }),
+ 
+  http.patch(`${API}/labels/:id/`, async ({ params, request }) => {
+    const body = await request.json() as Partial<{ name: string; color: string; category: string }>;
+    return HttpResponse.json({
+      ...mockLabel,
+      id: Number(params.id),
+      ...body,
+    });
+  }),
+ 
+  http.delete(`${API}/labels/:id/`, () => new HttpResponse(null, { status: 204 })),
 ];
 
 export const server = setupServer(...handlers);
