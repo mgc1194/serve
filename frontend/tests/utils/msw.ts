@@ -136,7 +136,12 @@ export const handlers = [
   http.get(`${API}/labels/`, ({ request }) => {
     const url = new URL(request.url);
     const householdId = url.searchParams.get('household_id');
-    if (!householdId) return HttpResponse.json([], { status: 400 });
+    if (!householdId) {
+      return HttpResponse.json(
+        { detail: 'household_id query parameter is required.' },
+        { status: 400 },
+      );
+    }
     return HttpResponse.json([mockLabel]);
   }),
  
