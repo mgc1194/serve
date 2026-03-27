@@ -16,13 +16,7 @@ class LabelSchema(Schema):
 
 
 class LabelCreateRequest(Schema):
-    """Request schema for creating a label.
-
-    A single label is created for each unique household in ``household_ids``.
-    If a label with the same name already exists in a given household it is
-    skipped and reported in the ``failed`` list of LabelCreateResult.
-    Duplicate household IDs are silently deduplicated.
-    """
+    """Request schema for creating a label."""
 
     name: str
     color: str = '#6B7280'

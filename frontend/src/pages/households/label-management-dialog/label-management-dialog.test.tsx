@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LabelManagementDialog } from '@pages/households/label-management-dialog';
 import {
-  createLabels,
+  createLabel,
   deleteLabel,
   listLabels,
   updateLabel,
@@ -20,14 +20,14 @@ vi.mock('@services/labels', async importOriginal => {
   return {
     ...actual,
     listLabels: vi.fn(),
-    createLabels: vi.fn(),
+    createLabel: vi.fn(),
     updateLabel: vi.fn(),
     deleteLabel: vi.fn(),
   };
 });
 
 const mockListLabels = vi.mocked(listLabels);
-const mockCreateLabels = vi.mocked(createLabels);
+const mockCreateLabel = vi.mocked(createLabel);
 const mockUpdateLabel = vi.mocked(updateLabel);
 const mockDeleteLabel = vi.mocked(deleteLabel);
 
@@ -147,10 +147,8 @@ describe('LabelManagementDialog mode transitions', () => {
   it('resets form fields when switching from edit to create', async () => {
     setup();
     await waitFor(() => screen.getByText('Groceries'));
-    // Go to edit
     fireEvent.click(screen.getByRole('button', { name: /edit groceries/i }));
     expect((screen.getByLabelText(/^name$/i) as HTMLInputElement).value).toBe('Groceries');
-    // Go back, then open create
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
     fireEvent.click(screen.getByRole('button', { name: /new label/i }));
     expect((screen.getByLabelText(/^name$/i) as HTMLInputElement).value).toBe('');
@@ -160,11 +158,10 @@ describe('LabelManagementDialog mode transitions', () => {
 // ── Create ─────────────────────────────────────────────────────────────────────
 
 describe('LabelManagementDialog create', () => {
-  it('calls createLabels with name, color, and householdId on save', async () => {
-    mockCreateLabels.mockResolvedValueOnce({
-      created: [{ id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 }],
-      failed: [],
-    });
+  it('calls createLabel with name, color, and householdId on save', async () => {
+    mockCreateLabel.mockResolvedValueOnce(
+      { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 },
+    );
 
     setup();
     await waitFor(() => screen.getByText('Groceries'));
@@ -173,18 +170,18 @@ describe('LabelManagementDialog create', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
     await waitFor(() =>
-      expect(mockCreateLabels).toHaveBeenCalledWith({
+      expect(mockCreateLabel).toHaveBeenCalledWith({
         name: 'Bills',
         color: '#6B7280',
         category: '',
-        household_ids: [1],
+        household_id: 1,
       }),
     );
   });
 
   it('calls onLabelsChanged after successful create', async () => {
     const newLabel = { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 };
-    mockCreateLabels.mockResolvedValueOnce({ created: [newLabel], failed: [] });
+    mockCreateLabel.mockResolvedValueOnce(newLabel);
 
     const { onLabelsChanged } = setup();
     await waitFor(() => screen.getByText('Groceries'));
@@ -197,10 +194,9 @@ describe('LabelManagementDialog create', () => {
   });
 
   it('returns to list mode after successful create', async () => {
-    mockCreateLabels.mockResolvedValueOnce({
-      created: [{ id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 }],
-      failed: [],
-    });
+    mockCreateLabel.mockResolvedValueOnce(
+      { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 },
+    );
 
     setup();
     await waitFor(() => screen.getByText('Groceries'));
@@ -213,11 +209,8 @@ describe('LabelManagementDialog create', () => {
     );
   });
 
-  it('shows error when createLabels returns a failure', async () => {
-    mockCreateLabels.mockResolvedValueOnce({
-      created: [],
-      failed: [{ household_id: 1, household_name: 'Smith Household', reason: 'Label already exists.' }],
-    });
+  it('shows error when createLabel throws an ApiError', async () => {
+    mockCreateLabel.mockRejectedValueOnce(new ApiError(400, 'A label named "Groceries" already exists in this household.'));
 
     setup();
     await waitFor(() => screen.getByText('Groceries'));
@@ -226,21 +219,7 @@ describe('LabelManagementDialog create', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
     await waitFor(() =>
-      expect(screen.getByText('Label already exists.')).toBeDefined(),
-    );
-  });
-
-  it('shows error when createLabels throws an ApiError', async () => {
-    mockCreateLabels.mockRejectedValueOnce(new ApiError(400, 'Label already exists.'));
-
-    setup();
-    await waitFor(() => screen.getByText('Groceries'));
-    fireEvent.click(screen.getByRole('button', { name: /new label/i }));
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Groceries' } });
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
-
-    await waitFor(() =>
-      expect(screen.getByText('Label already exists.')).toBeDefined(),
+      expect(screen.getByText(/already exists/i)).toBeDefined(),
     );
   });
 });
