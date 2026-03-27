@@ -3,26 +3,20 @@ api/v1/labels.py — Label management endpoints.
 
 Endpoints:
     GET    /api/v1/labels/        — list labels for the user's households
-    POST   /api/v1/labels/        — create a label across one or more households
+    POST   /api/v1/labels/        — create a label in a household
     PATCH  /api/v1/labels/{id}/   — update a label's name, color, or category
     DELETE /api/v1/labels/{id}/   — delete a label (SET_NULL on transactions)
 """
 
 import logging
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
-from schemas.labels import (
-    LabelCreateFailure,
-    LabelCreateRequest,
-    LabelCreateResult,
-    LabelSchema,
-    LabelUpdateRequest,
-)
+from schemas.labels import LabelCreateRequest, LabelSchema, LabelUpdateRequest
 from transactions.models import Label
 from users.models import Household
 
@@ -35,7 +29,19 @@ router = Router(tags=['Labels'], auth=django_auth)
 
 
 def _get_label_for_member(label_id: int, user) -> Label:
-    """Fetches a label and verifies the user is a member of its household."""
+    """Fetches a label and verifies the user is a member of its household.
+
+    Args:
+        label_id: Primary key of the label to fetch.
+        user: The requesting user.
+
+    Returns:
+        The Label instance.
+
+    Raises:
+        HttpError: 404 if the label does not exist.
+        HttpError: 403 if the user is not a member of the label's household.
+    """
     label = get_object_or_404(Label.objects.select_related('household'), pk=label_id)
     if not label.household.users.filter(pk=user.pk).exists():
         raise HttpError(403, 'You are not a member of this household.')
@@ -91,97 +97,50 @@ def list_labels(request, household_id: int | None = None):
 # ── POST /labels/ ─────────────────────────────────────────────────────────────
 
 
-@router.post('/labels/', response=LabelCreateResult)
+@router.post('/labels/', response=LabelSchema)
 def create_label(request, payload: LabelCreateRequest):
-    """Creates a label across one or more households.
+    """Creates a new label in a household.
 
-    Deduplicates ``household_ids`` before processing. Bulk-fetches all
-    requested households in a single query. Attempts to create the label in
-    each household — failures (not found, not a member, duplicate name) are
-    collected and returned rather than aborting the request.
-
-    Each create attempt runs in its own savepoint so an IntegrityError in one
-    household does not break the outer transaction.
+    The user must be a member of the target household. Label names must be
+    unique within a household.
 
     Args:
         request: The HTTP request object. Must be authenticated.
-        payload: LabelCreateRequest with name, color, category, and household_ids.
+        payload: LabelCreateRequest with name, color, category, and household_id.
 
     Returns:
-        LabelCreateResult with ``created`` and ``failed`` lists.
+        The created LabelSchema.
 
     Raises:
         HttpError: 400 if the name is blank.
-        HttpError: 400 if household_ids is empty.
+        HttpError: 400 if a label with that name already exists in the household.
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the household does not exist.
     """
     name = payload.name.strip()
     if not name:
         raise HttpError(400, 'Label name cannot be blank.')
 
-    # Deduplicate while preserving order.
-    seen = set()
-    unique_ids = [hid for hid in payload.household_ids if not (hid in seen or seen.add(hid))]
+    household = get_object_or_404(Household, pk=payload.household_id)
+    if not household.users.filter(pk=request.user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
 
-    if not unique_ids:
-        raise HttpError(400, 'At least one household must be selected.')
+    try:
+        label = Label.objects.create(
+            name=name,
+            color=payload.color,
+            category=payload.category.strip(),
+            household=household,
+        )
+    except IntegrityError:
+        raise HttpError(400, f'A label named "{name}" already exists in this household.') from None
 
-    # Bulk-fetch all requested households in one query.
-    household_map = {
-        h.pk: h for h in Household.objects.filter(pk__in=unique_ids).prefetch_related('users')
-    }
-
-    created = []
-    failed = []
-
-    for household_id in unique_ids:
-        household = household_map.get(household_id)
-
-        if household is None:
-            failed.append(
-                LabelCreateFailure(
-                    household_id=household_id,
-                    household_name=None,
-                    reason='Household not found.',
-                )
-            )
-            continue
-
-        if not household.users.filter(pk=request.user.pk).exists():
-            failed.append(
-                LabelCreateFailure(
-                    household_id=household_id,
-                    household_name=household.name,
-                    reason='You are not a member of this household.',
-                )
-            )
-            continue
-
-        try:
-            with transaction.atomic():
-                label = Label.objects.create(
-                    name=name,
-                    color=payload.color,
-                    category=payload.category.strip(),
-                    household=household,
-                )
-            created.append(label)
-            logger.info(
-                f'User {request.user.email} created label "{label.name}" '
-                f'(id={label.id}) in household "{household.name}" (id={household.id}).'
-            )
-        except IntegrityError:
-            failed.append(
-                LabelCreateFailure(
-                    household_id=household_id,
-                    household_name=household.name,
-                    reason=f'A label named "{name}" already exists in this household.',
-                )
-            )
-
-    return LabelCreateResult(
-        created=[_serialize(lbl) for lbl in created],
-        failed=failed,
+    logger.info(
+        f'User {request.user.email} created label "{label.name}" '
+        f'(id={label.id}) in household "{household.name}" (id={household.id}).'
     )
+
+    return _serialize(label)
 
 
 # ── PATCH /labels/{id}/ ───────────────────────────────────────────────────────

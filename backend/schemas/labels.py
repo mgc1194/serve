@@ -27,30 +27,7 @@ class LabelCreateRequest(Schema):
     name: str
     color: str = '#6B7280'
     category: str = ''
-    household_ids: list[int]
-
-
-class LabelCreateFailure(Schema):
-    """Represents a single failed label creation attempt.
-
-    ``household_name`` is None when the household could not be found.
-    """
-
     household_id: int
-    household_name: str | None
-    reason: str
-
-
-class LabelCreateResult(Schema):
-    """Output schema for a multi-household label create operation.
-
-    ``created`` contains the labels that were successfully created.
-    ``failed`` contains one entry per household where creation was skipped,
-    with a human-readable reason (e.g. name already exists).
-    """
-
-    created: list[LabelSchema]
-    failed: list[LabelCreateFailure]
 
 
 class LabelUpdateRequest(Schema):

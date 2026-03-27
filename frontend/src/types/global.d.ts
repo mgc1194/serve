@@ -100,17 +100,6 @@ export interface FileImportResult {
   error: string | null;
 }
 
-export interface LabelCreateFailure {
-  household_id: number;
-  household_name: string | null;
-  reason: string;
-}
-
-export interface LabelCreateResult {
-  created: Label[];
-  failed: LabelCreateFailure[];
-}
-
 // Returned by the API on errors (Django Ninja's default error shape).
 export interface ApiError {
   detail: string;
