@@ -8,6 +8,8 @@ import { setupServer } from 'msw/node';
 
 const API = '/api/v1';
 
+// ── Mock data ─────────────────────────────────────────────────────────────────
+
 export const mockHousehold = {
   id: 1,
   name: 'Test Household',
@@ -30,7 +32,7 @@ export const mockLabel = {
   category: 'Food',
   household_id: 1,
 };
- 
+
 export const mockTransaction = {
   id: 1,
   date: '2026-03-01',
@@ -70,7 +72,12 @@ export const mockAccount = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
 export const handlers = [
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+
   http.get(`${API}/auth/me`, () => {
     return HttpResponse.json(mockUser);
   }),
@@ -86,6 +93,8 @@ export const handlers = [
   http.post(`${API}/auth/logout`, () => {
     return new HttpResponse(null, { status: 204 });
   }),
+
+  // ── Households ──────────────────────────────────────────────────────────────
 
   http.get(`${API}/households/`, () => HttpResponse.json([mockDetailedHousehold])),
 
@@ -115,6 +124,8 @@ export const handlers = [
     });
   }),
 
+  // ── Accounts ────────────────────────────────────────────────────────────────
+
   http.get(`${API}/accounts/`, () => HttpResponse.json([mockAccount])),
 
   http.post(`${API}/accounts/`, async ({ request }) => {
@@ -132,7 +143,9 @@ export const handlers = [
   }),
 
   http.delete(`${API}/accounts/:id/`, () => new HttpResponse(null, { status: 204 })),
-  
+
+  // ── Labels ──────────────────────────────────────────────────────────────────
+
   http.get(`${API}/labels/`, ({ request }) => {
     const url = new URL(request.url);
     const householdId = url.searchParams.get('household_id');
@@ -144,24 +157,23 @@ export const handlers = [
     }
     return HttpResponse.json([mockLabel]);
   }),
- 
+
   http.post(`${API}/labels/`, async ({ request }) => {
     const body = await request.json() as {
       name: string;
       color: string;
       category: string;
-      household_ids: number[];
+      household_id: number;
     };
-    const created = body.household_ids.map((hid, i) => ({
-      id: 99 + i,
+    return HttpResponse.json({
+      id: 99,
       name: body.name,
       color: body.color,
       category: body.category,
-      household_id: hid,
-    }));
-    return HttpResponse.json({ created, failed: [] });
+      household_id: body.household_id,
+    });
   }),
- 
+
   http.patch(`${API}/labels/:id/`, async ({ params, request }) => {
     const body = await request.json() as Partial<{ name: string; color: string; category: string }>;
     return HttpResponse.json({
@@ -170,8 +182,9 @@ export const handlers = [
       ...body,
     });
   }),
- 
+
   http.delete(`${API}/labels/:id/`, () => new HttpResponse(null, { status: 204 })),
+
 ];
 
 export const server = setupServer(...handlers);

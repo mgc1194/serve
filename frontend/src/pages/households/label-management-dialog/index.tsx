@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react';
 import { ListLabels } from '@pages/households/label-management-dialog/list-labels';
 import { ManageLabel } from '@pages/households/label-management-dialog/manage-label';
 import type { Label } from '@serve/types/global';
-import { createLabels, deleteLabel, listLabels, updateLabel, ApiError } from '@services/labels';
+import { createLabel, deleteLabel, listLabels, updateLabel, ApiError } from '@services/labels';
 
 interface LabelManagementDialogProps {
   open: boolean;
@@ -109,19 +109,14 @@ export function LabelManagementDialog({
 
     try {
       if (mode === 'create') {
-        const result = await createLabels({
+        const created = await createLabel({
           name: trimmedName,
           color,
           category: '',
-          household_ids: [householdId],
+          household_id: householdId,
         });
 
-        if (result.failed.length > 0) {
-          setFormError(result.failed[0].reason);
-          return;
-        }
-
-        const updated = [...labels, ...result.created];
+        const updated = [...labels, created];
         setLabels(updated);
         onLabelsChanged(updated);
       } else if (mode === 'edit' && editingLabel) {

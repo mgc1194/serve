@@ -43,13 +43,6 @@ def household(db, alice):
 
 
 @pytest.fixture
-def second_household(db, alice):
-    h = Household.objects.create(name='Alice Second Household')
-    h.users.add(alice)
-    return h
-
-
-@pytest.fixture
 def other_household(db, bob):
     h = Household.objects.create(name='Bob Household')
     h.users.add(bob)
@@ -114,44 +107,20 @@ class TestListLabels:
 
 @pytest.mark.django_db
 class TestCreateLabel:
-    def test_creates_label_in_single_household(self, client, alice, household):
+    def test_creates_label_successfully(self, client, alice, household):
         response = client.post(
             '/labels/',
-            json={'name': 'Restaurants', 'household_ids': [household.id]},
+            json={'name': 'Restaurants', 'household_id': household.id},
             user=alice,
         )
         assert response.status_code == 200
-        data = response.json()
-        assert len(data['created']) == 1
-        assert data['created'][0]['name'] == 'Restaurants'
-        assert data['failed'] == []
-
-    def test_creates_label_across_multiple_households(
-        self, client, alice, household, second_household
-    ):
-        response = client.post(
-            '/labels/',
-            json={'name': 'Restaurants', 'household_ids': [household.id, second_household.id]},
-            user=alice,
-        )
-        data = response.json()
-        assert len(data['created']) == 2
-        assert data['failed'] == []
-
-    def test_deduplicates_household_ids(self, client, alice, household):
-        response = client.post(
-            '/labels/',
-            json={'name': 'Restaurants', 'household_ids': [household.id, household.id]},
-            user=alice,
-        )
-        data = response.json()
-        assert len(data['created']) == 1
-        assert Label.objects.filter(name='Restaurants', household=household).count() == 1
+        assert response.json()['name'] == 'Restaurants'
+        assert response.json()['household_id'] == household.id
 
     def test_persists_to_database(self, client, alice, household):
         client.post(
             '/labels/',
-            json={'name': 'Restaurants', 'household_ids': [household.id]},
+            json={'name': 'Restaurants', 'household_id': household.id},
             user=alice,
         )
         assert Label.objects.filter(name='Restaurants', household=household).exists()
@@ -159,105 +128,67 @@ class TestCreateLabel:
     def test_color_defaults_to_grey(self, client, alice, household):
         response = client.post(
             '/labels/',
-            json={'name': 'Restaurants', 'household_ids': [household.id]},
+            json={'name': 'Restaurants', 'household_id': household.id},
             user=alice,
         )
-        assert response.json()['created'][0]['color'] == '#6B7280'
+        assert response.json()['color'] == '#6B7280'
 
     def test_category_defaults_to_empty_string(self, client, alice, household):
         response = client.post(
             '/labels/',
-            json={'name': 'Restaurants', 'household_ids': [household.id]},
+            json={'name': 'Restaurants', 'household_id': household.id},
             user=alice,
         )
-        assert response.json()['created'][0]['category'] == ''
+        assert response.json()['category'] == ''
 
     def test_blank_name_returns_400(self, client, alice, household):
         response = client.post(
             '/labels/',
-            json={'name': '   ', 'household_ids': [household.id]},
+            json={'name': '   ', 'household_id': household.id},
             user=alice,
         )
         assert response.status_code == 400
         assert 'blank' in response.json()['detail'].lower()
 
-    def test_empty_household_ids_returns_400(self, client, alice):
+    def test_duplicate_name_returns_400(self, client, alice, household, label):
         response = client.post(
             '/labels/',
-            json={'name': 'Restaurants', 'household_ids': []},
+            json={'name': 'Groceries', 'household_id': household.id},
             user=alice,
         )
         assert response.status_code == 400
+        assert 'already exists' in response.json()['detail'].lower()
 
-    def test_duplicate_name_reported_in_failed(self, client, alice, household, label):
+    def test_returns_403_if_not_a_member(self, client, alice, other_household):
         response = client.post(
             '/labels/',
-            json={'name': 'Groceries', 'household_ids': [household.id]},
+            json={'name': 'Restaurants', 'household_id': other_household.id},
             user=alice,
         )
-        data = response.json()
-        assert len(data['created']) == 0
-        assert len(data['failed']) == 1
-        assert data['failed'][0]['household_id'] == household.id
-        assert data['failed'][0]['household_name'] == household.name
-        assert 'already exists' in data['failed'][0]['reason'].lower()
+        assert response.status_code == 403
 
-    def test_partial_success_across_households(
-        self, client, alice, household, second_household, label
-    ):
-        # 'Groceries' already exists in household but not second_household
+    def test_returns_404_for_nonexistent_household(self, client, alice):
         response = client.post(
             '/labels/',
-            json={'name': 'Groceries', 'household_ids': [household.id, second_household.id]},
+            json={'name': 'Restaurants', 'household_id': 9999},
             user=alice,
         )
-        data = response.json()
-        assert len(data['created']) == 1
-        assert data['created'][0]['household_id'] == second_household.id
-        assert len(data['failed']) == 1
-        assert data['failed'][0]['household_id'] == household.id
-
-    def test_non_member_household_reported_in_failed(
-        self, client, alice, household, other_household
-    ):
-        response = client.post(
-            '/labels/',
-            json={'name': 'Groceries', 'household_ids': [household.id, other_household.id]},
-            user=alice,
-        )
-        data = response.json()
-        assert len(data['created']) == 1
-        assert len(data['failed']) == 1
-        assert 'not a member' in data['failed'][0]['reason'].lower()
-
-    def test_nonexistent_household_reported_in_failed(self, client, alice, household):
-        response = client.post(
-            '/labels/',
-            json={'name': 'Groceries', 'household_ids': [household.id, 9999]},
-            user=alice,
-        )
-        data = response.json()
-        assert len(data['created']) == 1
-        assert data['failed'][0]['household_id'] == 9999
-        assert data['failed'][0]['household_name'] is None
-
-    def test_failed_entries_have_consistent_shape(self, client, alice, household, other_household):
-        response = client.post(
-            '/labels/',
-            json={'name': 'Groceries', 'household_ids': [other_household.id, 9999]},
-            user=alice,
-        )
-        for entry in response.json()['failed']:
-            assert 'household_id' in entry
-            assert 'household_name' in entry
-            assert 'reason' in entry
+        assert response.status_code == 404
 
     def test_unauthenticated_returns_401(self, client, household):
         response = client.post(
             '/labels/',
-            json={'name': 'Groceries', 'household_ids': [household.id]},
+            json={'name': 'Groceries', 'household_id': household.id},
         )
         assert response.status_code == 401
+
+    def test_response_shape(self, client, alice, household):
+        response = client.post(
+            '/labels/',
+            json={'name': 'Restaurants', 'household_id': household.id},
+            user=alice,
+        )
+        assert set(response.json().keys()) == {'id', 'name', 'color', 'category', 'household_id'}
 
 
 # ── PATCH /labels/{id}/ ───────────────────────────────────────────────────────
