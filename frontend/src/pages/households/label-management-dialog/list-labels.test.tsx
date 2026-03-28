@@ -254,4 +254,49 @@ describe('ListLabels listbox keyboard navigation', () => {
     fireEvent.blur(listbox);
     expect(listbox.getAttribute('aria-activedescendant')).toBeNull();
   });
+
+  it('does not set isFocused when a descendant button receives focus via click', () => {
+    setup();
+    const hint = screen.getByText(/arrow keys to navigate/i);
+    const editButton = screen.getByRole('button', { name: /edit groceries/i });
+    // Simulate mouse click focusing the button — focus event bubbles to listbox
+    // but target !== currentTarget so isFocused should stay false.
+    fireEvent.focus(editButton);
+    expect(hint.getAttribute('data-focused')).toBe('false');
+  });
+
+  it('clamps activeIndex when labels shrink', async () => {
+    const { rerender } = render(
+      <ListLabels
+        labels={LABELS}
+        isLoading={false}
+        error={null}
+        onEdit={vi.fn()}
+        onNewLabel={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    // Move to the last label
+    fireEvent.keyDown(listbox, { key: 'End' });
+    expect(screen.getAllByRole('option')[2].getAttribute('aria-selected')).toBe('true');
+
+    // Remove the last label — activeIndex should clamp to the new last
+    rerender(
+      <ListLabels
+        labels={LABELS.slice(0, 2)}
+        isLoading={false}
+        error={null}
+        onEdit={vi.fn()}
+        onNewLabel={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(2);
+    // activeIndex was 2, clamped to 1
+    expect(options[1].getAttribute('aria-selected')).toBe('true');
+  });
 });

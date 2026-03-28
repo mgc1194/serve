@@ -21,7 +21,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Label } from '@serve/types/global';
 import { contrastTextColor } from '@utils/contrast-text-color';
@@ -47,6 +47,16 @@ export function ListLabels({
   const [isFocused, setIsFocused] = useState(false);
   const listboxRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    if (labels.length > 0) {
+      setActiveIndex(i => Math.min(i, labels.length - 1));
+    }
+  }, [labels.length]);
+
+  // Derived — safe because activeIndex is always clamped above.
+  const activeLabel = labels.length > 0 ? labels[activeIndex] : undefined;
+  const activeOptionId = activeLabel ? `label-option-${activeLabel.id}` : undefined;
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (labels.length === 0) return;
 
@@ -62,14 +72,25 @@ export function ListLabels({
     } else if (e.key === 'End') {
       e.preventDefault();
       setActiveIndex(labels.length - 1);
-    } else if (e.key === 'Enter') {
+    } else if (e.key === 'Enter' && activeLabel) {
       e.preventDefault();
-      onEdit(labels[activeIndex]);
+      onEdit(activeLabel);
     }
   }
 
-  const activeOptionId =
-    labels.length > 0 ? `label-option-${labels[activeIndex].id}` : undefined;
+  function handleFocus(e: React.FocusEvent) {
+    if (e.target === e.currentTarget) {
+      setIsFocused(true);
+    }
+  }
+
+  function handleBlur(e: React.FocusEvent) {
+    // relatedTarget is the element receiving focus next. If it's still inside
+    // the listbox subtree we don't clear the focused state.
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setIsFocused(false);
+    }
+  }
 
   return (
     <Box sx={{ pt: 1 }}>
@@ -93,8 +114,8 @@ export function ListLabels({
             aria-label="Labels"
             aria-activedescendant={isFocused ? activeOptionId : undefined}
             tabIndex={0}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             sx={{
               display: 'flex',
