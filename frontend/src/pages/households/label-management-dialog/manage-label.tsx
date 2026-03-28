@@ -64,6 +64,7 @@ export function ManageLabel({
 
   const isValidColor = /^#[0-9A-Fa-f]{6}$/.test(color);
   const previewColor = isValidColor ? color : DEFAULT_COLOR;
+  const [colorInputFocused, setColorInputFocused] = useState(false);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
@@ -106,7 +107,10 @@ export function ManageLabel({
             flexShrink: 0,
             cursor: 'pointer',
             position: 'relative',
-            overflow: 'hidden',
+            overflow: 'visible',
+            outline: colorInputFocused ? '2px solid' : 'none',
+            outlineColor: 'primary.main',
+            outlineOffset: '2px',
           }}
         >
           <input
@@ -114,6 +118,8 @@ export function ManageLabel({
             aria-label="Choose label color"
             value={previewColor}
             onChange={e => onColorChange(e.target.value)}
+            onFocus={() => setColorInputFocused(true)}
+            onBlur={() => setColorInputFocused(false)}
             disabled={isSaving || isDeleting}
             style={{
               position: 'absolute',
