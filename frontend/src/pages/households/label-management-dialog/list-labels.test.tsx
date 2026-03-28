@@ -51,6 +51,30 @@ describe('ListLabels rendering', () => {
     expect(screen.getByRole('button', { name: /edit bills/i })).toBeDefined();
   });
 
+  it('renders the keyboard hint (hidden until focused)', () => {
+    setup();
+    const hint = screen.getByText(/arrow keys to navigate/i);
+    expect(hint).toBeDefined();
+    expect(hint.getAttribute('data-focused')).toBe('false');
+  });
+
+  it('shows the keyboard hint when the listbox is focused', () => {
+    setup();
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const hint = screen.getByText(/arrow keys to navigate/i);
+    fireEvent.focus(listbox);
+    expect(hint.getAttribute('data-focused')).toBe('true');
+  });
+
+  it('hides the keyboard hint when the listbox loses focus', () => {
+    setup();
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const hint = screen.getByText(/arrow keys to navigate/i);
+    fireEvent.focus(listbox);
+    fireEvent.blur(listbox);
+    expect(hint.getAttribute('data-focused')).toBe('false');
+  });
+
   it('renders the New label button', () => {
     setup();
     expect(screen.getByRole('button', { name: /new label/i })).toBeDefined();
@@ -64,6 +88,11 @@ describe('ListLabels rendering', () => {
   it('shows empty message when no labels', () => {
     setup({ labels: [] });
     expect(screen.getByText(/no labels yet/i)).toBeDefined();
+  });
+
+  it('does not render the keyboard hint when there are no labels', () => {
+    setup({ labels: [] });
+    expect(screen.queryByText(/arrow keys to navigate/i)).toBeNull();
   });
 
   it('shows loading spinner when isLoading', () => {
@@ -111,102 +140,118 @@ describe('ListLabels interactions', () => {
   });
 });
 
-// ── Toolbar / keyboard navigation ─────────────────────────────────────────────
+// ── Listbox / keyboard navigation ─────────────────────────────────────────────
 
-describe('ListLabels toolbar keyboard navigation', () => {
-  it('renders the chip list as a toolbar', () => {
+describe('ListLabels listbox keyboard navigation', () => {
+  it('renders the chip list as a listbox', () => {
     setup();
-    expect(screen.getByRole('toolbar', { name: /labels/i })).toBeDefined();
+    expect(screen.getByRole('listbox', { name: /labels/i })).toBeDefined();
   });
 
-  it('gives the first edit button tabIndex 0 and the rest -1', () => {
+  it('the listbox is the single tab stop', () => {
     setup();
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    expect(buttons[0].tabIndex).toBe(0);
-    expect(buttons[1].tabIndex).toBe(-1);
-    expect(buttons[2].tabIndex).toBe(-1);
+    expect(screen.getByRole('listbox', { name: /labels/i }).tabIndex).toBe(0);
   });
 
-  it('moves focus to the next button on ArrowRight', () => {
+  it('all edit buttons have tabIndex -1', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[0].focus();
-    fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(buttons[1]);
+    screen.getAllByRole('button', { name: /^edit/i }).forEach(btn => {
+      expect(btn.tabIndex).toBe(-1);
+    });
   });
 
-  it('moves focus to the previous button on ArrowLeft', () => {
+  it('the first option is selected by default', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[1].focus();
-    fireEvent.keyDown(toolbar, { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(buttons[0]);
+    const options = screen.getAllByRole('option');
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
+    expect(options[1].getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('ArrowRight moves selection to the next option', () => {
+    setup();
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    expect(options[1].getAttribute('aria-selected')).toBe('true');
+    expect(options[0].getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('ArrowLeft moves selection to the previous option', () => {
+    setup();
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    fireEvent.keyDown(listbox, { key: 'ArrowLeft' });
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('ArrowDown and ArrowUp also move selection', () => {
+    setup();
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    expect(options[1].getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(listbox, { key: 'ArrowUp' });
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
   });
 
   it('wraps from last to first on ArrowRight', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[2].focus();
-    fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(buttons[0]);
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
   });
 
   it('wraps from first to last on ArrowLeft', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[0].focus();
-    fireEvent.keyDown(toolbar, { key: 'ArrowLeft' });
-    expect(document.activeElement).toBe(buttons[2]);
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'ArrowLeft' });
+    expect(options[2].getAttribute('aria-selected')).toBe('true');
   });
 
-  it('moves focus to the first button on Home', () => {
+  it('Home moves selection to the first option', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[2].focus();
-    fireEvent.keyDown(toolbar, { key: 'Home' });
-    expect(document.activeElement).toBe(buttons[0]);
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    fireEvent.keyDown(listbox, { key: 'Home' });
+    expect(options[0].getAttribute('aria-selected')).toBe('true');
   });
 
-  it('moves focus to the last button on End', () => {
+  it('End moves selection to the last option', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[0].focus();
-    fireEvent.keyDown(toolbar, { key: 'End' });
-    expect(document.activeElement).toBe(buttons[2]);
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(listbox, { key: 'End' });
+    expect(options[2].getAttribute('aria-selected')).toBe('true');
   });
 
-  it('also moves focus on ArrowDown and ArrowUp', () => {
-    setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[0].focus();
-    fireEvent.keyDown(toolbar, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(buttons[1]);
-    fireEvent.keyDown(toolbar, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(buttons[0]);
+  it('Enter calls onEdit with the currently selected label', () => {
+    const { onEdit } = setup();
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(onEdit).toHaveBeenCalledWith(LABELS[1]);
   });
 
-  it('updates the active button tabIndex after keyboard navigation', () => {
+  it('aria-activedescendant points to the selected option', () => {
     setup();
-    const toolbar = screen.getByRole('toolbar', { name: /labels/i });
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    buttons[0].focus();
-    fireEvent.keyDown(toolbar, { key: 'ArrowRight' });
-    expect(buttons[0].tabIndex).toBe(-1);
-    expect(buttons[1].tabIndex).toBe(0);
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    fireEvent.focus(listbox);
+    fireEvent.keyDown(listbox, { key: 'ArrowRight' });
+    expect(listbox.getAttribute('aria-activedescendant')).toBe(`label-option-${LABELS[1].id}`);
   });
 
-  it('updates the active button tabIndex after a click', () => {
+  it('clears aria-activedescendant when listbox loses focus', () => {
     setup();
-    const buttons = screen.getAllByRole('button', { name: /^edit/i });
-    fireEvent.click(buttons[1]);
-    expect(buttons[0].tabIndex).toBe(-1);
-    expect(buttons[1].tabIndex).toBe(0);
+    const listbox = screen.getByRole('listbox', { name: /labels/i });
+    fireEvent.focus(listbox);
+    fireEvent.blur(listbox);
+    expect(listbox.getAttribute('aria-activedescendant')).toBeNull();
   });
 });

@@ -4,9 +4,11 @@
 // button (pencil icon) that opens the edit form. Deletion is handled inside
 // the edit form to prevent accidental deletions.
 //
-// Keyboard navigation: the chip list is a toolbar (ARIA APG composite widget).
-// Tab enters/exits the group as a single stop; arrow keys move between edit
-// buttons within the group (roving tabindex pattern).
+// Keyboard navigation (listbox pattern):
+//   Tab       — listbox is a single tab stop; Tab moves to [New label] → [Close]
+//   ↑↓ / ←→  — move selection between labels
+//   Home/End  — jump to first/last label
+//   Enter     — open the edit form for the selected label
 
 import EditIcon from '@mui/icons-material/Edit';
 import {
@@ -41,37 +43,36 @@ export function ListLabels({
   onNewLabel,
   onClose,
 }: ListLabelsProps) {
-  // Index of the currently "active" button in the toolbar (roving tabindex).
   const [activeIndex, setActiveIndex] = useState(0);
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [isFocused, setIsFocused] = useState(false);
+  const listboxRef = useRef<HTMLDivElement | null>(null);
 
-  function handleToolbarKeyDown(e: React.KeyboardEvent) {
+  function handleKeyDown(e: React.KeyboardEvent) {
     if (labels.length === 0) return;
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
-      const next = (activeIndex + 1) % labels.length;
-      setActiveIndex(next);
-      buttonRefs.current[next]?.focus();
+      setActiveIndex(i => (i + 1) % labels.length);
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
-      const prev = (activeIndex - 1 + labels.length) % labels.length;
-      setActiveIndex(prev);
-      buttonRefs.current[prev]?.focus();
+      setActiveIndex(i => (i - 1 + labels.length) % labels.length);
     } else if (e.key === 'Home') {
       e.preventDefault();
       setActiveIndex(0);
-      buttonRefs.current[0]?.focus();
     } else if (e.key === 'End') {
       e.preventDefault();
-      const last = labels.length - 1;
-      setActiveIndex(last);
-      buttonRefs.current[last]?.focus();
+      setActiveIndex(labels.length - 1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onEdit(labels[activeIndex]);
     }
   }
 
+  const activeOptionId =
+    labels.length > 0 ? `label-option-${labels[activeIndex].id}` : undefined;
+
   return (
-    <Box>
+    <Box sx={{ pt: 1 }}>
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
           <CircularProgress size={24} />
@@ -85,41 +86,78 @@ export function ListLabels({
           No labels yet. Create one to start categorizing transactions.
         </Typography>
       ) : (
-        <Box
-          role="toolbar"
-          aria-label="Labels"
-          onKeyDown={handleToolbarKeyDown}
-          sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}
-        >
-          {labels.map((label, index) => (
-            <Box key={label.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Chip
-                label={label.name}
-                size="small"
-                sx={{
-                  bgcolor: label.color,
-                  color: contrastTextColor(label.color),
-                  fontWeight: 500,
-                }}
-              />
-              <Tooltip title={`Edit "${label.name}"`}>
-                <IconButton
-                  ref={el => { buttonRefs.current[index] = el; }}
+        <>
+          <Box
+            ref={listboxRef}
+            role="listbox"
+            aria-label="Labels"
+            aria-activedescendant={isFocused ? activeOptionId : undefined}
+            tabIndex={0}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onKeyDown={handleKeyDown}
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              mb: 1,
+              borderRadius: 1,
+              outline: 'none',
+              '&:focus': {
+                outline: '2px solid',
+                outlineColor: 'primary.main',
+                outlineOffset: '2px',
+              },
+            }}
+          >
+            {labels.map((label, index) => (
+              <Box
+                key={label.id}
+                id={`label-option-${label.id}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+              >
+                <Chip
+                  label={label.name}
                   size="small"
-                  aria-label={`Edit ${label.name}`}
-                  tabIndex={index === activeIndex ? 0 : -1}
-                  onClick={() => {
-                    setActiveIndex(index);
-                    onEdit(label);
+                  sx={{
+                    bgcolor: label.color,
+                    color: contrastTextColor(label.color),
+                    fontWeight: 500,
+                    ...(isFocused && index === activeIndex && {
+                      outline: '2px solid',
+                      outlineColor: 'primary.main',
+                      outlineOffset: '2px',
+                    }),
                   }}
-                  sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                >
-                  <EditIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          ))}
-        </Box>
+                />
+                <Tooltip title={`Edit "${label.name}"`}>
+                  <IconButton
+                    size="small"
+                    aria-label={`Edit ${label.name}`}
+                    tabIndex={-1}
+                    onClick={() => {
+                      setActiveIndex(index);
+                      onEdit(label);
+                    }}
+                    sx={{ p: 0.25, color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                  >
+                    <EditIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            ))}
+          </Box>
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            data-focused={isFocused}
+            sx={{ display: 'block', mb: 2, visibility: isFocused ? 'visible' : 'hidden' }}
+          >
+            Arrow keys to navigate · Enter to edit
+          </Typography>
+        </>
       )}
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
