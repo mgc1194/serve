@@ -21,7 +21,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { Label } from '@serve/types/global';
 import { contrastTextColor } from '@utils/contrast-text-color';
@@ -47,14 +47,10 @@ export function ListLabels({
   const [isFocused, setIsFocused] = useState(false);
   const listboxRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    if (labels.length > 0) {
-      setActiveIndex(i => Math.min(i, labels.length - 1));
-    }
-  }, [labels.length]);
-
-  // Derived — safe because activeIndex is always clamped above.
-  const activeLabel = labels.length > 0 ? labels[activeIndex] : undefined;
+  // Clamp activeIndex at render time in case labels shrink (e.g. after a delete
+  // or refetch) while the component stays mounted — no effect needed.
+  const safeIndex = labels.length > 0 ? Math.min(activeIndex, labels.length - 1) : 0;
+  const activeLabel = labels.length > 0 ? labels[safeIndex] : undefined;
   const activeOptionId = activeLabel ? `label-option-${activeLabel.id}` : undefined;
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -62,10 +58,10 @@ export function ListLabels({
 
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex(i => (i + 1) % labels.length);
+      setActiveIndex((safeIndex + 1) % labels.length);
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIndex(i => (i - 1 + labels.length) % labels.length);
+      setActiveIndex((safeIndex - 1 + labels.length) % labels.length);
     } else if (e.key === 'Home') {
       e.preventDefault();
       setActiveIndex(0);
@@ -78,6 +74,11 @@ export function ListLabels({
     }
   }
 
+  // Fix #2 — only treat the listbox as focused when the listbox element itself
+  // has focus, not when a descendant (e.g. an IconButton clicked via mouse) does.
+  // onFocus/onBlur bubble in React, so we check e.currentTarget === e.target for
+  // focus-in, and use relatedTarget to detect focus truly leaving the subtree for
+  // focus-out.
   function handleFocus(e: React.FocusEvent) {
     if (e.target === e.currentTarget) {
       setIsFocused(true);
@@ -136,7 +137,7 @@ export function ListLabels({
                 key={label.id}
                 id={`label-option-${label.id}`}
                 role="option"
-                aria-selected={index === activeIndex}
+                aria-selected={index === safeIndex}
                 sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
               >
                 <Chip
@@ -146,7 +147,7 @@ export function ListLabels({
                     bgcolor: label.color,
                     color: contrastTextColor(label.color),
                     fontWeight: 500,
-                    ...(isFocused && index === activeIndex && {
+                    ...(isFocused && index === safeIndex && {
                       outline: '2px solid',
                       outlineColor: 'primary.main',
                       outlineOffset: '2px',
