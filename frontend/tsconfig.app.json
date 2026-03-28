@@ -32,6 +32,7 @@
       "@layout/*": ["src/layout/*"],
       "@context/*": ["src/context/*"],
       "@services/*": ["src/services/*"],
+      "@utils/*": ["src/utils/*"],
       "@tests/*": ["tests/*"],
     }
   },

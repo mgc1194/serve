@@ -18,6 +18,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 
 import type { Label } from '@serve/types/global';
+import { contrastTextColor } from '@utils/contrast-text-color';
 
 interface ManageLabelProps {
   mode: 'create' | 'edit';
@@ -134,7 +135,7 @@ export function ManageLabel({
         <Chip
           label={name || 'Label name'}
           size="small"
-          sx={{ bgcolor: previewColor, color: '#fff', fontWeight: 500 }}
+          sx={{ bgcolor: previewColor, color: contrastTextColor(previewColor), fontWeight: 500 }}
         />
       </Box>
 

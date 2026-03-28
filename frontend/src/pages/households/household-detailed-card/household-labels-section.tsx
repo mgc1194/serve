@@ -9,6 +9,7 @@ import { useState } from 'react';
 
 import { LabelManagementDialog } from '@pages/households/label-management-dialog';
 import type { Label } from '@serve/types/global';
+import { contrastTextColor } from '@utils/contrast-text-color';
 
 const MAX_PREVIEW = 5;
 
@@ -62,7 +63,7 @@ export function HouseholdLabelsSection({
                 onClick={openManage}
                 sx={{
                   bgcolor: label.color,
-                  color: '#fff',
+                  color: contrastTextColor(label.color),
                   fontWeight: 500,
                   cursor: 'pointer',
                   '&:hover': { opacity: 0.85 },

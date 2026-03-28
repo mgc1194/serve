@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 
 import type { Label } from '@serve/types/global';
+import { contrastTextColor } from '@utils/contrast-text-color';
 
 interface ListLabelsProps {
   labels: Label[];
@@ -58,7 +59,7 @@ export function ListLabels({
                 size="small"
                 sx={{
                   bgcolor: label.color,
-                  color: '#fff',
+                  color: contrastTextColor(label.color),
                   fontWeight: 500,
                 }}
               />
