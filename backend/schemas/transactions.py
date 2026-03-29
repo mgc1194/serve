@@ -25,6 +25,9 @@ class TransactionSchema(Schema):
     The ``id`` field is the auto-incrementing primary key from the database.
     Any deduplication logic (for example, when importing from CSV) is handled
     by backend services and is not exposed through this schema.
+
+    ``label_id``, ``label_name``, and ``label_color`` are derived from the
+    related Label FK. All three are None when no label is assigned.
     """
 
     id: int
@@ -33,6 +36,7 @@ class TransactionSchema(Schema):
     amount: float
     label_id: int | None
     label_name: str | None
+    label_color: str | None
     category: str | None
     additional_labels: str | None
     source: str
@@ -72,9 +76,13 @@ class TransactionCreateRequest(Schema):
 class TransactionUpdateRequest(Schema):
     """Request schema for editing a transaction.
 
-    Only concept (description) is editable after creation.
-    Date, amount, and account are immutable — if those need to change,
-    delete and re-create the transaction.
+    ``concept`` and ``label_id`` are independently optional — either or both
+    may be provided in a single PATCH. Omitting a field leaves it unchanged.
+
+    ``label_id`` may be set to null to explicitly remove the label from a
+    transaction. Date, amount, and account are immutable — if those need to
+    change, delete and re-create the transaction.
     """
 
-    concept: str
+    concept: str | None = None
+    label_id: int | None = None

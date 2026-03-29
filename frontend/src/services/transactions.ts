@@ -29,6 +29,16 @@ export async function updateTransactionConcept(
   });
 }
 
+export async function updateTransactionLabel(
+  id: number,
+  labelId: number | null,
+): Promise<Transaction> {
+  return apiFetch<Transaction>(`/transactions/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ label_id: labelId }),
+  });
+}
+
 export async function deleteTransaction(id: number): Promise<void> {
   return apiFetch<void>(`/transactions/${id}/`, { method: 'DELETE' });
 }

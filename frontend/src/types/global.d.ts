@@ -83,6 +83,7 @@ export interface Transaction {
   amount: number;
   label_id: number | null;
   label_name: string | null;
+  label_color: string | null;
   category: string | null;
   additional_labels: string | null;
   source: string;

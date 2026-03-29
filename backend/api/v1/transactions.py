@@ -4,7 +4,7 @@ api/v1/transactions.py — Transaction management endpoints.
 Endpoints:
     GET    /api/v1/transactions/          — list transactions for a household
     POST   /api/v1/transactions/          — manually create a transaction
-    PATCH  /api/v1/transactions/{id}/     — edit a transaction's description
+    PATCH  /api/v1/transactions/{id}/     — edit a transaction's concept and/or label
     DELETE /api/v1/transactions/{id}/     — delete a transaction
     POST   /api/v1/transactions/import    — upload and import a single CSV file
 """
@@ -27,7 +27,7 @@ from schemas.transactions import (
     TransactionUpdateRequest,
 )
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
-from transactions.models import Account, Transaction
+from transactions.models import Account, Label, Transaction
 from transactions.utils import upsert_transactions
 from users.models import Household
 
@@ -73,6 +73,7 @@ def _serialize(t: Transaction) -> dict:
         'amount': float(t.amount),
         'label_id': t.label_id,
         'label_name': t.label.name if t.label else None,
+        'label_color': t.label.color if t.label else None,
         'category': t.category,
         'additional_labels': t.additional_labels,
         'source': t.source,
@@ -227,37 +228,69 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
 @router.patch('/transactions/{transaction_id}/', response=TransactionSchema)
 def update_transaction(request, transaction_id: int, payload: TransactionUpdateRequest):
-    """Edits a transaction's description (concept).
+    """Edits a transaction's concept and/or label.
 
-    Only the concept field is editable after creation. Date, amount, and
-    account are immutable — delete and re-create to change those.
+    Both fields are independently optional — omitting a field leaves it
+    unchanged. Setting ``label_id`` to null explicitly removes the label.
+
+    The label must belong to the same household as the transaction's account.
+    This is enforced at the API layer to prevent cross-household assignment
+    even when the API is called directly outside the UI.
 
     The user must be a member of the household that owns the transaction.
 
     Args:
         request: The HTTP request object. Must be authenticated.
         transaction_id: Primary key of the transaction to edit.
-        payload: TransactionUpdateRequest with the new concept.
+        payload: TransactionUpdateRequest with optional concept and label_id.
 
     Returns:
         The updated TransactionSchema.
 
     Raises:
+        HttpError: 400 if no fields are provided.
         HttpError: 400 if the new concept is blank.
+        HttpError: 400 if label_id references a label from a different household.
         HttpError: 403 if the user is not a member of the household.
-        HttpError: 404 if the transaction does not exist.
+        HttpError: 404 if the transaction or label does not exist.
     """
-    concept = payload.concept.strip()
-    if not concept:
-        raise HttpError(400, 'Transaction concept cannot be blank.')
-
     transaction = _get_transaction_for_household_member(transaction_id, request.user)
 
-    transaction.concept = concept
-    transaction.save(update_fields=['concept'])
+    update_fields = []
+
+    if payload.concept is not None:
+        concept = payload.concept.strip()
+        if not concept:
+            raise HttpError(400, 'Transaction concept cannot be blank.')
+        transaction.concept = concept
+        update_fields.append('concept')
+
+    # label_id requires special handling: None means "remove the label", so we
+    # cannot use "is not None" to detect whether the field was sent. Instead we
+    # check model_fields_set, which pydantic populates with the keys that were
+    # explicitly included in the request body.
+    if 'label_id' in payload.model_fields_set:
+        if payload.label_id is None:
+            transaction.label = None
+            transaction.label_id = None
+        else:
+            label = get_object_or_404(Label, pk=payload.label_id)
+            if label.household_id != transaction.account.household_id:
+                raise HttpError(
+                    400,
+                    'Label does not belong to the same household as this transaction.',
+                )
+            transaction.label = label
+            transaction.label_id = label.pk
+        update_fields.append('label')
+
+    if not update_fields:
+        raise HttpError(400, 'At least one field must be provided.')
+
+    transaction.save(update_fields=[*update_fields, 'updated_at'])
 
     logger.info(
-        f'User {request.user.email} updated concept for transaction '
+        f'User {request.user.email} updated transaction '
         f'(id={transaction.id}) in account (id={transaction.account_id}).'
     )
 

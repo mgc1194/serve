@@ -14,6 +14,7 @@ import {
   importTransactionsCsv,
   listTransactions,
   updateTransactionConcept,
+  updateTransactionLabel,
 } from '@services/transactions';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -32,7 +33,9 @@ const TX = {
   date: '2026-03-01',
   concept: 'TRADER JOES',
   amount: -42.57,
-  label: null,
+  label_id: null,
+  label_name: null,
+  label_color: null,
   category: null,
   additional_labels: null,
   source: 'csv',
@@ -131,6 +134,13 @@ describe('updateTransactionConcept', () => {
     expect(JSON.parse(options.body as string)).toEqual({ concept: 'WHOLE FOODS' });
   });
 
+  it('does not include label_id in the body', async () => {
+    const spy = mockFetch(200, TX);
+    await updateTransactionConcept(1, 'WHOLE FOODS');
+    const [, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(options.body as string)).not.toHaveProperty('label_id');
+  });
+
   it('throws ApiError on 400 when concept is blank', async () => {
     mockFetch(400, { detail: 'Transaction concept cannot be blank.' });
     await expect(updateTransactionConcept(1, '')).rejects.toMatchObject({
@@ -151,6 +161,69 @@ describe('updateTransactionConcept', () => {
     await expect(updateTransactionConcept(9999, 'WHOLE FOODS')).rejects.toMatchObject({
       status: 404,
     });
+  });
+});
+
+// ── updateTransactionLabel ────────────────────────────────────────────────────
+
+describe('updateTransactionLabel', () => {
+  it('returns the updated transaction on 200', async () => {
+    const updated = { ...TX, label_id: 5, label_name: 'Groceries', label_color: '#16a34a' };
+    mockFetch(200, updated);
+    const result = await updateTransactionLabel(1, 5);
+    expect(result).toEqual(updated);
+  });
+
+  it('sends PATCH to /transactions/{id}/', async () => {
+    const spy = mockFetch(200, TX);
+    await updateTransactionLabel(1, 5);
+    const [url, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/transactions/1/');
+    expect(options.method).toBe('PATCH');
+  });
+
+  it('sends label_id in the request body when assigning a label', async () => {
+    const spy = mockFetch(200, TX);
+    await updateTransactionLabel(1, 5);
+    const [, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(options.body as string)).toEqual({ label_id: 5 });
+  });
+
+  it('sends label_id: null in the request body when removing a label', async () => {
+    const spy = mockFetch(200, TX);
+    await updateTransactionLabel(1, null);
+    const [, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(options.body as string)).toEqual({ label_id: null });
+  });
+
+  it('does not include concept in the body', async () => {
+    const spy = mockFetch(200, TX);
+    await updateTransactionLabel(1, 5);
+    const [, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(options.body as string)).not.toHaveProperty('concept');
+  });
+
+  it('throws ApiError on 400 when label is from a different household', async () => {
+    mockFetch(400, { detail: 'Label does not belong to the same household as this transaction.' });
+    await expect(updateTransactionLabel(1, 99)).rejects.toMatchObject({
+      status: 400,
+      message: 'Label does not belong to the same household as this transaction.',
+    });
+  });
+
+  it('throws ApiError on 403 when not a household member', async () => {
+    mockFetch(403, { detail: 'You are not a member of this household.' });
+    await expect(updateTransactionLabel(1, 5)).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('throws ApiError on 404 when transaction does not exist', async () => {
+    mockFetch(404, { detail: 'Not found.' });
+    await expect(updateTransactionLabel(9999, 5)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('throws ApiError on 404 when label does not exist', async () => {
+    mockFetch(404, { detail: 'Not found.' });
+    await expect(updateTransactionLabel(1, 9999)).rejects.toMatchObject({ status: 404 });
   });
 });
 
