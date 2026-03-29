@@ -15,7 +15,7 @@ import logging
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from ninja import File, Router
+from ninja import File, Router, Status
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 from ninja.security import django_auth
@@ -325,7 +325,7 @@ def delete_transaction(request, transaction_id: int):
         f'(id={transaction_id}) from account (id={transaction.account_id}).'
     )
 
-    return 204, None
+    return Status(204, None)
 
 
 # ── POST /transactions/import ─────────────────────────────────────────────────
