@@ -1,5 +1,5 @@
 // pages/transactions/transaction-row.tsx — Single transaction row with inline
-// concept edit and confirm-delete.
+// concept edit, label selector, and confirm-delete.
 //
 // Renders data cells in the order specified by the `columnOrder` prop, which
 // is owned by TransactionsTable and updated via drag-and-drop. The Actions
@@ -11,26 +11,35 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
-  CircularProgress,
   Chip,
+  CircularProgress,
   IconButton,
   OutlinedInput,
   TableCell,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 
 import { type ColumnKey } from '@pages/transactions/columns';
-import type { Transaction } from '@serve/types/global';
-import { updateTransactionConcept, deleteTransaction, ApiError } from '@services/transactions';
+import type { Label, Transaction } from '@serve/types/global';
+import {
+  ApiError,
+  deleteTransaction,
+  updateTransactionConcept,
+  updateTransactionLabel,
+} from '@services/transactions';
+import { contrastTextColor } from '@utils/contrast-text-color';
 
 interface TransactionRowProps {
   transaction: Transaction;
   columnOrder: ColumnKey[];
+  labels?: Label[];
   onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
 }
@@ -70,6 +79,7 @@ function AmountCell({ amount }: { amount: number }) {
 export function TransactionRow({
   transaction,
   columnOrder,
+  labels = [],
   onUpdated,
   onDeleted,
 }: TransactionRowProps) {
@@ -78,6 +88,10 @@ export function TransactionRow({
   const [editConcept, setEditConcept] = useState(transaction.concept);
   const [isSaving, setIsSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // Label
+  const [isUpdatingLabel, setIsUpdatingLabel] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
 
   // Delete
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -117,6 +131,34 @@ export function TransactionRow({
       );
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleLabelChange(_event: React.SyntheticEvent, selected: Label | null) {
+    const newLabelId = selected?.id ?? null;
+
+    // Optimistic update.
+    const optimistic: Transaction = {
+      ...transaction,
+      label_id: newLabelId,
+      label_name: selected?.name ?? null,
+      label_color: selected?.color ?? null,
+    };
+    onUpdated(optimistic);
+    setIsUpdatingLabel(true);
+    setLabelError(null);
+
+    try {
+      const updated = await updateTransactionLabel(transaction.id, newLabelId);
+      onUpdated(updated);
+    } catch (err) {
+      // Revert on failure.
+      onUpdated(transaction);
+      setLabelError(
+        err instanceof ApiError ? err.message : 'Could not update label.',
+      );
+    } finally {
+      setIsUpdatingLabel(false);
     }
   }
 
@@ -217,16 +259,49 @@ export function TransactionRow({
           </TableCell>
         );
 
-      case 'label':
+      case 'label': {
+        const selectedLabel = labels.find(l => l.id === transaction.label_id) ?? null;
         return (
           <TableCell key="label" sx={{ py: 1.5 }}>
-            {transaction.label ? (
-              <Chip label={transaction.label} size="small" color="primary" variant="outlined" />
-            ) : (
-              <Typography variant="body2" color="text.disabled">—</Typography>
-            )}
+            <Autocomplete
+              value={selectedLabel}
+              options={labels}
+              getOptionLabel={l => l.name}
+              onChange={handleLabelChange}
+              disabled={isUpdatingLabel}
+              size="small"
+              clearOnEscape
+              ListboxProps={{ style: { maxHeight: 240 } }}
+              renderInput={params => (
+                <TextField
+                  {...params}
+                  placeholder="No label"
+                  aria-label={`Label for ${transaction.concept}`}
+                  sx={{ minWidth: 160 }}
+                />
+              )}
+              renderOption={(props, label) => (
+                <li {...props} key={label.id}>
+                  <Chip
+                    label={label.name}
+                    size="small"
+                    sx={{
+                      bgcolor: label.color,
+                      color: contrastTextColor(label.color),
+                      fontWeight: 500,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                </li>
+              )}
+              renderTags={() => null}
+              slotProps={{
+                paper: { elevation: 3 },
+              }}
+            />
           </TableCell>
         );
+      }
 
       case 'category':
         return (
@@ -295,18 +370,19 @@ export function TransactionRow({
       </TableRow>
 
       {/* Inline error rows */}
-      {(editError || deleteError) && (
+      {(editError || labelError || deleteError) && (
         <TableRow>
           <TableCell colSpan={COLSPAN} sx={{ py: 0, border: 0 }}>
             <Alert
               severity="error"
               onClose={() => {
                 setEditError(null);
+                setLabelError(null);
                 setDeleteError(null);
               }}
               sx={{ borderRadius: 0 }}
             >
-              {editError ?? deleteError}
+              {editError ?? labelError ?? deleteError}
             </Alert>
           </TableCell>
         </TableRow>

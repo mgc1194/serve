@@ -11,7 +11,7 @@ from ninja.testing import TestClient
 
 from api.v1.transactions import router
 from transactions.constants import HandlerKeys
-from transactions.models import Account, AccountType, Transaction
+from transactions.models import Account, AccountType, Label, Transaction
 from users.models import CustomUser, Household
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -71,6 +71,24 @@ def account(db, account_type, household):
 
 
 @pytest.fixture
+def label(db, household):
+    return Label.objects.create(
+        name='Groceries',
+        color='#16a34a',
+        household=household,
+    )
+
+
+@pytest.fixture
+def other_label(db, other_household):
+    return Label.objects.create(
+        name='Transport',
+        color='#2563eb',
+        household=other_household,
+    )
+
+
+@pytest.fixture
 def transaction(db, account):
     return Transaction.objects.create(
         dedupe_hash='abc123' * 10 + 'abcd',  # 64 chars
@@ -80,6 +98,20 @@ def transaction(db, account):
         concept='TRADER JOES',
         amount=-45.50,
         account=account,
+    )
+
+
+@pytest.fixture
+def labeled_transaction(db, account, label):
+    return Transaction.objects.create(
+        dedupe_hash='def456' * 10 + 'defg',  # 64 chars
+        raw_data=None,
+        source=Transaction.Source.IMPORT,
+        date='2026-01-16',
+        concept='WHOLE FOODS',
+        amount=-31.20,
+        account=account,
+        label=label,
     )
 
 
@@ -157,6 +189,29 @@ class TestListTransactions:
     def test_response_includes_source(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
         assert response.json()[0]['source'] == 'import'
+
+    def test_response_includes_label_fields(self, client, alice, labeled_transaction, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        data = response.json()[0]
+        assert 'label_id' in data
+        assert 'label_name' in data
+        assert 'label_color' in data
+
+    def test_label_fields_are_none_when_unlabeled(self, client, alice, transaction, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        data = response.json()[0]
+        assert data['label_id'] is None
+        assert data['label_name'] is None
+        assert data['label_color'] is None
+
+    def test_label_fields_populated_when_labeled(
+        self, client, alice, labeled_transaction, label, household
+    ):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        data = response.json()[0]
+        assert data['label_id'] == label.id
+        assert data['label_name'] == label.name
+        assert data['label_color'] == label.color
 
     def test_results_ordered_by_date_descending(self, client, alice, account, household):
         Transaction.objects.create(
@@ -325,6 +380,8 @@ class TestCreateTransaction:
 
 @pytest.mark.django_db
 class TestUpdateTransaction:
+    # ── Concept updates (existing behaviour) ──────────────────────────────────
+
     def test_updates_concept_successfully(self, client, alice, transaction):
         response = client.patch(
             f'/transactions/{transaction.id}/',
@@ -334,7 +391,7 @@ class TestUpdateTransaction:
         assert response.status_code == 200
         assert response.json()['concept'] == "TRADER JOE'S"
 
-    def test_persists_to_database(self, client, alice, transaction):
+    def test_persists_concept_to_database(self, client, alice, transaction):
         client.patch(
             f'/transactions/{transaction.id}/',
             json={'concept': 'UPDATED CONCEPT'},
@@ -360,6 +417,124 @@ class TestUpdateTransaction:
         )
         assert response.status_code == 400
         assert 'concept cannot be blank' in response.json()['detail'].lower()
+
+    def test_other_fields_unchanged_after_concept_update(self, client, alice, transaction):
+        transaction.refresh_from_db()
+        original_amount = transaction.amount
+        original_date = transaction.date
+
+        client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'NEW NAME'},
+            user=alice,
+        )
+        transaction.refresh_from_db()
+
+        assert transaction.amount == original_amount
+        assert transaction.date == original_date
+
+    # ── Label assignment ──────────────────────────────────────────────────────
+
+    def test_assigns_label_to_transaction(self, client, alice, transaction, label):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'label_id': label.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['label_id'] == label.id
+        assert data['label_name'] == label.name
+        assert data['label_color'] == label.color
+
+    def test_label_persists_to_database(self, client, alice, transaction, label):
+        client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'label_id': label.id},
+            user=alice,
+        )
+        transaction.refresh_from_db()
+        assert transaction.label_id == label.id
+
+    def test_removes_label_when_label_id_is_null(self, client, alice, labeled_transaction):
+        response = client.patch(
+            f'/transactions/{labeled_transaction.id}/',
+            json={'label_id': None},
+            user=alice,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['label_id'] is None
+        assert data['label_name'] is None
+        assert data['label_color'] is None
+
+    def test_null_label_persists_to_database(self, client, alice, labeled_transaction):
+        client.patch(
+            f'/transactions/{labeled_transaction.id}/',
+            json={'label_id': None},
+            user=alice,
+        )
+        labeled_transaction.refresh_from_db()
+        assert labeled_transaction.label_id is None
+
+    def test_can_update_concept_and_label_together(self, client, alice, transaction, label):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'WHOLE FOODS', 'label_id': label.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['concept'] == 'WHOLE FOODS'
+        assert data['label_id'] == label.id
+
+    def test_omitting_label_id_does_not_clear_existing_label(
+        self, client, alice, labeled_transaction, label
+    ):
+        response = client.patch(
+            f'/transactions/{labeled_transaction.id}/',
+            json={'concept': 'NEW CONCEPT'},
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert response.json()['label_id'] == label.id
+
+    def test_cross_household_label_rejected(self, client, alice, transaction, other_label):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'label_id': other_label.id},
+            user=alice,
+        )
+        assert response.status_code == 400
+        assert 'household' in response.json()['detail'].lower()
+
+    def test_cross_household_label_does_not_persist(self, client, alice, transaction, other_label):
+        client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'label_id': other_label.id},
+            user=alice,
+        )
+        transaction.refresh_from_db()
+        assert transaction.label_id is None
+
+    def test_nonexistent_label_returns_404(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'label_id': 9999},
+            user=alice,
+        )
+        assert response.status_code == 404
+
+    # ── Shared error cases ────────────────────────────────────────────────────
+
+    def test_no_fields_provided_returns_400(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={},
+            user=alice,
+        )
+        assert response.status_code == 400
+        assert 'at least one field' in response.json()['detail'].lower()
 
     def test_returns_403_for_non_member(self, client, bob, transaction):
         response = client.patch(
@@ -391,21 +566,6 @@ class TestUpdateTransaction:
             user=alice,
         )
         assert response.status_code == 422
-
-    def test_other_fields_unchanged_after_update(self, client, alice, transaction):
-        transaction.refresh_from_db()
-        original_amount = transaction.amount
-        original_date = transaction.date
-
-        client.patch(
-            f'/transactions/{transaction.id}/',
-            json={'concept': 'NEW NAME'},
-            user=alice,
-        )
-        transaction.refresh_from_db()
-
-        assert transaction.amount == original_amount
-        assert transaction.date == original_date
 
 
 # ── DELETE /transactions/{id}/ ────────────────────────────────────────────────

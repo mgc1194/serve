@@ -5,7 +5,7 @@ import type { Decorator, Meta, StoryObj } from '@storybook/react';
 
 import { DEFAULT_COLUMN_ORDER } from '@pages/transactions/columns';
 import { TransactionRow } from '@pages/transactions/transaction-row';
-import type { Transaction } from '@serve/types/global';
+import type { Label, Transaction } from '@serve/types/global';
 
 const tableDecorator: Decorator = Story => (
   <Table size="small">
@@ -15,12 +15,20 @@ const tableDecorator: Decorator = Story => (
   </Table>
 );
 
+const LABELS: Label[] = [
+  { id: 1, name: 'Groceries', color: '#16a34a', category: 'Food', household_id: 1 },
+  { id: 2, name: 'Subscriptions', color: '#7c3aed', category: 'Entertainment', household_id: 1 },
+  { id: 3, name: 'Transport', color: '#2563eb', category: '', household_id: 1 },
+];
+
 const TX: Transaction = {
   id: 1,
   date: '2026-03-01',
   concept: 'TRADER JOES #123',
   amount: -42.57,
-  label: null,
+  label_id: null,
+  label_name: null,
+  label_color: null,
   category: null,
   additional_labels: null,
   source: 'csv',
@@ -38,6 +46,7 @@ const meta: Meta<typeof TransactionRow> = {
   args: {
     transaction: TX,
     columnOrder: DEFAULT_COLUMN_ORDER,
+    labels: LABELS,
     onUpdated: () => {},
     onDeleted: () => {},
   },
@@ -46,7 +55,7 @@ const meta: Meta<typeof TransactionRow> = {
 export default meta;
 type Story = StoryObj<typeof TransactionRow>;
 
-// Default debit row
+// Default debit row — no label assigned
 export const Debit: Story = {};
 
 // Credit (positive amount)
@@ -73,15 +82,24 @@ export const LongConcept: Story = {
   },
 };
 
-// Row with label and category set
-export const WithLabelAndCategory: Story = {
+// Row with a label pre-selected
+export const WithLabel: Story = {
   args: {
     transaction: {
       ...TX,
       concept: 'NETFLIX.COM',
       amount: -15.49,
-      label: 'Subscriptions',
+      label_id: 2,
+      label_name: 'Subscriptions',
+      label_color: '#7c3aed',
       category: 'Entertainment',
     },
+  },
+};
+
+// Row with no labels available in the household
+export const NoLabels: Story = {
+  args: {
+    labels: [],
   },
 };

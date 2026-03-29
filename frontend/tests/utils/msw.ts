@@ -40,6 +40,7 @@ export const mockTransaction = {
   amount: -42.57,
   label_id: null,
   label_name: null,
+  label_color: null,
   category: null,
   additional_labels: null,
   source: 'import',
@@ -184,6 +185,27 @@ export const handlers = [
   }),
 
   http.delete(`${API}/labels/:id/`, () => new HttpResponse(null, { status: 204 })),
+
+  // ── Transactions ─────────────────────────────────────────────────────────────
+
+  http.get(`${API}/transactions/`, () => HttpResponse.json([mockTransaction])),
+
+  http.patch(`${API}/transactions/:id/`, async ({ params, request }) => {
+    const body = await request.json() as Partial<{ concept: string; label_id: number | null }>;
+
+    const labelPatch = 'label_id' in body
+      ? body.label_id === null
+        ? { label_id: null, label_name: null, label_color: null }
+        : { label_id: body.label_id, label_name: mockLabel.name, label_color: mockLabel.color }
+      : {};
+
+    return HttpResponse.json({
+      ...mockTransaction,
+      id: Number(params.id),
+      ...(body.concept !== undefined ? { concept: body.concept } : {}),
+      ...labelPatch,
+    });
+  }),
 
 ];
 
