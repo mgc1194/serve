@@ -71,15 +71,6 @@ def account(db, account_type, household):
 
 
 @pytest.fixture
-def other_account(db, account_type, other_household):
-    return Account.objects.create(
-        name='Bob Account',
-        account_type=account_type,
-        household=other_household,
-    )
-
-
-@pytest.fixture
 def label(db, household):
     return Label.objects.create(
         name='Groceries',

@@ -11,17 +11,16 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Chip,
   CircularProgress,
   IconButton,
-  MenuItem,
   OutlinedInput,
-  Select,
-  SelectChangeEvent,
   TableCell,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -40,12 +39,10 @@ import { contrastTextColor } from '@utils/contrast-text-color';
 interface TransactionRowProps {
   transaction: Transaction;
   columnOrder: ColumnKey[];
-  labels: Label[];
+  labels?: Label[];
   onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
 }
-
-const UNASSIGNED = '__unassigned__';
 
 /** Formats an ISO date string (YYYY-MM-DD) as a short locale date. */
 function formatDate(iso: string): string {
@@ -82,7 +79,7 @@ function AmountCell({ amount }: { amount: number }) {
 export function TransactionRow({
   transaction,
   columnOrder,
-  labels,
+  labels = [],
   onUpdated,
   onDeleted,
 }: TransactionRowProps) {
@@ -137,17 +134,15 @@ export function TransactionRow({
     }
   }
 
-  async function handleLabelChange(e: SelectChangeEvent<string>) {
-    const value = e.target.value;
-    const newLabelId = value === UNASSIGNED ? null : Number(value);
-    const selectedLabel = newLabelId !== null ? labels.find(l => l.id === newLabelId) ?? null : null;
+  async function handleLabelChange(_event: React.SyntheticEvent, selected: Label | null) {
+    const newLabelId = selected?.id ?? null;
 
     // Optimistic update.
     const optimistic: Transaction = {
       ...transaction,
       label_id: newLabelId,
-      label_name: selectedLabel?.name ?? null,
-      label_color: selectedLabel?.color ?? null,
+      label_name: selected?.name ?? null,
+      label_color: selected?.color ?? null,
     };
     onUpdated(optimistic);
     setIsUpdatingLabel(true);
@@ -264,50 +259,29 @@ export function TransactionRow({
           </TableCell>
         );
 
-      case 'label':
+      case 'label': {
+        const selectedLabel = labels.find(l => l.id === transaction.label_id) ?? null;
         return (
           <TableCell key="label" sx={{ py: 1.5 }}>
-            <Select
-              value={transaction.label_id !== null ? String(transaction.label_id) : UNASSIGNED}
+            <Autocomplete
+              value={selectedLabel}
+              options={labels}
+              getOptionLabel={l => l.name}
               onChange={handleLabelChange}
               disabled={isUpdatingLabel}
               size="small"
-              displayEmpty
-              aria-label={`Label for ${transaction.concept}`}
-              renderValue={value => {
-                if (value === UNASSIGNED || transaction.label_id === null) {
-                  return (
-                    <Typography variant="body2" color="text.disabled">
-                      No label
-                    </Typography>
-                  );
-                }
-                const label = labels.find(l => l.id === transaction.label_id);
-                const color = label?.color ?? transaction.label_color ?? '#6B7280';
-                const name = label?.name ?? transaction.label_name ?? '';
-                return (
-                  <Chip
-                    label={name}
-                    size="small"
-                    sx={{
-                      bgcolor: color,
-                      color: contrastTextColor(color),
-                      fontWeight: 500,
-                      height: 20,
-                      pointerEvents: 'none',
-                    }}
-                  />
-                );
-              }}
-              sx={{ minWidth: 140 }}
-            >
-              <MenuItem value={UNASSIGNED}>
-                <Typography variant="body2" color="text.secondary">
-                  No label
-                </Typography>
-              </MenuItem>
-              {labels.map(label => (
-                <MenuItem key={label.id} value={String(label.id)}>
+              clearOnEscape
+              ListboxProps={{ style: { maxHeight: 240 } }}
+              renderInput={params => (
+                <TextField
+                  {...params}
+                  placeholder="No label"
+                  aria-label={`Label for ${transaction.concept}`}
+                  sx={{ minWidth: 160 }}
+                />
+              )}
+              renderOption={(props, label) => (
+                <li {...props} key={label.id}>
                   <Chip
                     label={label.name}
                     size="small"
@@ -318,11 +292,16 @@ export function TransactionRow({
                       pointerEvents: 'none',
                     }}
                   />
-                </MenuItem>
-              ))}
-            </Select>
+                </li>
+              )}
+              renderTags={() => null}
+              slotProps={{
+                paper: { elevation: 3 },
+              }}
+            />
           </TableCell>
         );
+      }
 
       case 'category':
         return (

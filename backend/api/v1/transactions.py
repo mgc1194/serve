@@ -15,7 +15,7 @@ import logging
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from ninja import File, Router, Status
+from ninja import File, Router
 from ninja.errors import HttpError
 from ninja.files import UploadedFile
 from ninja.security import django_auth
@@ -249,6 +249,7 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
 
     Raises:
         HttpError: 400 if no fields are provided.
+        HttpError: 400 if concept is explicitly null.
         HttpError: 400 if the new concept is blank.
         HttpError: 400 if label_id references a label from a different household.
         HttpError: 403 if the user is not a member of the household.
@@ -258,7 +259,9 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
 
     update_fields = []
 
-    if payload.concept is not None:
+    if 'concept' in payload.model_fields_set:
+        if payload.concept is None:
+            raise HttpError(400, 'Transaction concept cannot be null.')
         concept = payload.concept.strip()
         if not concept:
             raise HttpError(400, 'Transaction concept cannot be blank.')
@@ -325,7 +328,7 @@ def delete_transaction(request, transaction_id: int):
         f'(id={transaction_id}) from account (id={transaction.account_id}).'
     )
 
-    return Status(204, None)
+    return 204, None
 
 
 # ── POST /transactions/import ─────────────────────────────────────────────────

@@ -40,7 +40,7 @@ import { useRef, useState } from 'react';
 
 import { type ColumnKey, COLUMN_LABELS, DEFAULT_COLUMN_ORDER } from '@pages/transactions/columns';
 import { TransactionRow } from '@pages/transactions/transaction-row';
-import type { Transaction } from '@serve/types/global';
+import type { Label, Transaction } from '@serve/types/global';
 
 // ── Sorting ───────────────────────────────────────────────────────────────────
 
@@ -56,12 +56,12 @@ function sortTransactions(
     let bv: string | number;
 
     switch (key) {
-      case 'date':     av = a.date;                           bv = b.date;                           break;
-      case 'concept':  av = a.concept.toLowerCase();          bv = b.concept.toLowerCase();          break;
-      case 'amount':   av = a.amount;                         bv = b.amount;                         break;
-      case 'account':  av = a.account_name.toLowerCase();     bv = b.account_name.toLowerCase();     break;
-      case 'label':    av = a.label?.toLowerCase()    ?? '';  bv = b.label?.toLowerCase()    ?? '';  break;
-      case 'category': av = a.category?.toLowerCase() ?? '';  bv = b.category?.toLowerCase() ?? '';  break;
+      case 'date':     av = a.date;                             bv = b.date;                             break;
+      case 'concept':  av = a.concept.toLowerCase();            bv = b.concept.toLowerCase();            break;
+      case 'amount':   av = a.amount;                           bv = b.amount;                           break;
+      case 'account':  av = a.account_name.toLowerCase();       bv = b.account_name.toLowerCase();       break;
+      case 'label':    av = a.label_name?.toLowerCase() ?? '';  bv = b.label_name?.toLowerCase() ?? '';  break;
+      case 'category': av = a.category?.toLowerCase()   ?? '';  bv = b.category?.toLowerCase()   ?? '';  break;
     }
 
     if (av < bv) return dir === 'asc' ? -1 : 1;
@@ -74,6 +74,7 @@ function sortTransactions(
 
 interface TransactionsTableProps {
   transactions: Transaction[];
+  labels?: Label[];
   isLoading: boolean;
   error: string | null;
   onRetry: () => void;
@@ -100,6 +101,7 @@ const DRAG_THRESHOLD = 6; // px — pointer delta below this is treated as a cli
 
 export function TransactionsTable({
   transactions,
+  labels = [],
   isLoading,
   error,
   onRetry,
@@ -402,6 +404,7 @@ export function TransactionsTable({
                   key={tx.id}
                   transaction={tx}
                   columnOrder={columnOrder}
+                  labels={labels}
                   onUpdated={onUpdated}
                   onDeleted={onDeleted}
                 />
