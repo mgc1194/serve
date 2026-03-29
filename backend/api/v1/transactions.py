@@ -287,7 +287,7 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
     if not update_fields:
         raise HttpError(400, 'At least one field must be provided.')
 
-    transaction.save(update_fields=[*update_fields, 'updated_at'])
+    transaction.save(update_fields=update_fields)
 
     logger.info(
         f'User {request.user.email} updated transaction '
