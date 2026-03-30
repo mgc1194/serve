@@ -2,7 +2,7 @@
 // Label autocomplete with optimistic updates. Immediately reflects the
 // selected label as a colored chip and reverts on API failure.
 
-import { Autocomplete, Box, Chip, TableCell, TextField } from '@mui/material';
+import { Autocomplete, Chip, TableCell, TextField } from '@mui/material';
 import { useState } from 'react';
 
 import type { Label, Transaction } from '@serve/types/global';
@@ -16,6 +16,15 @@ interface TransactionLabelCellProps {
   onError: (message: string | null) => void;
 }
 
+// Sentinel option rendered at the top of the list to allow clearing the label.
+const NO_LABEL: Label = {
+  id: -1,
+  name: 'No label',
+  color: '',
+  category: '',
+  household_id: -1,
+};
+
 export function TransactionLabelCell({
   transaction,
   labels,
@@ -24,17 +33,18 @@ export function TransactionLabelCell({
 }: TransactionLabelCellProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const selectedLabel = labels.find(l => l.id === transaction.label_id) ?? null;
+  const selectedLabel = labels.find(l => l.id === transaction.label_id) ?? undefined;
+  const options = [NO_LABEL, ...labels];
 
-  async function handleChange(_event: React.SyntheticEvent, selected: Label | null) {
-    const newLabelId = selected?.id ?? null;
+  async function handleChange(_event: React.SyntheticEvent, selected: Label) {
+    const isClearing = selected.id === NO_LABEL.id;
+    const newLabelId = isClearing ? null : selected.id;
 
-    // Optimistic update
     const optimistic: Transaction = {
       ...transaction,
       label_id: newLabelId,
-      label_name: selected?.name ?? null,
-      label_color: selected?.color ?? null,
+      label_name: isClearing ? null : selected.name,
+      label_color: isClearing ? null : selected.color,
     };
     onUpdated(optimistic);
     setIsUpdating(true);
@@ -44,7 +54,7 @@ export function TransactionLabelCell({
       const updated = await updateTransactionLabel(transaction.id, newLabelId);
       onUpdated(updated);
     } catch (err) {
-      onUpdated(transaction); // revert
+      onUpdated(transaction);
       onError(err instanceof ApiError ? err.message : 'Could not update label.');
     } finally {
       setIsUpdating(false);
@@ -55,74 +65,79 @@ export function TransactionLabelCell({
     <TableCell sx={{ py: 1.5 }}>
       <Autocomplete
         value={selectedLabel}
-        options={labels}
+        options={options}
         getOptionLabel={l => l.name}
         onChange={handleChange}
         disabled={isUpdating}
         size="small"
-        clearOnEscape
-        ListboxProps={{ style: { maxHeight: 240 } }}
+        disableClearable
+        slotProps={{
+          paper: { elevation: 3 },
+          listbox: { style: { maxHeight: 240 } },
+        }}
         renderInput={params => (
-          // When a label is selected, hide the native input text and overlay
-          // the colored chip instead. The input remains in the DOM (unfocused,
-          // visually hidden) so MUI's Autocomplete keyboard behavior is intact.
-          <Box sx={{ position: 'relative', minWidth: 140 }}>
-            <TextField
-              {...params}
-              placeholder={selectedLabel ? undefined : 'No label'}
-              aria-label={`Label for ${transaction.concept}`}
-              sx={{
-                '& .MuiInputBase-input': {
-                  // Hide the text input when a chip is shown so they don't overlap,
-                  // but keep it focusable so the user can type to search / clear.
-                  color: selectedLabel ? 'transparent' : undefined,
+          <TextField
+            {...params}
+            placeholder="No label"
+            aria-label={`Label for ${transaction.concept}`}
+            onKeyDown={e => {
+                if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim() === '') {
+                    handleChange(e as unknown as React.SyntheticEvent, NO_LABEL);
+                }
+            }}
+            sx={{
+              minWidth: 120,
+              ...(selectedLabel && {
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: selectedLabel.color,
+                  borderRadius: '16px',
+                  '& fieldset': { border: 'none' },
+                  '&:hover fieldset': { border: 'none' },
+                  '&.Mui-focused fieldset': {
+                    border: '2px solid',
+                    borderColor: selectedLabel.color,
+                    filter: 'brightness(0.85)',
+                  },
                 },
-              }}
-            />
-            {selectedLabel && (
-              <Box
+                '& .MuiInputBase-input': {
+                  color: contrastTextColor(selectedLabel.color),
+                  fontWeight: 500,
+                  fontSize: '0.8125rem',
+                  caretColor: contrastTextColor(selectedLabel.color),
+                },
+                '& .MuiAutocomplete-popupIndicator': {
+                  color: contrastTextColor(selectedLabel.color),
+                },
+              }),
+            }}
+          />
+        )}
+        renderOption={(props, label) => {
+          const { key, ...restProps } = props;
+          if (label.id === NO_LABEL.id) {
+            return (
+              <li key={key} {...restProps}>
+                <span style={{ fontSize: '0.8125rem', color: 'var(--mui-palette-text-secondary)' }}>
+                  No label
+                </span>
+              </li>
+            );
+          }
+          return (
+            <li key={key} {...restProps}>
+              <Chip
+                label={label.name}
+                size="small"
                 sx={{
-                  position: 'absolute',
-                  top: '50%',
-                  // Align with MUI's small TextField content area, leaving
-                  // room for the clear (×) button that appears on the right.
-                  left: 10,
-                  right: 36,
-                  transform: 'translateY(-50%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  pointerEvents: 'none', // clicks fall through to the input
+                  bgcolor: label.color,
+                  color: contrastTextColor(label.color),
+                  fontWeight: 500,
+                  pointerEvents: 'none',
                 }}
-              >
-                <Chip
-                  label={selectedLabel.name}
-                  size="small"
-                  sx={{
-                    bgcolor: selectedLabel.color,
-                    color: contrastTextColor(selectedLabel.color),
-                    fontWeight: 500,
-                    maxWidth: '100%',
-                  }}
-                />
-              </Box>
-            )}
-          </Box>
-        )}
-        renderOption={(props, label) => (
-          <li {...props} key={label.id}>
-            <Chip
-              label={label.name}
-              size="small"
-              sx={{
-                bgcolor: label.color,
-                color: contrastTextColor(label.color),
-                fontWeight: 500,
-                pointerEvents: 'none',
-              }}
-            />
-          </li>
-        )}
-        slotProps={{ paper: { elevation: 3 } }}
+              />
+            </li>
+          );
+        }}
       />
     </TableCell>
   );
