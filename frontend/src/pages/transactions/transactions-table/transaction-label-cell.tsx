@@ -39,7 +39,7 @@ export function TransactionLabelCell({
 }: TransactionLabelCellProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const selectedLabel = labels.find(lbl => lbl.id === transaction.label_id) ?? null;
+  const selectedLabel = labels.find(lbl => lbl.id === transaction.label_id) ?? undefined;
   const options = [NO_LABEL, ...labels];
 
   const [inputValue, setInputValue] = useState(selectedLabel?.name ?? '');
