@@ -2,7 +2,7 @@
 
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { ManageLabel } from '@pages/households/label-management-dialog/manage-label';
+import { ManageLabel } from '@serve/pages/households/label-management-dialog/manage-label';
 
 const LABEL = { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 };
 
