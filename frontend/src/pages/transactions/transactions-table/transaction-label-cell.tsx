@@ -98,7 +98,7 @@ export function TransactionLabelCell({
             placeholder="No label"
             aria-label={`Label for ${transaction.concept}`}
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim() === '') {
+              if (e.key === 'Enter' && inputValue.trim() === '') {
                 handleChange(e as unknown as React.SyntheticEvent, NO_LABEL);
                 setInputValue('');
               }
