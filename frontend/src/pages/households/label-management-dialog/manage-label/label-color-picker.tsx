@@ -2,7 +2,7 @@
 
 import { Box, Paper, Typography } from '@mui/material';
 
-const GITHUB_COLORS = [
+const RAINBOW_COLORS = [
   { hex: '#b60205', label: 'Red' },
   { hex: '#d93f0b', label: 'Orange' },
   { hex: '#fbca04', label: 'Yellow' },
@@ -32,7 +32,7 @@ interface LabelColorPickerProps {
 export function LabelColorPicker({ open, selectedColor, onSelect }: LabelColorPickerProps) {
   if (!open) return null;
 
-  const rows = [GITHUB_COLORS.slice(0, ROW_SIZE), GITHUB_COLORS.slice(ROW_SIZE)];
+  const rows = [RAINBOW_COLORS.slice(0, ROW_SIZE), RAINBOW_COLORS.slice(ROW_SIZE)];
 
   return (
     <Paper

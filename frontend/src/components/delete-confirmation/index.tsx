@@ -1,4 +1,4 @@
-// components/delete-confirmation.tsx
+// components/delete-confirmation/index.tsx
 
 import { Box, Button, CircularProgress, Typography } from '@mui/material';
 
