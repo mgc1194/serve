@@ -5,17 +5,10 @@
 
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  IconButton,
-  TableCell,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, IconButton, TableCell, Tooltip } from '@mui/material';
 import { useState } from 'react';
 
+import { DeleteConfirmation } from '@components/delete-confirmation';
 import type { Transaction } from '@serve/types/global';
 import { ApiError, deleteTransaction } from '@services/transactions';
 
@@ -52,29 +45,12 @@ export function TransactionActionsCell({
   if (confirmDelete) {
     return (
       <TableCell sx={{ py: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            Delete?
-          </Typography>
-          <Button
-            size="small"
-            color="error"
-            variant="contained"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            sx={{ minWidth: 0, px: 1.5, py: 0.25, fontSize: '0.75rem' }}
-          >
-            {isDeleting ? <CircularProgress size={14} color="inherit" /> : 'Yes'}
-          </Button>
-          <Button
-            size="small"
-            onClick={() => setConfirmDelete(false)}
-            disabled={isDeleting}
-            sx={{ minWidth: 0, px: 1, py: 0.25, fontSize: '0.75rem' }}
-          >
-            No
-          </Button>
-        </Box>
+        <DeleteConfirmation
+          prompt="Delete?"
+          isDeleting={isDeleting}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
       </TableCell>
     );
   }
