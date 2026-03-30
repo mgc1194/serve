@@ -15,10 +15,9 @@ import { AppHeader } from '@layout/app-header';
 import { AccountsFilterBar } from '@pages/accounts/accounts-filter-bar';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
-import type { AccountDetail, FileImportResult, Household, Transaction } from '@serve/types/global';
-import { listAccounts, ApiError as AccountsApiError } from '@services/accounts';
+import type { FileImportResult, Household, Label, Transaction } from '@serve/types/global';
+import { listLabels, ApiError as LabelsApiError } from '@services/labels';
 import { listTransactions, ApiError } from '@services/transactions';
-
 
 export function TransactionsPage() {
   const navigate = useNavigate();
@@ -26,12 +25,11 @@ export function TransactionsPage() {
   const { user } = useAuth();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [accounts, setAccounts] = useState<AccountDetail[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
-  // Filter stored in URL so it survives reload and is shareable
   const householdIdParam = searchParams.get('household_id');
   const householdIdFilter =
     householdIdParam !== null && householdIdParam.trim() !== ''
@@ -48,9 +46,6 @@ export function TransactionsPage() {
       ? households.find(h => h.id === householdIdFilter)
       : undefined;
 
-  // If no household_id is in the URL yet but the user has households, redirect
-  // to the first one immediately so the URL always reflects what's shown and
-  // the subtitle is never misleading.
   useEffect(() => {
     if (householdIdFilter === undefined && households.length > 0) {
       setSearchParams({ household_id: String(households[0].id) }, { replace: true });
@@ -60,6 +55,9 @@ export function TransactionsPage() {
 
   function load() {
     if (householdIdFilter === undefined) {
+      setTransactions([]);
+      setLabels([]);
+      setError(null);
       setIsLoading(false);
       return;
     }
@@ -69,15 +67,15 @@ export function TransactionsPage() {
 
     Promise.all([
       listTransactions({ household_id: householdIdFilter }),
-      listAccounts({ household_id: householdIdFilter }),
+      listLabels(householdIdFilter),
     ])
-      .then(([txns, accts]) => {
+      .then(([txns, lbls]) => {
         setTransactions(txns);
-        setAccounts(accts);
+        setLabels(lbls);
       })
       .catch(err => {
         setError(
-          err instanceof ApiError || err instanceof AccountsApiError
+          err instanceof ApiError || err instanceof LabelsApiError
             ? err.message
             : 'Could not load transactions.',
         );
@@ -141,7 +139,7 @@ export function TransactionsPage() {
             </Typography>
             <Typography color="text.secondary">
               {activeHousehold
-                ? `Showing transactions in ${activeHousehold.name}`
+                ? `${activeHousehold.name}`
                 : 'Select a household to view transactions.'}
             </Typography>
           </Box>
@@ -150,23 +148,21 @@ export function TransactionsPage() {
             variant="contained"
             startIcon={<FileUploadOutlinedIcon />}
             onClick={() => setImportOpen(true)}
-            disabled={accounts.length === 0}
+            disabled={householdIdFilter === undefined}
           >
             Import CSV
           </Button>
         </Box>
 
-        {/* Household filter */}
-        {households.length > 1 && (
-          <AccountsFilterBar
-            households={households}
-            householdId={householdIdFilter}
-            onHouseholdChange={handleHouseholdChange}
-          />
-        )}
+        <AccountsFilterBar
+          households={households}
+          householdId={householdIdFilter}
+          onHouseholdChange={handleHouseholdChange}
+        />
 
         <TransactionsTable
           transactions={transactions}
+          labels={labels}
           isLoading={isLoading}
           error={error}
           onRetry={load}
@@ -174,14 +170,14 @@ export function TransactionsPage() {
           onDeleted={handleDeleted}
           onImport={() => setImportOpen(true)}
         />
-      </Container>
 
-      <ImportCsvDialog
-        open={importOpen}
-        households={households}
-        onImported={handleImported}
-        onClose={() => setImportOpen(false)}
-      />
+        <ImportCsvDialog
+          open={importOpen}
+          households={households}
+          onClose={() => setImportOpen(false)}
+          onImported={handleImported}
+        />
+      </Container>
     </Box>
   );
 }
