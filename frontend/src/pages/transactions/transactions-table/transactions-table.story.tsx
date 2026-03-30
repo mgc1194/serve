@@ -1,4 +1,4 @@
-// pages/transactions/transactions-table.story.tsx
+// pages/transactions/transactions-table/transactions-table.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 
@@ -17,10 +17,10 @@ const TRANSACTIONS: Transaction[] = [
     date: '2026-03-10',
     concept: 'TRADER JOES #123',
     amount: -42.57,
-    label_id: null,
-    label_name: null,
-    label_color: null,
-    category: null,
+    label_id: 1,
+    label_name: 'Groceries',
+    label_color: '#16a34a',
+    category: 'Food',
     additional_labels: null,
     source: 'csv',
     account_id: 1,
@@ -60,6 +60,22 @@ const TRANSACTIONS: Transaction[] = [
     bank_name: 'SoFi',
     imported_at: '2026-03-11T08:00:00Z',
   },
+  {
+    id: 4,
+    date: '2026-03-07',
+    concept: 'UBER',
+    amount: -18.00,
+    label_id: 3,
+    label_name: 'Transport',
+    label_color: '#2563eb',
+    category: null,
+    additional_labels: null,
+    source: 'csv',
+    account_id: 1,
+    account_name: "Alice's 360 Savings",
+    bank_name: 'Capital One',
+    imported_at: '2026-03-11T08:00:00Z',
+  },
 ];
 
 const meta: Meta<typeof TransactionsTable> = {
@@ -81,7 +97,9 @@ const meta: Meta<typeof TransactionsTable> = {
 export default meta;
 type Story = StoryObj<typeof TransactionsTable>;
 
-export const Loading: Story = { args: { isLoading: true } };
+export const Loading: Story = {
+  args: { isLoading: true },
+};
 
 export const Error: Story = {
   args: { error: 'Could not load transactions. Please try again.' },
@@ -95,4 +113,9 @@ export const WithTransactions: Story = {
 
 export const NoLabels: Story = {
   args: { transactions: TRANSACTIONS, labels: [] },
+};
+
+// Single transaction — useful for checking row layout in isolation
+export const SingleRow: Story = {
+  args: { transactions: [TRANSACTIONS[0]] },
 };

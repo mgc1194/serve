@@ -1,10 +1,10 @@
-// pages/transactions/transaction-row.story.tsx
+// pages/transactions/transactions-table/transaction-row.story.tsx
 
 import { Table, TableBody } from '@mui/material';
 import type { Decorator, Meta, StoryObj } from '@storybook/react';
 
-import { DEFAULT_COLUMN_ORDER } from '@pages/transactions/columns';
-import { TransactionRow } from '@pages/transactions/transaction-row';
+import { DEFAULT_COLUMN_ORDER } from '@pages/transactions/transactions-table/columns';
+import { TransactionRow } from '@pages/transactions/transactions-table/transaction-row';
 import type { Label, Transaction } from '@serve/types/global';
 
 const tableDecorator: Decorator = Story => (
@@ -23,7 +23,7 @@ const LABELS: Label[] = [
 
 const TX: Transaction = {
   id: 1,
-  date: '2026-03-01',
+  date: '2026-03-10',
   concept: 'TRADER JOES #123',
   amount: -42.57,
   label_id: null,
@@ -35,11 +35,11 @@ const TX: Transaction = {
   account_id: 1,
   account_name: "Alice's 360 Savings",
   bank_name: 'Capital One',
-  imported_at: '2026-03-10T08:00:00Z',
+  imported_at: '2026-03-11T08:00:00Z',
 };
 
 const meta: Meta<typeof TransactionRow> = {
-  title: 'Transactions/TransactionRow',
+  title: 'Transactions/TransactionsTable/TransactionRow',
   component: TransactionRow,
   decorators: [tableDecorator],
   parameters: { layout: 'padded' },
@@ -66,23 +66,13 @@ export const Credit: Story = {
       id: 2,
       concept: 'DIRECT DEPOSIT - EMPLOYER',
       amount: 2400.0,
-      bank_name: 'SoFi',
       account_name: "Bob's Checking",
+      bank_name: 'SoFi',
     },
   },
 };
 
-// Long concept — verifies text wraps cleanly
-export const LongConcept: Story = {
-  args: {
-    transaction: {
-      ...TX,
-      concept: 'AMAZON MARKETPLACE AMZN.COM/BILL WA 98109 US ONLINE PURCHASE REFUND',
-    },
-  },
-};
-
-// Row with a label pre-selected
+// Row with a label and category pre-assigned
 export const WithLabel: Story = {
   args: {
     transaction: {
@@ -97,9 +87,17 @@ export const WithLabel: Story = {
   },
 };
 
-// Row with no labels available in the household
-export const NoLabels: Story = {
+// Long concept — verifies text wraps cleanly
+export const LongConcept: Story = {
   args: {
-    labels: [],
+    transaction: {
+      ...TX,
+      concept: 'AMAZON MARKETPLACE AMZN.COM/BILL WA 98109 US ONLINE PURCHASE REFUND',
+    },
   },
+};
+
+// No labels available in this household
+export const NoLabels: Story = {
+  args: { labels: [] },
 };
