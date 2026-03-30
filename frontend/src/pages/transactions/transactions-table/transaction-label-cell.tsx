@@ -2,12 +2,18 @@
 // Label autocomplete with optimistic updates. Immediately reflects the
 // selected label as a colored chip and reverts on API failure.
 
-import { Autocomplete, Chip, TableCell, TextField } from '@mui/material';
-import { useState } from 'react';
+import { Autocomplete, Box, Chip, TableCell, TextField } from '@mui/material';
+import { useEffect, useState } from 'react';
 
 import type { Label, Transaction } from '@serve/types/global';
 import { ApiError, updateTransactionLabel } from '@services/transactions';
 import { contrastTextColor } from '@utils/contrast-text-color';
+
+import {
+  autocompleteSx,
+  getSelectedLabelInputSx,
+  noLabelInputSx,
+} from '@pages/transactions/transactions-table/transaction-label-cell.styles';
 
 interface TransactionLabelCellProps {
   transaction: Transaction;
@@ -36,15 +42,23 @@ export function TransactionLabelCell({
   const selectedLabel = labels.find(l => l.id === transaction.label_id) ?? undefined;
   const options = [NO_LABEL, ...labels];
 
-  async function handleChange(_event: React.SyntheticEvent, selected: Label) {
-    const isClearing = selected.id === NO_LABEL.id;
-    const newLabelId = isClearing ? null : selected.id;
+  const [inputValue, setInputValue] = useState(selectedLabel?.name ?? '');
+  useEffect(() => {
+    setInputValue(selectedLabel?.name ?? '');
+  }, [selectedLabel?.name]);
+
+  async function handleChange(
+    _event: React.SyntheticEvent,
+    selected: Label | null | undefined,
+  ) {
+    const isClearing = selected == null || selected.id === NO_LABEL.id;
+    const newLabelId = isClearing ? null : selected!.id;
 
     const optimistic: Transaction = {
       ...transaction,
       label_id: newLabelId,
-      label_name: isClearing ? null : selected.name,
-      label_color: isClearing ? null : selected.color,
+      label_name: isClearing ? null : selected!.name,
+      label_color: isClearing ? null : selected!.color,
     };
     onUpdated(optimistic);
     setIsUpdating(true);
@@ -65,12 +79,15 @@ export function TransactionLabelCell({
     <TableCell sx={{ py: 1.5 }}>
       <Autocomplete
         value={selectedLabel}
+        inputValue={inputValue}
+        onInputChange={(_event, newValue) => setInputValue(newValue)}
         options={options}
         getOptionLabel={l => l.name}
         onChange={handleChange}
         disabled={isUpdating}
         size="small"
-        disableClearable
+        clearOnEscape
+        sx={autocompleteSx}
         slotProps={{
           paper: { elevation: 3 },
           listbox: { style: { maxHeight: 240 } },
@@ -81,35 +98,12 @@ export function TransactionLabelCell({
             placeholder="No label"
             aria-label={`Label for ${transaction.concept}`}
             onKeyDown={e => {
-                if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim() === '') {
-                    handleChange(e as unknown as React.SyntheticEvent, NO_LABEL);
-                }
+              if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim() === '') {
+                handleChange(e as unknown as React.SyntheticEvent, NO_LABEL);
+                setInputValue('');
+              }
             }}
-            sx={{
-              minWidth: 120,
-              ...(selectedLabel && {
-                '& .MuiOutlinedInput-root': {
-                  bgcolor: selectedLabel.color,
-                  borderRadius: '16px',
-                  '& fieldset': { border: 'none' },
-                  '&:hover fieldset': { border: 'none' },
-                  '&.Mui-focused fieldset': {
-                    border: '2px solid',
-                    borderColor: selectedLabel.color,
-                    filter: 'brightness(0.85)',
-                  },
-                },
-                '& .MuiInputBase-input': {
-                  color: contrastTextColor(selectedLabel.color),
-                  fontWeight: 500,
-                  fontSize: '0.8125rem',
-                  caretColor: contrastTextColor(selectedLabel.color),
-                },
-                '& .MuiAutocomplete-popupIndicator': {
-                  color: contrastTextColor(selectedLabel.color),
-                },
-              }),
-            }}
+            sx={selectedLabel ? getSelectedLabelInputSx(selectedLabel.color) : noLabelInputSx}
           />
         )}
         renderOption={(props, label) => {
@@ -117,9 +111,9 @@ export function TransactionLabelCell({
           if (label.id === NO_LABEL.id) {
             return (
               <li key={key} {...restProps}>
-                <span style={{ fontSize: '0.8125rem', color: 'var(--mui-palette-text-secondary)' }}>
+                <Box component="span" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
                   No label
-                </span>
+                </Box>
               </li>
             );
           }

@@ -55,6 +55,8 @@ export function TransactionsPage() {
 
   function load() {
     if (householdIdFilter === undefined) {
+      setTransactions([]);
+      setLabels([]);
       setIsLoading(false);
       return;
     }
