@@ -5,15 +5,15 @@
 import { Autocomplete, Box, Chip, TableCell, TextField } from '@mui/material';
 import { useEffect, useState } from 'react';
 
-import type { Label, Transaction } from '@serve/types/global';
-import { ApiError, updateTransactionLabel } from '@services/transactions';
-import { contrastTextColor } from '@utils/contrast-text-color';
-
 import {
   autocompleteSx,
   getSelectedLabelInputSx,
   noLabelInputSx,
 } from '@pages/transactions/transactions-table/transaction-label-cell.styles';
+import type { Label, Transaction } from '@serve/types/global';
+import { ApiError, updateTransactionLabel } from '@services/transactions';
+import { contrastTextColor } from '@utils/contrast-text-color';
+
 
 interface TransactionLabelCellProps {
   transaction: Transaction;
@@ -39,7 +39,7 @@ export function TransactionLabelCell({
 }: TransactionLabelCellProps) {
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const selectedLabel = labels.find(l => l.id === transaction.label_id) ?? undefined;
+  const selectedLabel = labels.find(lbl => lbl.id === transaction.label_id) ?? null;
   const options = [NO_LABEL, ...labels];
 
   const [inputValue, setInputValue] = useState(selectedLabel?.name ?? '');

@@ -4,6 +4,7 @@
 // component with MUI class-name overrides.
 
 import type { SxProps, Theme } from '@mui/material';
+
 import { contrastTextColor } from '@utils/contrast-text-color';
 
 export function getSelectedLabelInputSx(color: string): SxProps<Theme> {
