@@ -33,8 +33,10 @@ export function SummaryFilters({
     <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap', alignItems: 'center' }}>
       {households.length > 1 && (
         <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel>Household</InputLabel>
+          <InputLabel id="summary-household-label">Household</InputLabel>
           <Select
+            labelId="summary-household-label"
+            id="summary-household-select"
             value={householdId ?? ''}
             label="Household"
             onChange={e => onHouseholdChange(Number(e.target.value))}
@@ -49,8 +51,10 @@ export function SummaryFilters({
       )}
 
       <FormControl size="small" sx={{ minWidth: 110 }}>
-        <InputLabel>Year</InputLabel>
+        <InputLabel id="summary-year-label">Year</InputLabel>
         <Select
+          labelId="summary-year-label"
+          id="summary-year-select"
           value={selectedYear}
           label="Year"
           onChange={e => onYearChange(Number(e.target.value))}
@@ -64,8 +68,10 @@ export function SummaryFilters({
       </FormControl>
 
       <FormControl size="small" sx={{ minWidth: 140 }}>
-        <InputLabel>Month</InputLabel>
+        <InputLabel id="summary-month-label">Month</InputLabel>
         <Select
+          labelId="summary-month-label"
+          id="summary-month-select"
           value={selectedMonth}
           label="Month"
           onChange={e => onMonthChange(Number(e.target.value))}

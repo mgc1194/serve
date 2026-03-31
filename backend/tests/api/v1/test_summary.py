@@ -1,5 +1,5 @@
 """
-tests/test_summary.py — Integration tests for GET /api/v1/summary/.
+tests/api/v1/test_summary.py — Integration tests for GET /api/v1/summary/.
 """
 
 import pytest

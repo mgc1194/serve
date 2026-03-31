@@ -79,6 +79,7 @@ export function SummaryTotalsBar({ summary }: SummaryTotalsBarProps) {
           label="Unlabelled"
           value={summary.uncategorised_total}
           color="text.secondary"
+          prefix={summary.uncategorised_total > 0 ? '+' : summary.uncategorised_total < 0 ? '−' : undefined}
         />
       )}
     </Box>

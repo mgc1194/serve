@@ -99,18 +99,16 @@ export function SummaryPage() {
     const available = availableMonths(year, earliestDate);
     const newMonth = available.includes(selectedMonth) ? selectedMonth : available[0];
     if (newMonth !== undefined) {
-      setSearchParams({
-        household_id: householdIdFilter != null ? String(householdIdFilter) : '',
-        month: toMonthStr(year, newMonth),
-      });
+      const params: Record<string, string> = { month: toMonthStr(year, newMonth) };
+      if (householdIdFilter != null) params.household_id = String(householdIdFilter);
+      setSearchParams(params);
     }
   }
 
   function handleMonthChange(month: number) {
-    setSearchParams({
-      household_id: householdIdFilter != null ? String(householdIdFilter) : '',
-      month: toMonthStr(selectedYear, month),
-    });
+    const params: Record<string, string> = { month: toMonthStr(selectedYear, month) };
+    if (householdIdFilter != null) params.household_id = String(householdIdFilter);
+    setSearchParams(params);
   }
 
   const activeHousehold = households.find(h => h.id === householdIdFilter);
