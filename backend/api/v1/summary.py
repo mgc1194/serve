@@ -14,6 +14,7 @@ Query parameters:
 
 import logging
 from collections import defaultdict
+from datetime import datetime
 from decimal import Decimal
 
 from django.db.models import Min, Sum
@@ -111,12 +112,11 @@ def get_summary(
 
     if month is not None:
         try:
-            parts = month.split('-')
-            if len(parts) != 2:
-                raise ValueError
-            year, month_num = int(parts[0]), int(parts[1])
-            if not (1 <= month_num <= 12):
-                raise ValueError
+            # strptime enforces both the strict "YYYY-MM" format (four-digit
+            # year, two-digit month) and the valid month range (01-12).
+            # Looser inputs like "2026-3" or "99-12" are correctly rejected.
+            parsed = datetime.strptime(month, '%Y-%m')
+            year, month_num = parsed.year, parsed.month
         except ValueError:
             raise HttpError(400, 'month must be a valid "YYYY-MM" string.') from None
 

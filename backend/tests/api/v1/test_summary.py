@@ -1,5 +1,5 @@
 """
-tests/api/v1/test_summary.py — Integration tests for GET /api/v1/summary/.
+tests/test_summary.py — Integration tests for GET /api/v1/summary/.
 """
 
 import pytest
@@ -147,6 +147,21 @@ class TestSummaryBasic:
 
     def test_400_for_month_with_invalid_number(self, auth_client, household):
         response = auth_client.get(f'/api/v1/summary/?household_id={household.id}&month=2026-13')
+        assert response.status_code == 400
+
+    def test_400_for_single_digit_month(self, auth_client, household):
+        # "2026-3" is not strict YYYY-MM — strptime rejects it
+        response = auth_client.get(f'/api/v1/summary/?household_id={household.id}&month=2026-3')
+        assert response.status_code == 400
+
+    def test_400_for_two_digit_year(self, auth_client, household):
+        # "99-12" has a two-digit year — strptime rejects it
+        response = auth_client.get(f'/api/v1/summary/?household_id={household.id}&month=99-12')
+        assert response.status_code == 400
+
+    def test_400_for_full_iso_date(self, auth_client, household):
+        # "2026-03-15" is not YYYY-MM — strptime rejects it
+        response = auth_client.get(f'/api/v1/summary/?household_id={household.id}&month=2026-03-15')
         assert response.status_code == 400
 
 
