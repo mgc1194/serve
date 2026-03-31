@@ -138,9 +138,10 @@ describe('availableMonths', () => {
   });
 
   it('combines future-month and earliest-month constraints in same year', () => {
-    // Earliest is March 2026, current date is also March 2026
+    // Earliest is February 2026, current date is March 2026.
+    // Lower bound cuts January, upper bound cuts April–December.
     const months = availableMonths(2026, '2026-02-01');
-    expect(months).toEqual([1, 2, 3]);
+    expect(months).toEqual([2, 3]);
   });
 
   it('returns only a single month when earliest is same year and month as today', () => {
