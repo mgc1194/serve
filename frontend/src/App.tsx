@@ -12,6 +12,7 @@ import { DashboardPage } from '@pages/dashboard';
 import { HouseholdsPage } from '@pages/households';
 import { LoginPage } from '@pages/login';
 import { RegisterPage } from '@pages/register';
+import { SummaryPage } from '@pages/summary';
 import { TransactionsPage } from '@pages/transactions';
 import theme from '@serve/theme';
 
@@ -62,6 +63,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <AccountsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/summary"
+                element={
+                  <ProtectedRoute>
+                    <SummaryPage />
                   </ProtectedRoute>
                 }
               />
