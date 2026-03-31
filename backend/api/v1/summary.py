@@ -112,9 +112,6 @@ def get_summary(
 
     if month is not None:
         try:
-            # strptime enforces both the strict "YYYY-MM" format (four-digit
-            # year, two-digit month) and the valid month range (01-12).
-            # Looser inputs like "2026-3" or "99-12" are correctly rejected.
             parsed = datetime.strptime(month, '%Y-%m')
             year, month_num = parsed.year, parsed.month
         except ValueError:
