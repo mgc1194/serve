@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   availableMonths,
+  currentMonthStr,
   formatMonthLabel,
   parseMonthStr,
   toMonthStr,
   yearRange,
-  currentMonthStr,
 } from './date-utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -18,7 +18,11 @@ function mockNow(isoDate: string) {
   vi.setSystemTime(new Date(isoDate));
 }
 
-beforeEach(() => mockNow('2026-03-15'));
+beforeEach(() => {
+  vi.useFakeTimers();
+  mockNow('2026-03-15');
+});
+
 afterEach(() => vi.useRealTimers());
 
 // ── toMonthStr ────────────────────────────────────────────────────────────────
@@ -44,16 +48,41 @@ describe('toMonthStr', () => {
 // ── parseMonthStr ─────────────────────────────────────────────────────────────
 
 describe('parseMonthStr', () => {
-  it('parses a padded month string', () => {
+  it('parses a valid padded month string', () => {
     expect(parseMonthStr('2026-03')).toEqual({ year: 2026, month: 3 });
-  });
-
-  it('parses a full ISO date string (uses only YYYY-MM part)', () => {
-    expect(parseMonthStr('2025-01-15')).toEqual({ year: 2025, month: 1 });
   });
 
   it('parses December correctly', () => {
     expect(parseMonthStr('2024-12')).toEqual({ year: 2024, month: 12 });
+  });
+
+  it('parses January correctly', () => {
+    expect(parseMonthStr('2025-01')).toEqual({ year: 2025, month: 1 });
+  });
+
+  it('falls back to current month for a missing separator', () => {
+    expect(parseMonthStr('202603')).toEqual({ year: 2026, month: 3 });
+  });
+
+  it('falls back to current month for a non-numeric string', () => {
+    expect(parseMonthStr('bad')).toEqual({ year: 2026, month: 3 });
+  });
+
+  it('falls back to current month for an empty string', () => {
+    expect(parseMonthStr('')).toEqual({ year: 2026, month: 3 });
+  });
+
+  it('falls back to current month for month 0', () => {
+    expect(parseMonthStr('2026-00')).toEqual({ year: 2026, month: 3 });
+  });
+
+  it('falls back to current month for month 13', () => {
+    expect(parseMonthStr('2026-13')).toEqual({ year: 2026, month: 3 });
+  });
+
+  it('falls back to current month for a full ISO date string', () => {
+    // parseMonthStr only accepts strict "YYYY-MM" — full dates do not match
+    expect(parseMonthStr('2025-01-15')).toEqual({ year: 2026, month: 3 });
   });
 });
 
@@ -70,6 +99,10 @@ describe('formatMonthLabel', () => {
 
   it('formats December', () => {
     expect(formatMonthLabel('2024-12')).toBe('December 2024');
+  });
+
+  it('falls back to current month label for invalid input', () => {
+    expect(formatMonthLabel('bad')).toBe('March 2026');
   });
 });
 

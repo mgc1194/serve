@@ -28,7 +28,7 @@ class SummarySchema(Schema):
 
     earnings                  — labels whose net total is positive (credits)
     spending                  — labels whose net total is negative (debits, stored as negative float)
-    total                     — net of all labelled transactions
+    total                     — net of all transactions in the summary (labelled + uncategorised_total)
     balance                   — alias for total (kept for parity with the Detailed view in the UI)
     uncategorised_total       — sum of transactions with no label at all
     earliest_transaction_date — ISO date string of the oldest transaction in the household,

@@ -22,8 +22,17 @@ export function toMonthStr(year: number, month: number): string {
 }
 
 export function parseMonthStr(iso: string): { year: number; month: number } {
-  const [y, m] = iso.split('-');
-  return { year: Number(y), month: Number(m) };
+  // Expect a strict "YYYY-MM" string. Fall back to current year/month on
+  // invalid input so NaN never propagates into UI state or MONTH_NAMES lookups.
+  const match = /^(\d{4})-(\d{2})$/.exec(iso);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isNaN(year) && !Number.isNaN(month) && month >= 1 && month <= 12) {
+      return { year, month };
+    }
+  }
+  return { year: currentYear(), month: currentMonthNum() };
 }
 
 export function formatMonthLabel(iso: string): string {

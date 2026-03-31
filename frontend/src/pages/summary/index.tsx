@@ -38,8 +38,12 @@ export function SummaryPage() {
     return Number.isNaN(parsed) ? undefined : parsed;
   })();
 
-  const monthParam = searchParams.get('month') ?? currentMonthStr();
-  const { year: selectedYear, month: selectedMonth } = parseMonthStr(monthParam);
+  // Sanitise the month URL param — parseMonthStr falls back to the current
+  // month on invalid input, so we re-derive the canonical string from the
+  // parsed result to keep the URL and state consistent.
+  const rawMonthParam = searchParams.get('month') ?? currentMonthStr();
+  const { year: selectedYear, month: selectedMonth } = parseMonthStr(rawMonthParam);
+  const monthParam = toMonthStr(selectedYear, selectedMonth);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
