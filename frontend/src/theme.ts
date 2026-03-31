@@ -8,6 +8,7 @@
 //               #7025bb — wisteria dark, AAA on bg (7.21:1)
 //   Tertiary    #f99090 — coral red, AAA on navy (7.17:1)
 //               #a10c0c — deep red, AAA on bg (7.48:1)
+//   Success     #1a7f37 — forest green, AAA on bg (7.18:1)
 //   Rainbow     all seven colors AAA on navy
 
 import { createTheme, keyframes } from '@mui/material/styles';
@@ -96,7 +97,13 @@ const theme = createTheme({
       dark: '#a10c0c',
       contrastText: '#1e2235',
     },
-
+    success: {
+      main: '#1a7f37',   // AAA on bg (7.18:1)
+      contrastText: '#ffffff',
+    },
+    error: {
+      main: '#c0392b',
+    },
     rainbowText: {
       red: '#ff8f8f',
       orange: '#f59942',
@@ -105,10 +112,6 @@ const theme = createTheme({
       blue: '#a3d6f0',
       indigo: '#afadff',
       violet: '#c4a1f2',
-    },
-
-    error: {
-      main: '#c0392b',
     },
     background: {
       default: '#f4f5f7',

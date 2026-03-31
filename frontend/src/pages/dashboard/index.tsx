@@ -6,6 +6,7 @@ import { useAuth } from '@context/auth-context';
 import { AppHeader } from '@layout/app-header';
 import { AccountsNavCard } from '@pages/dashboard/accounts-nav-card';
 import { HouseholdsNavCard } from '@pages/dashboard/households-nav-card';
+import { SummaryNavCard } from '@pages/dashboard/summary-nav-card';
 import { TransactionsNavCard } from '@pages/dashboard/transactions-nav-card';
 
 export function DashboardPage() {
@@ -27,6 +28,7 @@ export function DashboardPage() {
           <HouseholdsNavCard />
           <AccountsNavCard />
           <TransactionsNavCard />
+          <SummaryNavCard />
         </Box>
       </Container>
     </Box>

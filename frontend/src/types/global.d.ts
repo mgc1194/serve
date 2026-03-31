@@ -68,6 +68,7 @@ export interface Bank {
   account_types: AccountType[];
 }
 
+// Labels types
 export interface Label {
   id: number;
   name: string;
@@ -76,6 +77,7 @@ export interface Label {
   household_id: number;
 }
 
+// Transactions types
 export interface Transaction {
   id: number;
   date: string;
@@ -100,6 +102,32 @@ export interface FileImportResult {
   total: number;
   error: string | null;
 }
+
+// Summary types
+export interface LabelSummary {
+  label_id: number;
+  label_name: string;
+  label_color: string;
+  category: string;
+  total: number;
+}
+ 
+export interface CategorySummary {
+  category: string;
+  total: number;
+  labels: LabelSummary[];
+}
+ 
+export interface Summary {
+  earnings: CategorySummary[];
+  spending: CategorySummary[];
+  total: number;
+  balance: number;
+  uncategorised_total: number;
+  /** ISO date string "YYYY-MM-DD" of the oldest transaction in the household, or null. */
+  earliest_transaction_date: string | null;
+}
+
 
 // Returned by the API on errors (Django Ninja's default error shape).
 export interface ApiError {
