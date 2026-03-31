@@ -1,7 +1,5 @@
 """
 schemas/transactions.py — API schemas for transaction-related endpoints.
-
-Schemas define the API contract independently from the database models.
 """
 
 from datetime import date
@@ -26,8 +24,8 @@ class TransactionSchema(Schema):
     Any deduplication logic (for example, when importing from CSV) is handled
     by backend services and is not exposed through this schema.
 
-    ``label_id``, ``label_name``, and ``label_color`` are derived from the
-    related Label FK. All three are None when no label is assigned.
+    ``exclude_from_summary`` — when True this transaction is omitted from all
+    summary aggregations (earnings, spending, and balance).
     """
 
     id: int
@@ -39,6 +37,7 @@ class TransactionSchema(Schema):
     label_color: str | None
     category: str | None
     additional_labels: str | None
+    exclude_from_summary: bool
     source: str
     account_id: int
     account_name: str
@@ -48,6 +47,7 @@ class TransactionSchema(Schema):
 
 class TransactionCreateRequest(Schema):
     """Request schema for manually creating a transaction.
+
     The transaction will be deduplicated against existing transactions in the
     same account using the same SHA-256 strategy as CSV imports. If a user
     manually creates a transaction that matches an existing one (based on this
@@ -76,13 +76,14 @@ class TransactionCreateRequest(Schema):
 class TransactionUpdateRequest(Schema):
     """Request schema for editing a transaction.
 
-    ``concept`` and ``label_id`` are independently optional — either or both
-    may be provided in a single PATCH. Omitting a field leaves it unchanged.
+    All fields are independently optional — omitting a field leaves it
+    unchanged. Setting ``label_id`` to null explicitly removes the label.
+    Setting ``exclude_from_summary`` toggles summary visibility.
 
-    ``label_id`` may be set to null to explicitly remove the label from a
-    transaction. Date, amount, and account are immutable — if those need to
-    change, delete and re-create the transaction.
+    Date, amount, and account are immutable — delete and re-create to
+    change those.
     """
 
     concept: str | None = None
     label_id: int | None = None
+    exclude_from_summary: bool = False

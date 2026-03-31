@@ -136,6 +136,7 @@ export function TransactionRow({
         <TransactionActionsCell
           transaction={transaction}
           onStartEditing={() => startEditingRef.current?.()}
+          onUpdated={onUpdated}
           onDeleted={onDeleted}
           onError={setRowError}
         />

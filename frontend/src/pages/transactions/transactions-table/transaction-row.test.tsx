@@ -39,6 +39,7 @@ const TX: Transaction = {
   label_color: null,
   category: 'Groceries',
   additional_labels: null,
+  exclude_from_summary: false,
   source: 'csv',
   account_id: 1,
   account_name: "Alice's 360 Savings",

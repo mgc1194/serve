@@ -39,6 +39,16 @@ export async function updateTransactionLabel(
   });
 }
 
+export async function toggleTransactionExclusion(
+  id: number,
+  exclude: boolean,
+): Promise<Transaction> {
+  return apiFetch<Transaction>(`/transactions/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ exclude_from_summary: exclude }),
+  });
+}
+
 export async function deleteTransaction(id: number): Promise<void> {
   return apiFetch<void>(`/transactions/${id}/`, { method: 'DELETE' });
 }
@@ -50,8 +60,6 @@ export async function importTransactionsCsv(
   const formData = new FormData();
   formData.append('file', file);
 
-  // apiFetch sets Content-Type: application/json by default, but FormData
-  // needs the browser to set its own multipart boundary — so we bypass it.
   const csrfMatch = document.cookie.match(/csrftoken=([^;]+)/);
   const csrfToken = csrfMatch ? csrfMatch[1] : '';
 

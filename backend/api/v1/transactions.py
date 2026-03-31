@@ -76,6 +76,7 @@ def _serialize(t: Transaction) -> dict:
         'label_color': t.label.color if t.label else None,
         'category': t.category,
         'additional_labels': t.additional_labels,
+        'exclude_from_summary': t.exclude_from_summary,
         'source': t.source,
         'account_id': t.account_id,
         'account_name': t.account.name,
@@ -286,6 +287,10 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
             transaction.label = label
             transaction.label_id = label.pk
         update_fields.append('label')
+
+    if 'exclude_from_summary' in payload.model_fields_set:
+        transaction.exclude_from_summary = payload.exclude_from_summary
+        update_fields.append('exclude_from_summary')
 
     if not update_fields:
         raise HttpError(400, 'At least one field must be provided.')

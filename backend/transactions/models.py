@@ -193,6 +193,14 @@ class Transaction(models.Model):
 
     category = models.CharField(max_length=255, blank=True, null=True)  # noqa: DJ001
     additional_labels = models.TextField(blank=True, null=True)  # noqa: DJ001
+    exclude_from_summary = models.BooleanField(
+        default=False,
+        help_text=(
+            'When True this transaction is omitted from summary aggregations. '
+            'Use for transfers, loan proceeds, or any amount that would '
+            'otherwise distort spending/earnings totals.'
+        ),
+    )
     account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='transactions')
     imported_at = models.DateTimeField(auto_now_add=True)
 
