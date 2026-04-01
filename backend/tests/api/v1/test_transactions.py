@@ -148,14 +148,14 @@ class TestListTransactions:
     def test_returns_transactions_for_household(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()['results']
         assert len(data) == 1
         assert data[0]['id'] == transaction.id
 
     def test_returns_empty_for_household_with_no_transactions(self, client, alice, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json()['results'] == []
 
     def test_filters_by_account_id(
         self, client, alice, transaction, account, household, account_type
@@ -178,34 +178,34 @@ class TestListTransactions:
             f'/transactions/?household_id={household.id}&account_id={account.id}',
             user=alice,
         )
-        data = response.json()
+        data = response.json()['results']
         assert len(data) == 1
         assert data[0]['id'] == transaction.id
 
     def test_response_includes_account_and_bank_info(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        data = response.json()[0]
+        data = response.json()['results'][0]
         assert data['account_name'] == 'Test Account'
         assert data['bank_name'] == 'SoFi'
 
     def test_response_includes_source(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        assert response.json()[0]['source'] == 'import'
+        assert response.json()['results'][0]['source'] == 'import'
 
     def test_response_includes_label_fields(self, client, alice, labeled_transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        data = response.json()[0]
+        data = response.json()['results'][0]
         assert 'label_id' in data
         assert 'label_name' in data
         assert 'label_color' in data
 
     def test_response_includes_exclude_from_summary(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        assert 'exclude_from_summary' in response.json()[0]
+        assert 'exclude_from_summary' in response.json()['results'][0]
 
     def test_label_fields_are_none_when_unlabeled(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        data = response.json()[0]
+        data = response.json()['results'][0]
         assert data['label_id'] is None
         assert data['label_name'] is None
         assert data['label_color'] is None
@@ -214,7 +214,7 @@ class TestListTransactions:
         self, client, alice, labeled_transaction, label, household
     ):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        data = response.json()[0]
+        data = response.json()['results'][0]
         assert data['label_id'] == label.id
         assert data['label_name'] == label.name
         assert data['label_color'] == label.color
@@ -236,7 +236,7 @@ class TestListTransactions:
         )
 
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
-        data = response.json()
+        data = response.json()['results']
         assert data[0]['concept'] == 'NEWER'
         assert data[1]['concept'] == 'OLDER'
 

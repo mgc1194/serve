@@ -2,6 +2,8 @@
 schemas/transactions.py — API schemas for transaction-related endpoints.
 """
 
+import base64
+import json
 from datetime import date
 
 from ninja import Schema
@@ -24,6 +26,9 @@ class TransactionSchema(Schema):
     Any deduplication logic (for example, when importing from CSV) is handled
     by backend services and is not exposed through this schema.
 
+    ``label_id``, ``label_name``, and ``label_color`` are derived from the
+    related Label FK. All three are None when no label is assigned.
+
     ``exclude_from_summary`` — when True this transaction is omitted from all
     summary aggregations (earnings, spending, and balance).
     """
@@ -43,6 +48,40 @@ class TransactionSchema(Schema):
     account_name: str
     bank_name: str
     imported_at: str
+
+
+class PaginatedTransactionsSchema(Schema):
+    """Paginated response for the transaction list endpoint.
+
+    results         — the current page of transactions
+    count           — total number of matching transactions (for display)
+    next_cursor     — opaque cursor string to fetch the next page; null at end
+    previous_cursor — opaque cursor string to fetch the previous page; null at start
+    sort            — the active sort field
+    sort_dir        — the active sort direction
+    """
+
+    results: list[TransactionSchema]
+    count: int
+    next_cursor: str | None
+    previous_cursor: str | None
+    sort: str
+    sort_dir: str
+
+
+def encode_cursor(date_str: str, tx_id: int) -> str:
+    """Encodes a (date, id) pair into an opaque base64 cursor string."""
+    payload = json.dumps({'date': date_str, 'id': tx_id})
+    return base64.urlsafe_b64encode(payload.encode()).decode()
+
+
+def decode_cursor(cursor: str) -> tuple[str, int] | None:
+    """Decodes a cursor string back to (date_str, id). Returns None if invalid."""
+    try:
+        payload = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
+        return payload['date'], int(payload['id'])
+    except Exception:
+        return None
 
 
 class TransactionCreateRequest(Schema):
@@ -78,8 +117,8 @@ class TransactionUpdateRequest(Schema):
 
     All fields are independently optional — omitting a field leaves it
     unchanged. Setting ``label_id`` to null explicitly removes the label.
-    Setting ``exclude_from_summary`` to true or false toggles summary
-    visibility. Passing null is not permitted and returns 400.
+    ``exclude_from_summary`` must be a boolean when provided; omitting it
+    leaves the existing value unchanged.
 
     Date, amount, and account are immutable — delete and re-create to
     change those.

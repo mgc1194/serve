@@ -154,5 +154,5 @@ class BaseHandler:
         """SHA-256 hash of all raw CSV columns — intentionally uses raw data
         so that fields like 'current balance' or 'transaction id' disambiguate otherwise
         identical rows (e.g. two transactions with the same date and amount)."""
-        unique_string = '_'.join(row.astype(str))
+        unique_string = '_'.join(str(v) for v in row)
         return hashlib.sha256(unique_string.encode()).hexdigest()
