@@ -597,6 +597,14 @@ class TestUpdateTransaction:
         assert labeled_transaction.label_id == label.id
         assert float(labeled_transaction.amount) == pytest.approx(-31.20)
 
+    def test_null_exclude_from_summary_returns_400(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': None},
+            user=alice,
+        )
+        assert response.status_code == 400
+
     def test_non_member_cannot_toggle_exclusion(self, client, bob, transaction):
         response = client.patch(
             f'/transactions/{transaction.id}/',

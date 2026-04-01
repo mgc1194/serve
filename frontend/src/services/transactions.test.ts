@@ -13,6 +13,7 @@ import {
   deleteTransaction,
   importTransactionsCsv,
   listTransactions,
+  toggleTransactionExclusion,
   updateTransactionConcept,
   updateTransactionLabel,
 } from '@services/transactions';
@@ -38,6 +39,7 @@ const TX = {
   label_color: null,
   category: null,
   additional_labels: null,
+  exclude_from_summary: false,
   source: 'csv',
   account_id: 1,
   account_name: "Alice's Savings",
@@ -224,6 +226,49 @@ describe('updateTransactionLabel', () => {
   it('throws ApiError on 404 when label does not exist', async () => {
     mockFetch(404, { detail: 'Not found.' });
     await expect(updateTransactionLabel(1, 9999)).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// ── toggleTransactionExclusion ────────────────────────────────────────────────
+ 
+describe('toggleTransactionExclusion', () => {
+  it('returns the updated transaction on 200', async () => {
+    const updated = { ...TX, exclude_from_summary: true };
+    mockFetch(200, updated);
+    const result = await toggleTransactionExclusion(1, true);
+    expect(result).toEqual(updated);
+  });
+ 
+  it('sends PATCH to /transactions/{id}/', async () => {
+    const spy = mockFetch(200, TX);
+    await toggleTransactionExclusion(1, true);
+    const [url, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/transactions/1/');
+    expect(options.method).toBe('PATCH');
+  });
+ 
+  it('sends exclude_from_summary: true in the request body when excluding', async () => {
+    const spy = mockFetch(200, TX);
+    await toggleTransactionExclusion(1, true);
+    const [, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(options.body as string)).toEqual({ exclude_from_summary: true });
+  });
+ 
+  it('sends exclude_from_summary: false in the request body when including', async () => {
+    const spy = mockFetch(200, TX);
+    await toggleTransactionExclusion(1, false);
+    const [, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(options.body as string)).toEqual({ exclude_from_summary: false });
+  });
+ 
+  it('throws ApiError on 403', async () => {
+    mockFetch(403, { detail: 'You are not a member of this household.' });
+    await expect(toggleTransactionExclusion(1, true)).rejects.toMatchObject({ status: 403 });
+  });
+ 
+  it('throws ApiError on 404', async () => {
+    mockFetch(404, { detail: 'Not found.' });
+    await expect(toggleTransactionExclusion(9999, true)).rejects.toMatchObject({ status: 404 });
   });
 });
 

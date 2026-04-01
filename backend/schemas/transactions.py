@@ -78,7 +78,8 @@ class TransactionUpdateRequest(Schema):
 
     All fields are independently optional — omitting a field leaves it
     unchanged. Setting ``label_id`` to null explicitly removes the label.
-    Setting ``exclude_from_summary`` toggles summary visibility.
+    Setting ``exclude_from_summary`` to true or false toggles summary
+    visibility. Passing null is not permitted and returns 400.
 
     Date, amount, and account are immutable — delete and re-create to
     change those.
@@ -86,4 +87,4 @@ class TransactionUpdateRequest(Schema):
 
     concept: str | None = None
     label_id: int | None = None
-    exclude_from_summary: bool = False
+    exclude_from_summary: bool | None = None

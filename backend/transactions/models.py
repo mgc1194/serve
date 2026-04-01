@@ -169,6 +169,7 @@ class Transaction(models.Model):
 
     category and additional_labels are manually assigned and never overwritten
     on re-import.
+    exclude_from_summary is user-controlled and never overwritten on re-import.
     """
 
     class Source(models.TextChoices):
