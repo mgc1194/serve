@@ -97,6 +97,7 @@ def transaction(db, account):
         date='2026-01-15',
         concept='TRADER JOES',
         amount=-45.50,
+        exclude_from_summary=False,
         account=account,
     )
 
@@ -110,6 +111,7 @@ def labeled_transaction(db, account, label):
         date='2026-01-16',
         concept='WHOLE FOODS',
         amount=-31.20,
+        exclude_from_summary=False,
         account=account,
         label=label,
     )
@@ -196,6 +198,10 @@ class TestListTransactions:
         assert 'label_id' in data
         assert 'label_name' in data
         assert 'label_color' in data
+
+    def test_response_includes_exclude_from_summary(self, client, alice, transaction, household):
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        assert 'exclude_from_summary' in response.json()[0]
 
     def test_label_fields_are_none_when_unlabeled(self, client, alice, transaction, household):
         response = client.get(f'/transactions/?household_id={household.id}', user=alice)
@@ -310,6 +316,19 @@ class TestCreateTransaction:
         )
         assert response.json()['source'] == 'manual'
 
+    def test_new_transaction_not_excluded_from_summary(self, client, alice, account):
+        response = client.post(
+            '/transactions/',
+            json={
+                'account_id': account.id,
+                'date': '2026-02-01',
+                'concept': 'NETFLIX',
+                'amount': -15.99,
+            },
+            user=alice,
+        )
+        assert response.json()['exclude_from_summary'] is False
+
     def test_blank_concept_returns_400(self, client, alice, account):
         response = client.post(
             '/transactions/',
@@ -380,7 +399,7 @@ class TestCreateTransaction:
 
 @pytest.mark.django_db
 class TestUpdateTransaction:
-    # ── Concept updates (existing behaviour) ──────────────────────────────────
+    # ── Concept updates ───────────────────────────────────────────────────────
 
     def test_updates_concept_successfully(self, client, alice, transaction):
         response = client.patch(
@@ -524,6 +543,75 @@ class TestUpdateTransaction:
             user=alice,
         )
         assert response.status_code == 404
+
+    # ── exclude_from_summary ──────────────────────────────────────────────────
+
+    def test_exclude_from_summary_defaults_to_false(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'concept': 'ANY'},
+            user=alice,
+        )
+        assert response.json()['exclude_from_summary'] is False
+
+    def test_can_set_exclude_from_summary_to_true(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': True},
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert response.json()['exclude_from_summary'] is True
+
+    def test_exclude_from_summary_persists_to_database(self, client, alice, transaction):
+        client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': True},
+            user=alice,
+        )
+        transaction.refresh_from_db()
+        assert transaction.exclude_from_summary is True
+
+    def test_can_set_exclude_from_summary_back_to_false(self, client, alice, transaction):
+        transaction.exclude_from_summary = True
+        transaction.save()
+
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': False},
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert response.json()['exclude_from_summary'] is False
+
+    def test_other_fields_unaffected_when_toggling_exclusion(
+        self, client, alice, labeled_transaction, label
+    ):
+        client.patch(
+            f'/transactions/{labeled_transaction.id}/',
+            json={'exclude_from_summary': True},
+            user=alice,
+        )
+        labeled_transaction.refresh_from_db()
+        assert labeled_transaction.concept == 'WHOLE FOODS'
+        assert labeled_transaction.label_id == label.id
+        assert float(labeled_transaction.amount) == pytest.approx(-31.20)
+
+    def test_null_exclude_from_summary_returns_400(self, client, alice, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': None},
+            user=alice,
+        )
+        assert response.status_code == 400
+
+    def test_non_member_cannot_toggle_exclusion(self, client, bob, transaction):
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': True},
+            user=bob,
+        )
+        assert response.status_code == 403
 
     # ── Shared error cases ────────────────────────────────────────────────────
 

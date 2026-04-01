@@ -4,7 +4,7 @@ api/v1/transactions.py — Transaction management endpoints.
 Endpoints:
     GET    /api/v1/transactions/          — list transactions for a household
     POST   /api/v1/transactions/          — manually create a transaction
-    PATCH  /api/v1/transactions/{id}/     — edit a transaction's concept and/or label
+    PATCH  /api/v1/transactions/{id}/     — edit concept, label, or summary visibility
     DELETE /api/v1/transactions/{id}/     — delete a transaction
     POST   /api/v1/transactions/import    — upload and import a single CSV file
 """
@@ -76,6 +76,7 @@ def _serialize(t: Transaction) -> dict:
         'label_color': t.label.color if t.label else None,
         'category': t.category,
         'additional_labels': t.additional_labels,
+        'exclude_from_summary': t.exclude_from_summary,
         'source': t.source,
         'account_id': t.account_id,
         'account_name': t.account.name,
@@ -228,7 +229,7 @@ def create_transaction(request, payload: TransactionCreateRequest):
 
 @router.patch('/transactions/{transaction_id}/', response=TransactionSchema)
 def update_transaction(request, transaction_id: int, payload: TransactionUpdateRequest):
-    """Edits a transaction's concept and/or label.
+    """Edits a transaction's concept, label, or summary visibility.
 
     Both fields are independently optional — omitting a field leaves it
     unchanged. Setting ``label_id`` to null explicitly removes the label.
@@ -242,7 +243,8 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
     Args:
         request: The HTTP request object. Must be authenticated.
         transaction_id: Primary key of the transaction to edit.
-        payload: TransactionUpdateRequest with optional concept and label_id.
+        payload: TransactionUpdateRequest with optional concept, label_id,
+                 and/or exclude_from_summary.
 
     Returns:
         The updated TransactionSchema.
@@ -286,6 +288,13 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
             transaction.label = label
             transaction.label_id = label.pk
         update_fields.append('label')
+
+    if (
+        'exclude_from_summary' in payload.model_fields_set
+        and payload.exclude_from_summary is not None
+    ):
+        transaction.exclude_from_summary = payload.exclude_from_summary
+        update_fields.append('exclude_from_summary')
 
     if not update_fields:
         raise HttpError(400, 'At least one field must be provided.')

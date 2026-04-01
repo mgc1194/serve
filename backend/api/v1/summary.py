@@ -124,7 +124,7 @@ def get_summary(
     earliest_transaction_date = earliest_date.isoformat() if earliest_date else None
 
     # ── Base queryset scoped to household (+ optional month filter) ───────────
-    base_qs = all_qs
+    base_qs = all_qs.filter(exclude_from_summary=False)
     if year is not None and month_num is not None:
         base_qs = base_qs.filter(date__year=year, date__month=month_num)
 

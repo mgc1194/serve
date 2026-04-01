@@ -1,20 +1,21 @@
 // pages/transactions/transactions-table/transaction-actions-cell.tsx —
-// Edit and delete actions for a transaction row. Shows an edit button (triggers
-// concept edit mode via a ref) and a delete button that requires a confirmation
-// step before committing.
+// Edit, exclude-from-summary, and delete actions for a transaction row.
 
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { Box, IconButton, TableCell, Tooltip } from '@mui/material';
 import { useState } from 'react';
 
 import { DeleteConfirmation } from '@components/delete-confirmation';
 import type { Transaction } from '@serve/types/global';
-import { ApiError, deleteTransaction } from '@services/transactions';
+import { ApiError, deleteTransaction, toggleTransactionExclusion } from '@services/transactions';
 
 interface TransactionActionsCellProps {
   transaction: Transaction;
   onStartEditing: () => void;
+  onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
   onError: (message: string | null) => void;
 }
@@ -22,11 +23,29 @@ interface TransactionActionsCellProps {
 export function TransactionActionsCell({
   transaction,
   onStartEditing,
+  onUpdated,
   onDeleted,
   onError,
 }: TransactionActionsCellProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isTogglingExclusion, setIsTogglingExclusion] = useState(false);
+
+  async function handleToggleExclusion() {
+    setIsTogglingExclusion(true);
+    onError(null);
+    try {
+      const updated = await toggleTransactionExclusion(
+        transaction.id,
+        !transaction.exclude_from_summary,
+      );
+      onUpdated(updated);
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : 'Could not update transaction.');
+    } finally {
+      setIsTogglingExclusion(false);
+    }
+  }
 
   async function handleDelete() {
     setIsDeleting(true);
@@ -55,6 +74,8 @@ export function TransactionActionsCell({
     );
   }
 
+  const isExcluded = transaction.exclude_from_summary;
+
   return (
     <TableCell sx={{ py: 1.5 }}>
       <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -63,6 +84,23 @@ export function TransactionActionsCell({
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+
+        <Tooltip title={isExcluded ? 'Include in summary' : 'Exclude from summary'}>
+          <IconButton
+            size="small"
+            onClick={handleToggleExclusion}
+            disabled={isTogglingExclusion}
+            aria-label={isExcluded ? 'Include in summary' : 'Exclude from summary'}
+            aria-pressed={isExcluded}
+            sx={{ color: isExcluded ? 'text.disabled' : 'text.secondary' }}
+          >
+            {isExcluded
+              ? <VisibilityOffOutlinedIcon fontSize="small" />
+              : <VisibilityOutlinedIcon fontSize="small" />
+            }
+          </IconButton>
+        </Tooltip>
+
         <Tooltip title="Delete">
           <IconButton
             size="small"

@@ -10,6 +10,7 @@ export interface Transaction {
   label_color: string | null;
   category: string | null;
   additional_labels: string | null;
+  exclude_from_summary: boolean;
   source: string;
   account_id: number;
   account_name: string;

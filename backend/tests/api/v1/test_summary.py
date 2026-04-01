@@ -74,6 +74,13 @@ def food_label(db, household):
 
 
 @pytest.fixture
+def income_label(db, household):
+    return Label.objects.create(
+        name='Income', color='#036628', category='Income', household=household
+    )
+
+
+@pytest.fixture
 def transport_label(db, household):
     return Label.objects.create(
         name='Gas', color='#2563eb', category='Transport', household=household
@@ -319,3 +326,60 @@ class TestSummaryEarliestDate:
         data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
         # Should reflect our household only, not the other household's 2020 date
         assert data['earliest_transaction_date'] == '2026-03-01'
+
+
+@pytest.mark.django_db
+class TestSummaryExcludesTransactions:
+    def test_excluded_spending_label_not_in_summary(
+        self, auth_client, account, household, food_label
+    ):
+        tx = _tx(account, -100.00, food_label, suffix='excl_spend')
+        tx.exclude_from_summary = True
+        tx.save()
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['spending'] == []
+        assert data['total'] == 0.0
+
+    def test_excluded_earnings_label_not_in_summary(
+        self, auth_client, account, household, income_label
+    ):
+        tx = _tx(account, 500.00, income_label, suffix='excl_earn')
+        tx.exclude_from_summary = True
+        tx.save()
+
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['earnings'] == []
+        assert data['total'] == 0.0
+
+    def test_excluded_unlabelled_transaction_not_in_uncategorised_total(
+        self, auth_client, account, household
+    ):
+        tx = _tx(account, -50.00, suffix='excl_uncat')
+        tx.exclude_from_summary = True
+        tx.save()
+
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['uncategorised_total'] == 0.0
+
+    def test_only_excluded_transactions_are_filtered(
+        self, auth_client, account, household, food_label
+    ):
+        _tx(account, -30.00, food_label, suffix='incl')
+        excluded = _tx(account, -70.00, food_label, suffix='excl')
+        excluded.exclude_from_summary = True
+        excluded.save()
+
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['spending'][0]['labels'][0]['total'] == pytest.approx(-30.00)
+
+    def test_earliest_transaction_date_includes_excluded_transactions(
+        self, auth_client, account, household, food_label
+    ):
+        # Excluded transactions should still anchor the date bounds
+        old = _tx(account, -10.00, food_label, date='2024-01-01', suffix='old_excl')
+        old.exclude_from_summary = True
+        old.save()
+        _tx(account, -20.00, food_label, date='2026-03-01', suffix='recent')
+
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['earliest_transaction_date'] == '2024-01-01'
