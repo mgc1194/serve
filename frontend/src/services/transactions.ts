@@ -1,6 +1,12 @@
 // services/transactions.ts — Typed fetch functions for transaction endpoints.
 
-import type { Transaction, FileImportResult } from '@serve/types/global';
+import type {
+  FileImportResult,
+  PaginatedTransactions,
+  SortDir,
+  SortField,
+  Transaction,
+} from '@serve/types/global';
 import { apiFetch, ApiError } from '@services/api-client';
 
 export { ApiError };
@@ -8,15 +14,23 @@ export { ApiError };
 export interface ListTransactionsParams {
   household_id: number;
   account_id?: number;
+  cursor?: string;
+  previous_cursor?: string;
+  sort?: SortField;
+  sort_dir?: SortDir;
 }
 
 export async function listTransactions(
   params: ListTransactionsParams,
-): Promise<Transaction[]> {
+): Promise<PaginatedTransactions> {
   const query = new URLSearchParams();
   query.set('household_id', String(params.household_id));
   if (params.account_id != null) query.set('account_id', String(params.account_id));
-  return apiFetch<Transaction[]>(`/transactions/?${query.toString()}`);
+  if (params.cursor != null) query.set('cursor', params.cursor);
+  if (params.previous_cursor != null) query.set('previous_cursor', params.previous_cursor);
+  if (params.sort != null) query.set('sort', params.sort);
+  if (params.sort_dir != null) query.set('sort_dir', params.sort_dir);
+  return apiFetch<PaginatedTransactions>(`/transactions/?${query.toString()}`);
 }
 
 export async function updateTransactionConcept(

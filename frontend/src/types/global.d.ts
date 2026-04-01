@@ -9,4 +9,4 @@ export type { User, LoginRequest, RegisterRequest } from '@serve/types/auth';
 export type { Household, HouseholdDetail, HouseholdMember } from '@serve/types/households';
 export type { Label } from '@serve/types/labels';
 export type { CategorySummary, LabelSummary, Summary } from '@serve/types/summary';
-export type { FileImportResult, Transaction } from '@serve/types/transactions';
+export type { FileImportResult, Transaction, PaginatedTransactions, SortField, SortDir } from '@serve/types/transactions';

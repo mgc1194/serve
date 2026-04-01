@@ -1,52 +1,23 @@
-// pages/transactions/transactions-table/use-sort.ts — Sort state and
-// sortTransactions helper for the transactions table.
+// pages/transactions/transactions-table/use-sort.ts — Sort state for the
+// transactions table header. Sorting is performed server-side; this hook
+// manages the active sort key and direction and emits changes via onSortChange.
 
-import { useState } from 'react';
+import { type ColumnKey } from '@pages/transactions/transactions-table/columns';
+import type { SortDir, SortField } from '@serve/types/global';
 
-import { type ColumnKey } from '@serve/pages/transactions/transactions-table/columns';
-import type { Transaction } from '@serve/types/global';
+export type { SortDir };
 
-export type SortDir = 'asc' | 'desc';
-
-export function sortTransactions(
-  txns: Transaction[],
-  key: ColumnKey,
-  dir: SortDir,
-): Transaction[] {
-  return [...txns].sort((a, b) => {
-    let av: string | number;
-    let bv: string | number;
-
-    switch (key) {
-      case 'date':     av = a.date;                             bv = b.date;                             break;
-      case 'concept':  av = a.concept.toLowerCase();            bv = b.concept.toLowerCase();            break;
-      case 'amount':   av = a.amount;                           bv = b.amount;                           break;
-      case 'account':  av = a.account_name.toLowerCase();       bv = b.account_name.toLowerCase();       break;
-      case 'label':    av = a.label_name?.toLowerCase() ?? '';  bv = b.label_name?.toLowerCase() ?? '';  break;
-      case 'category': av = a.category?.toLowerCase()   ?? '';  bv = b.category?.toLowerCase()   ?? '';  break;
-    }
-
-    if (av < bv) return dir === 'asc' ? -1 : 1;
-    if (av > bv) return dir === 'asc' ?  1 : -1;
-    return 0;
-  });
+/** Maps ColumnKey to the SortField the server understands. */
+export function columnKeyToSortField(key: ColumnKey): SortField {
+  return key as SortField;
 }
 
-export interface UseSortReturn {
-  sortKey: ColumnKey;
-  sortDir: SortDir;
-  applySort: (key: ColumnKey) => void;
-}
-
-/** Manages sort key + direction. Default mirrors the server default: date desc. */
-export function useSort(): UseSortReturn {
-  const [sortKey, setSortKey] = useState<ColumnKey>('date');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-
-  function applySort(key: ColumnKey) {
-    setSortDir(prev => (sortKey === key && prev === 'asc' ? 'desc' : 'asc'));
-    setSortKey(key);
-  }
-
-  return { sortKey, sortDir, applySort };
+/** Returns the toggled sort direction for a column click. */
+export function nextSortDir(
+  currentKey: ColumnKey,
+  clickedKey: ColumnKey,
+  currentDir: SortDir,
+): SortDir {
+  if (currentKey !== clickedKey) return 'asc';
+  return currentDir === 'asc' ? 'desc' : 'asc';
 }
