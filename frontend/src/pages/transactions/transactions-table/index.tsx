@@ -44,6 +44,7 @@ interface TransactionsTableProps {
   count: number;
   offset: number;
   page: number;
+  pageSize: number;
   nextCursor: string | null;
   previousCursor: string | null;
   onNextPage: () => void;
@@ -66,6 +67,7 @@ export function TransactionsTable({
   count,
   offset,
   page,
+  pageSize,
   nextCursor,
   previousCursor,
   onNextPage,
@@ -173,10 +175,10 @@ export function TransactionsTable({
                 {(() => {
                   // Use exact offset when the backend provides it (date sort).
                   // Fall back to page-based calculation for other sort fields.
-                  const from = offset > 0 ? offset + 1 : (page - 1) * 20 + 1;
+                  const from = offset > 0 ? offset + 1 : (page - 1) * pageSize + 1;
                   const to = offset > 0
                     ? offset + transactions.length
-                    : (page - 1) * 20 + transactions.length;
+                    : (page - 1) * pageSize + transactions.length;
                   if (from === 1 && to === count) {
                     return `${count.toLocaleString()} transaction${count !== 1 ? 's' : ''}`;
                   }

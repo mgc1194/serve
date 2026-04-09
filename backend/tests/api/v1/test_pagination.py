@@ -168,7 +168,9 @@ class TestPaginationCorrectness:
                 break
         assert len(all_ids) == 55
 
-    def test_second_page_has_five_results(self, client, alice, household, fifty_five_transactions):
+    def test_second_page_has_twenty_results(
+        self, client, alice, household, fifty_five_transactions
+    ):
         first = client.get(f'/transactions/?household_id={household.id}', user=alice).json()
         second = client.get(
             f'/transactions/?household_id={household.id}&cursor={first["next_cursor"]}',
@@ -179,6 +181,13 @@ class TestPaginationCorrectness:
     def test_invalid_cursor_returns_400(self, client, alice, household):
         response = client.get(
             f'/transactions/?household_id={household.id}&cursor=notavalidcursor',
+            user=alice,
+        )
+        assert response.status_code == 400
+
+    def test_both_cursors_returns_400(self, client, alice, household):
+        response = client.get(
+            f'/transactions/?household_id={household.id}&cursor=abc&previous_cursor=xyz',
             user=alice,
         )
         assert response.status_code == 400
@@ -323,11 +332,11 @@ class TestBackwardNavigation:
             backward_ids.extend(t['id'] for t in data['results'])
             prev = data['previous_cursor']
 
-        # Forward covers all 55; backward covers the first 35 (all but last page)
-        assert (
-            set(forward_ids) == set(range(min(forward_ids), max(forward_ids) + 1))
-            or len(forward_ids) == 55
-        )
+        # Forward navigation must cover all 55 transactions with no duplicates
+        assert len(set(forward_ids)) == 55
+        # Backward navigation covers the first 40 (pages 1 and 2 of 3)
+        # and must be a subset of the forward IDs with no duplicates
+        assert len(backward_ids) == len(set(backward_ids))
         assert set(backward_ids).issubset(set(forward_ids))
 
 

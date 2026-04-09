@@ -31,6 +31,8 @@ import { listTransactions, ApiError } from '@services/transactions';
 
 const DEFAULT_SORT: SortField = 'date';
 const DEFAULT_DIR: SortDir = 'desc';
+// Must match PAGE_SIZE in backend/api/v1/transactions.py
+const PAGE_SIZE = 20;
 
 export function TransactionsPage() {
   const navigate = useNavigate();
@@ -49,6 +51,7 @@ export function TransactionsPage() {
   const sortDir = (searchParams.get('sort_dir') ?? DEFAULT_DIR) as SortDir;
   const cursor = searchParams.get('cursor') ?? undefined;
   const previousCursor = searchParams.get('previous_cursor') ?? undefined;
+  const page = Number(searchParams.get('page') ?? '1');
 
   // ── Component state ─────────────────────────────────────────────────────────
   const [paginated, setPaginated] = useState<PaginatedTransactions | null>(null);
@@ -56,7 +59,7 @@ export function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [page, setPage] = useState(1);
+
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   // loadRef gives the retry button a stable reference to the latest fetch
@@ -110,6 +113,7 @@ export function TransactionsPage() {
     const base: Record<string, string> = {};
     if (sortKey !== DEFAULT_SORT) base.sort = sortKey;
     if (sortDir !== DEFAULT_DIR) base.sort_dir = sortDir;
+    if (page > 1) base.page = String(page);
     for (const [k, v] of Object.entries(overrides)) {
       if (v !== undefined) base[k] = v;
       else delete base[k];
@@ -118,25 +122,31 @@ export function TransactionsPage() {
   }
 
   function handleSortChange(field: SortField, dir: SortDir) {
-    setPage(1);
     setSearchParams(buildParams({
       sort: field,
       sort_dir: dir,
       cursor: undefined,
       previous_cursor: undefined,
+      page: undefined,
     }));
   }
 
   function handleNextPage() {
     if (paginated?.next_cursor == null) return;
-    setPage(p => p + 1);
-    setSearchParams(buildParams({ cursor: paginated.next_cursor, previous_cursor: undefined }));
+    setSearchParams(buildParams({
+      cursor: paginated.next_cursor,
+      previous_cursor: undefined,
+      page: String(page + 1),
+    }));
   }
 
   function handlePreviousPage() {
     if (paginated?.previous_cursor == null) return;
-    setPage(p => Math.max(1, p - 1));
-    setSearchParams(buildParams({ previous_cursor: paginated.previous_cursor, cursor: undefined }));
+    setSearchParams(buildParams({
+      previous_cursor: paginated.previous_cursor,
+      cursor: undefined,
+      page: String(Math.max(1, page - 1)),
+    }));
   }
 
   function handleUpdated(updated: Transaction) {
@@ -157,8 +167,7 @@ export function TransactionsPage() {
 
   function handleImported(_result: FileImportResult) {
     setImportOpen(false);
-    setPage(1);
-    setSearchParams(buildParams({ cursor: undefined, previous_cursor: undefined }));
+    setSearchParams(buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }));
   }
 
   return (
@@ -200,6 +209,7 @@ export function TransactionsPage() {
           count={paginated?.count ?? 0}
           offset={paginated?.offset ?? 0}
           page={page}
+          pageSize={PAGE_SIZE}
           nextCursor={paginated?.next_cursor ?? null}
           previousCursor={paginated?.previous_cursor ?? null}
           onNextPage={handleNextPage}

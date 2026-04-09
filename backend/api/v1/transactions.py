@@ -165,7 +165,7 @@ def _get_sort_value(row, sort: str) -> str:
     return row.date.isoformat()
 
 
-def _apply_cursor_filter(qs, sort: str, direction: str, sort_value: str, cursor_id: int):
+def _apply_cursor_filter(qs, sort: SortField, direction: str, sort_value: str, cursor_id: int):
     """Filters to rows strictly after the cursor in the given direction.
 
     All nullable fields are coalesced to '' in the annotation, so '' is a
@@ -188,7 +188,7 @@ def _apply_cursor_filter(qs, sort: str, direction: str, sort_value: str, cursor_
         return qs.filter(Q(**{f'{f}__gt': sort_value}) | Q(**{f: sort_value, 'id__gt': cursor_id}))
 
 
-def _compute_offset(base_qs, sort: str, sort_dir: str, first_row) -> int:
+def _compute_offset(base_qs, sort: SortField, sort_dir: str, first_row) -> int:
     """Zero-based index of first_row. Only implemented for date sort."""
     if sort != SortField.date:
         return 0
@@ -229,8 +229,10 @@ def list_transactions(
         request:         The HTTP request. Must be authenticated.
         household_id:    The household to list transactions for.
         account_id:      Optional account filter.
-        cursor:          Opaque forward-pagination cursor.
-        previous_cursor: Opaque backward-pagination cursor.
+        cursor:          Opaque forward-pagination cursor. Mutually exclusive
+                         with previous_cursor.
+        previous_cursor: Opaque backward-pagination cursor. Mutually exclusive
+                         with cursor.
         sort:            Sort field. Default: date.
         sort_dir:        'asc' or 'desc'. Default: desc.
 
@@ -238,12 +240,16 @@ def list_transactions(
         PaginatedTransactionsSchema.
 
     Raises:
-        HttpError 400: invalid sort_dir or unparseable cursor.
+        HttpError 400: invalid sort_dir, unparseable cursor, or both cursor
+                     and previous_cursor provided simultaneously.
         HttpError 403: user not a household member.
         HttpError 404: household not found.
     """
     if sort_dir not in ('asc', 'desc'):
         raise HttpError(400, "sort_dir must be 'asc' or 'desc'.")
+
+    if cursor is not None and previous_cursor is not None:
+        raise HttpError(400, "'cursor' and 'previous_cursor' are mutually exclusive.")
 
     household = get_object_or_404(Household, pk=household_id)
     if not household.users.filter(pk=request.user.pk).exists():

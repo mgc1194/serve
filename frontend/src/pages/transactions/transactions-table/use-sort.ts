@@ -1,6 +1,7 @@
-// pages/transactions/transactions-table/use-sort.ts — Sort state for the
-// transactions table header. Sorting is performed server-side; this hook
-// manages the active sort key and direction and emits changes via onSortChange.
+// pages/transactions/transactions-table/use-sort.ts — Pure sort helpers for
+// the transactions table. Sorting is performed server-side; sort state lives
+// in the URL and is owned by TransactionsPage. This module exports two
+// stateless utility functions used by TransactionsTable to compute sort changes.
 
 import { type ColumnKey } from '@pages/transactions/transactions-table/columns';
 import type { SortDir, SortField } from '@serve/types/global';

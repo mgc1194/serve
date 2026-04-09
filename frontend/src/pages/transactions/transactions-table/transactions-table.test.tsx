@@ -79,6 +79,7 @@ function setup(props: Partial<React.ComponentProps<typeof TransactionsTable>> = 
       count={0}
       offset={0}
       page={1}
+      pageSize={20}
       nextCursor={null}
       previousCursor={null}
       onNextPage={onNextPage}
