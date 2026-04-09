@@ -193,6 +193,7 @@ export function TransactionsPage() {
           onDeleted={handleDeleted}
           onImport={() => setImportOpen(true)}
           count={paginated?.count ?? 0}
+          offset={paginated?.offset ?? 0}
           nextCursor={paginated?.next_cursor ?? null}
           previousCursor={paginated?.previous_cursor ?? null}
           onNextPage={handleNextPage}

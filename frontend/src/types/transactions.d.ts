@@ -25,6 +25,7 @@ export type SortDir = 'asc' | 'desc';
 export interface PaginatedTransactions {
   results: Transaction[];
   count: number;
+  offset: number;
   next_cursor: string | null;
   previous_cursor: string | null;
   sort: SortField;

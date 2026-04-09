@@ -55,6 +55,8 @@ class PaginatedTransactionsSchema(Schema):
 
     results         — the current page of transactions
     count           — total number of matching transactions (for display)
+    offset          — zero-based index of the first result on this page;
+                      used by the frontend to display "X-Y of Z"
     next_cursor     — opaque cursor string to fetch the next page; null at end
     previous_cursor — opaque cursor string to fetch the previous page; null at start
     sort            — the active sort field
@@ -63,23 +65,29 @@ class PaginatedTransactionsSchema(Schema):
 
     results: list[TransactionSchema]
     count: int
+    offset: int
     next_cursor: str | None
     previous_cursor: str | None
     sort: str
     sort_dir: str
 
 
-def encode_cursor(date_str: str, tx_id: int) -> str:
-    """Encodes a (date, id) pair into an opaque base64 cursor string."""
-    payload = json.dumps({'date': date_str, 'id': tx_id})
+def encode_cursor(sort_value: str, tx_id: int) -> str:
+    """Encodes a (sort_value, id) pair into an opaque base64 cursor string.
+
+    sort_value is the string representation of the sorted field's value for
+    the boundary row. Using a string keeps the cursor format uniform across
+    all sort fields (date, concept, amount, label name, etc.).
+    """
+    payload = json.dumps({'v': sort_value, 'id': tx_id})
     return base64.urlsafe_b64encode(payload.encode()).decode()
 
 
 def decode_cursor(cursor: str) -> tuple[str, int] | None:
-    """Decodes a cursor string back to (date_str, id). Returns None if invalid."""
+    """Decodes a cursor string back to (sort_value, id). Returns None if invalid."""
     try:
         payload = json.loads(base64.urlsafe_b64decode(cursor.encode()).decode())
-        return payload['date'], int(payload['id'])
+        return str(payload['v']), int(payload['id'])
     except Exception:
         return None
 

@@ -69,6 +69,7 @@ function setup(props: Partial<React.ComponentProps<typeof TransactionsTable>> = 
       onDeleted={onDeleted}
       onImport={onImport}
       count={0}
+      offset={0}
       nextCursor={null}
       previousCursor={null}
       onNextPage={onNextPage}
@@ -179,7 +180,7 @@ describe('TransactionsTable pagination', () => {
   });
 
   it('next page button is enabled when nextCursor is set', () => {
-    setup({ transactions: [TX], count: 51, nextCursor: 'abc123' });
+    setup({ transactions: [TX], count: 21, nextCursor: 'abc123' });
     expect(screen.getByRole('button', { name: /next page/i }).hasAttribute('disabled')).toBe(false);
   });
 
@@ -189,18 +190,18 @@ describe('TransactionsTable pagination', () => {
   });
 
   it('previous page button is enabled when previousCursor is set', () => {
-    setup({ transactions: [TX], count: 51, previousCursor: 'xyz789' });
+    setup({ transactions: [TX], count: 21, previousCursor: 'xyz789' });
     expect(screen.getByRole('button', { name: /previous page/i }).hasAttribute('disabled')).toBe(false);
   });
 
   it('calls onNextPage when next button is clicked', () => {
-    const { onNextPage } = setup({ transactions: [TX], count: 51, nextCursor: 'abc123' });
+    const { onNextPage } = setup({ transactions: [TX], count: 21, nextCursor: 'abc123' });
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(onNextPage).toHaveBeenCalledOnce();
   });
 
   it('calls onPreviousPage when previous button is clicked', () => {
-    const { onPreviousPage } = setup({ transactions: [TX], count: 51, previousCursor: 'xyz789' });
+    const { onPreviousPage } = setup({ transactions: [TX], count: 21, previousCursor: 'xyz789' });
     fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
     expect(onPreviousPage).toHaveBeenCalledOnce();
   });

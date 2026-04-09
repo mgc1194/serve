@@ -42,6 +42,7 @@ interface TransactionsTableProps {
   onImport: () => void;
   // Pagination
   count: number;
+  offset: number;
   nextCursor: string | null;
   previousCursor: string | null;
   onNextPage: () => void;
@@ -62,6 +63,7 @@ export function TransactionsTable({
   onDeleted,
   onImport,
   count,
+  offset,
   nextCursor,
   previousCursor,
   onNextPage,
@@ -166,7 +168,9 @@ export function TransactionsTable({
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                {count.toLocaleString()} transaction{count !== 1 ? 's' : ''}
+                {offset > 0 || nextCursor != null
+                  ? `${(offset + 1).toLocaleString()}–${(offset + transactions.length).toLocaleString()} of ${count.toLocaleString()} transactions`
+                  : `${count.toLocaleString()} transaction${count !== 1 ? 's' : ''}`}
               </Typography>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
