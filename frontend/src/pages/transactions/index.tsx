@@ -56,6 +56,7 @@ export function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   // loadRef gives the retry button a stable reference to the latest fetch
@@ -117,6 +118,7 @@ export function TransactionsPage() {
   }
 
   function handleSortChange(field: SortField, dir: SortDir) {
+    setPage(1);
     setSearchParams(buildParams({
       sort: field,
       sort_dir: dir,
@@ -127,11 +129,13 @@ export function TransactionsPage() {
 
   function handleNextPage() {
     if (paginated?.next_cursor == null) return;
+    setPage(p => p + 1);
     setSearchParams(buildParams({ cursor: paginated.next_cursor, previous_cursor: undefined }));
   }
 
   function handlePreviousPage() {
     if (paginated?.previous_cursor == null) return;
+    setPage(p => Math.max(1, p - 1));
     setSearchParams(buildParams({ previous_cursor: paginated.previous_cursor, cursor: undefined }));
   }
 
@@ -153,6 +157,7 @@ export function TransactionsPage() {
 
   function handleImported(_result: FileImportResult) {
     setImportOpen(false);
+    setPage(1);
     setSearchParams(buildParams({ cursor: undefined, previous_cursor: undefined }));
   }
 
@@ -194,6 +199,7 @@ export function TransactionsPage() {
           onImport={() => setImportOpen(true)}
           count={paginated?.count ?? 0}
           offset={paginated?.offset ?? 0}
+          page={page}
           nextCursor={paginated?.next_cursor ?? null}
           previousCursor={paginated?.previous_cursor ?? null}
           onNextPage={handleNextPage}

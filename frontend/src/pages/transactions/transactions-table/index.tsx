@@ -43,6 +43,7 @@ interface TransactionsTableProps {
   // Pagination
   count: number;
   offset: number;
+  page: number;
   nextCursor: string | null;
   previousCursor: string | null;
   onNextPage: () => void;
@@ -64,6 +65,7 @@ export function TransactionsTable({
   onImport,
   count,
   offset,
+  page,
   nextCursor,
   previousCursor,
   onNextPage,
@@ -168,9 +170,18 @@ export function TransactionsTable({
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                {offset > 0 || nextCursor != null
-                  ? `${(offset + 1).toLocaleString()}–${(offset + transactions.length).toLocaleString()} of ${count.toLocaleString()} transactions`
-                  : `${count.toLocaleString()} transaction${count !== 1 ? 's' : ''}`}
+                {(() => {
+                  // Use exact offset when the backend provides it (date sort).
+                  // Fall back to page-based calculation for other sort fields.
+                  const from = offset > 0 ? offset + 1 : (page - 1) * 20 + 1;
+                  const to = offset > 0
+                    ? offset + transactions.length
+                    : (page - 1) * 20 + transactions.length;
+                  if (from === 1 && to === count) {
+                    return `${count.toLocaleString()} transaction${count !== 1 ? 's' : ''}`;
+                  }
+                  return `${from.toLocaleString()}–${to.toLocaleString()} of ${count.toLocaleString()} transactions`;
+                })()}
               </Typography>
 
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
