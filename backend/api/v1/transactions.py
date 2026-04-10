@@ -12,8 +12,11 @@ Endpoints:
 import hashlib
 import io
 import logging
+from enum import StrEnum
 
 from django.db import IntegrityError
+from django.db.models import F, Q, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from ninja import File, Router
 from ninja.errors import HttpError
@@ -22,9 +25,12 @@ from ninja.security import django_auth
 
 from schemas.transactions import (
     FileImportResult,
+    PaginatedTransactionsSchema,
     TransactionCreateRequest,
     TransactionSchema,
     TransactionUpdateRequest,
+    decode_cursor,
+    encode_cursor,
 )
 from transactions.handlers.accounts import ACCOUNT_HANDLERS
 from transactions.models import Account, Label, Transaction
@@ -35,6 +41,31 @@ logger = logging.getLogger(__name__)
 
 router = Router(tags=['Transactions'], auth=django_auth)
 
+PAGE_SIZE = 20
+
+
+class SortField(StrEnum):
+    date = 'date'
+    concept = 'concept'
+    amount = 'amount'
+    account = 'account'
+    label = 'label'
+    category = 'category'
+
+
+# ── Field metadata ────────────────────────────────────────────────────────────
+
+# Maps SortField to the ORM field name used in ORDER BY and WHERE.
+# label and category use annotated fields so Django emits LEFT JOINs
+# rather than INNER JOINs (which would silently drop unlabelled rows).
+_SORT_FIELD = {
+    SortField.date: 'date',
+    SortField.concept: 'concept',
+    SortField.amount: 'amount',
+    SortField.account: 'account_name_sort',
+    SortField.label: 'label_name_sort',
+    SortField.category: 'category_sort',
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,47 +139,196 @@ def _make_dedupe_hash(account_id: int, date: str, concept: str, amount: str) -> 
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _apply_sort(qs, sort: str, direction: str):
+    """Applies ORDER BY to a queryset using annotated fields for nullable sorts."""
+    db_dir = '' if direction == 'asc' else '-'
+    f = _SORT_FIELD[sort]
+    return qs.order_by(f'{db_dir}{f}', f'{db_dir}id')
+
+
+def _get_sort_value(row, sort: str) -> str:
+    """Extracts the boundary row's sort value for cursor encoding.
+
+    Nullable fields (label, category) are coalesced to '' — matching the
+    annotation value so cursor round-trips are consistent.
+    """
+    if sort == SortField.label:
+        return row.label.name if row.label else ''
+    if sort == SortField.category:
+        return row.category if row.category else ''
+    if sort == SortField.account:
+        return row.account.name
+    if sort == SortField.concept:
+        return row.concept
+    if sort == SortField.amount:
+        return str(row.amount)
+    return row.date.isoformat()
+
+
+def _apply_cursor_filter(qs, sort: SortField, direction: str, sort_value: str, cursor_id: int):
+    """Filters to rows strictly after the cursor in the given direction.
+
+    All nullable fields are coalesced to '' in the annotation, so '' is a
+    valid sort value meaning "no label / no category". The keyset filter
+    works uniformly across all fields:
+
+        DESC: (field, id) < (sort_value, cursor_id)
+        ASC:  (field, id) > (sort_value, cursor_id)
+
+    This works correctly for '' boundaries too:
+    - ASC  + '': rows where field > '' (labelled rows) OR field = '' AND id > cursor_id
+    - DESC + '': rows where field < '' → empty (nothing sorts before '') OR
+                 field = '' AND id < cursor_id (more unlabelled rows)
+    """
+    f = _SORT_FIELD[sort]
+
+    if direction == 'desc':
+        return qs.filter(Q(**{f'{f}__lt': sort_value}) | Q(**{f: sort_value, 'id__lt': cursor_id}))
+    else:
+        return qs.filter(Q(**{f'{f}__gt': sort_value}) | Q(**{f: sort_value, 'id__gt': cursor_id}))
+
+
+def _compute_offset(base_qs, sort: SortField, sort_dir: str, first_row) -> int:
+    """Zero-based index of first_row. Only implemented for date sort."""
+    if sort != SortField.date:
+        return 0
+    date_val = first_row.date.isoformat()
+    if sort_dir == 'desc':
+        return base_qs.filter(Q(date__gt=date_val) | Q(date=date_val, id__gt=first_row.id)).count()
+    else:
+        return base_qs.filter(Q(date__lt=date_val) | Q(date=date_val, id__lt=first_row.id)).count()
+
+
 # ── GET /transactions/ ────────────────────────────────────────────────────────
 
 
-@router.get('/transactions/', response=list[TransactionSchema])
+@router.get('/transactions/', response=PaginatedTransactionsSchema)
 def list_transactions(
     request,
     household_id: int,
     account_id: int | None = None,
+    cursor: str | None = None,
+    previous_cursor: str | None = None,
+    sort: SortField = SortField.date,
+    sort_dir: str = 'desc',
 ):
-    """Lists all transactions for a household.
+    """Lists transactions for a household with cursor-based pagination.
 
-    Scoped to the requesting user — the household_id must belong to a
-    household the user is a member of. An optional account_id narrows
-    results to a single account. Results are ordered by date descending.
+    Results are stable across concurrent imports because pagination is
+    keyset-based — inserting new transactions does not shift existing pages.
+
+    Nullable sort fields (label, category) are coalesced to empty string,
+    meaning unlabelled/uncategorised rows sort first in ASC and last in DESC.
+
+    Pagination:
+    - First page:    no cursor params.
+    - Next page:     cursor = previous response next_cursor.
+    - Previous page: previous_cursor = previous response previous_cursor.
 
     Args:
-        request: The HTTP request object. Must be authenticated.
-        household_id: The ID of the household to list transactions for.
-        account_id: Optional. Narrows results to a single account.
+        request:         The HTTP request. Must be authenticated.
+        household_id:    The household to list transactions for.
+        account_id:      Optional account filter.
+        cursor:          Opaque forward-pagination cursor. Mutually exclusive
+                         with previous_cursor.
+        previous_cursor: Opaque backward-pagination cursor. Mutually exclusive
+                         with cursor.
+        sort:            Sort field. Default: date.
+        sort_dir:        'asc' or 'desc'. Default: desc.
 
     Returns:
-        A list of TransactionSchema ordered by date descending.
+        PaginatedTransactionsSchema.
 
     Raises:
-        HttpError: 403 if the user is not a member of the household.
-        HttpError: 404 if the household does not exist.
+        HttpError 400: invalid sort_dir, unparseable cursor, or both cursor
+                     and previous_cursor provided simultaneously.
+        HttpError 403: user not a household member.
+        HttpError 404: household not found.
     """
+    if sort_dir not in ('asc', 'desc'):
+        raise HttpError(400, "sort_dir must be 'asc' or 'desc'.")
+
+    if cursor is not None and previous_cursor is not None:
+        raise HttpError(400, "'cursor' and 'previous_cursor' are mutually exclusive.")
+
     household = get_object_or_404(Household, pk=household_id)
     if not household.users.filter(pk=request.user.pk).exists():
         raise HttpError(403, 'You are not a member of this household.')
 
-    qs = (
+    # Annotate nullable sort fields so ORDER BY uses LEFT JOINs.
+    # label__name and category are nullable — coalescing to '' means:
+    #   - Unlabelled/uncategorised rows sort first in ASC ('' < any label)
+    #   - Unlabelled/uncategorised rows sort last in DESC ('' < any label)
+    # account__name is non-nullable but annotated for consistency.
+    base_qs = (
         Transaction.objects.filter(account__household_id=household_id)
-        .select_related('account__account_type__bank', 'account__household', 'label')
-        .order_by('-date', '-imported_at')
+        .select_related('account__account_type__bank', 'label')
+        .annotate(
+            label_name_sort=Coalesce(F('label__name'), Value('')),
+            category_sort=Coalesce(F('category'), Value('')),
+            account_name_sort=F('account__name'),
+        )
     )
-
     if account_id is not None:
-        qs = qs.filter(account_id=account_id)
+        base_qs = base_qs.filter(account_id=account_id)
 
-    return [_serialize(t) for t in qs]
+    count = base_qs.count()
+
+    going_backwards = previous_cursor is not None
+    active_cursor = previous_cursor if going_backwards else cursor
+    fetch_dir = ('asc' if sort_dir == 'desc' else 'desc') if going_backwards else sort_dir
+
+    sort_value: str | None = None
+    cursor_id: int | None = None
+
+    if active_cursor is not None:
+        decoded = decode_cursor(active_cursor)
+        if decoded is None:
+            raise HttpError(400, 'Invalid cursor.')
+        sort_value, cursor_id = decoded
+
+    qs = _apply_sort(base_qs, sort, fetch_dir)
+
+    if sort_value is not None and cursor_id is not None:
+        qs = _apply_cursor_filter(qs, sort, fetch_dir, sort_value, cursor_id)
+
+    rows = list(qs[: PAGE_SIZE + 1])
+    has_more = len(rows) > PAGE_SIZE
+    rows = rows[:PAGE_SIZE]
+
+    if going_backwards:
+        rows = list(reversed(rows))
+
+    next_cursor: str | None = None
+    prev_cursor: str | None = None
+
+    if rows:
+        first = rows[0]
+        last = rows[-1]
+
+        if going_backwards:
+            next_cursor = encode_cursor(_get_sort_value(last, sort), last.id)
+            if has_more:
+                prev_cursor = encode_cursor(_get_sort_value(first, sort), first.id)
+        else:
+            if has_more:
+                next_cursor = encode_cursor(_get_sort_value(last, sort), last.id)
+            if cursor is not None:
+                prev_cursor = encode_cursor(_get_sort_value(first, sort), first.id)
+
+    offset = 0
+    if rows and active_cursor is not None:
+        offset = _compute_offset(base_qs, sort, sort_dir, rows[0])
+
+    return PaginatedTransactionsSchema(
+        results=[_serialize(t) for t in rows],
+        count=count,
+        offset=offset,
+        next_cursor=next_cursor,
+        previous_cursor=prev_cursor,
+        sort=sort,
+        sort_dir=sort_dir,
+    )
 
 
 # ── POST /transactions/ ───────────────────────────────────────────────────────

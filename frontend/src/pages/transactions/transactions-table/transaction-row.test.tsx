@@ -18,6 +18,7 @@ vi.mock('@services/transactions', async importOriginal => {
     updateTransactionConcept: vi.fn(),
     updateTransactionLabel: vi.fn(),
     deleteTransaction: vi.fn(),
+    toggleTransactionExclusion: vi.fn(),
   };
 });
 
