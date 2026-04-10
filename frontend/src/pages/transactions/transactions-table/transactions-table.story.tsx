@@ -96,6 +96,9 @@ const meta: Meta<typeof TransactionsTable> = {
     onDeleted: () => {},
     onImport: () => {},
     count: 0,
+    offset: 0,
+    page: 1,
+    pageSize: 20,
     nextCursor: null,
     previousCursor: null,
     onNextPage: () => {},
@@ -137,6 +140,8 @@ export const WithPagination: Story = {
   args: {
     transactions: TRANSACTIONS,
     count: 247,
+    offset: 20,
+    page: 2,
     nextCursor: 'eyJkYXRlIjoiMjAyNi0wMy0wNyIsImlkIjo0fQ==',
     previousCursor: 'eyJkYXRlIjoiMjAyNi0wMy0xMCIsImlkIjoxfQ==',
   },
