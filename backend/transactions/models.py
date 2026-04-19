@@ -216,6 +216,7 @@ class Transaction(models.Model):
             models.Index(fields=['date'], name='idx_transactions_date'),
             models.Index(fields=['label'], name='idx_transactions_label'),
             models.Index(fields=['category'], name='idx_transactions_category'),
+            models.Index(fields=['account', 'date', 'id'], name='idx_transactions_cursor'),
         ]
 
     def __str__(self):

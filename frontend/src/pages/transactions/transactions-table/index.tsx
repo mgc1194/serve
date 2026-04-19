@@ -1,15 +1,7 @@
 // pages/transactions/transactions-table/index.tsx — Transactions data table.
 //
-// Supports both pointer and keyboard interactions on column headers:
-//
-//   Sorting    — Click or Enter/Space on any header to sort by that column.
-//                A second activation on the same column toggles asc ↔ desc.
-//
-//   Reordering — Click/Enter/Space on the drag-handle icon to "pick up" a
-//                column (announced to screen readers via aria-live). While a
-//                column is held, Left/Right arrows move it one position at a
-//                time; Enter/Space drops it; Escape cancels. Pointer drag-and-
-//                drop continues to work in parallel.
+// Sorting is server-side — sort state is owned by TransactionsPage and passed
+// as props. Column reordering remains client-side via useColumnOrder.
 //
 // ARIA:
 //   • Each <th> has role="columnheader" and aria-sort="ascending|descending|none".
@@ -17,14 +9,18 @@
 //   • An aria-live="polite" region announces reorder operations.
 
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import {
   Alert,
   Box,
   Button,
+  IconButton,
   Paper,
   Skeleton,
   Table,
   TableBody,
+  Tooltip,
   Typography,
 } from '@mui/material';
 
@@ -32,8 +28,8 @@ import { type ColumnKey } from '@pages/transactions/transactions-table/columns';
 import { TransactionRow } from '@pages/transactions/transactions-table/transaction-row';
 import { TransactionsTableHeader } from '@pages/transactions/transactions-table/transactions-table-header';
 import { useColumnOrder } from '@pages/transactions/transactions-table/use-column-order';
-import { sortTransactions, useSort } from '@pages/transactions/transactions-table/use-sort';
-import type { Label, Transaction } from '@serve/types/global';
+import { columnKeyToSortField, nextSortDir } from '@pages/transactions/transactions-table/use-sort';
+import type { Label, SortDir, SortField, Transaction } from '@serve/types/global';
 
 interface TransactionsTableProps {
   transactions: Transaction[];
@@ -44,6 +40,19 @@ interface TransactionsTableProps {
   onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
   onImport: () => void;
+  // Pagination
+  count: number;
+  offset: number;
+  page: number;
+  pageSize: number;
+  nextCursor: string | null;
+  previousCursor: string | null;
+  onNextPage: () => void;
+  onPreviousPage: () => void;
+  // Sort (server-side — owned by the page)
+  sortKey: SortField;
+  sortDir: SortDir;
+  onSortChange: (field: SortField, dir: SortDir) => void;
 }
 
 export function TransactionsTable({
@@ -55,8 +64,18 @@ export function TransactionsTable({
   onUpdated,
   onDeleted,
   onImport,
+  count,
+  offset,
+  page,
+  pageSize,
+  nextCursor,
+  previousCursor,
+  onNextPage,
+  onPreviousPage,
+  sortKey,
+  sortDir,
+  onSortChange,
 }: TransactionsTableProps) {
-  const { sortKey, sortDir, applySort } = useSort();
   const {
     columnOrder,
     dragOver,
@@ -74,11 +93,13 @@ export function TransactionsTable({
   function handleHeaderKeyDown(e: React.KeyboardEvent, key: ColumnKey) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      applySort(key);
+      const field = columnKeyToSortField(key);
+      onSortChange(field, nextSortDir(sortKey as ColumnKey, key, sortDir));
     }
   }
 
-  const sorted = sortTransactions(transactions, sortKey, sortDir);
+  const hasPreviousPage = previousCursor != null;
+  const hasNextPage = nextCursor != null;
 
   return (
     <>
@@ -102,42 +123,104 @@ export function TransactionsTable({
         ) : transactions.length === 0 ? (
           <EmptyState onImport={onImport} />
         ) : (
-          <Table size="small">
-            <TransactionsTableHeader
-              columnOrder={columnOrder}
-              sortKey={sortKey}
-              sortDir={sortDir}
-              dragOver={dragOver}
-              heldKey={heldKey}
-              onMouseDown={handleMouseDown}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-              onDragEnd={handleDragEnd}
-              onHeaderClick={(e, key) => handleHeaderClick(e, key, applySort)}
-              onHeaderKeyDown={handleHeaderKeyDown}
-              onHandleKeyDown={handleHandleKeyDown}
-            />
-            <TableBody>
-              {sorted.map(tx => (
-                <TransactionRow
-                  key={tx.id}
-                  transaction={tx}
-                  columnOrder={columnOrder}
-                  labels={labels}
-                  onUpdated={onUpdated}
-                  onDeleted={onDeleted}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <>
+            <Table size="small">
+              <TransactionsTableHeader
+                columnOrder={columnOrder}
+                sortKey={sortKey as ColumnKey}
+                sortDir={sortDir}
+                dragOver={dragOver}
+                heldKey={heldKey}
+                onMouseDown={handleMouseDown}
+                onDragStart={handleDragStart}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onDragEnd={handleDragEnd}
+                onHeaderClick={(e, key) =>
+                  handleHeaderClick(e, key, k => {
+                    const field = columnKeyToSortField(k);
+                    onSortChange(field, nextSortDir(sortKey as ColumnKey, k, sortDir));
+                  })
+                }
+                onHeaderKeyDown={handleHeaderKeyDown}
+                onHandleKeyDown={handleHandleKeyDown}
+              />
+              <TableBody>
+                {transactions.map(tx => (
+                  <TransactionRow
+                    key={tx.id}
+                    transaction={tx}
+                    columnOrder={columnOrder}
+                    labels={labels}
+                    onUpdated={onUpdated}
+                    onDeleted={onDeleted}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* Pagination controls */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                px: 2,
+                py: 1,
+                borderTop: 1,
+                borderColor: 'divider',
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {(() => {
+                  // Use exact offset when the backend provides it (date sort).
+                  // Fall back to page-based calculation for other sort fields.
+                  const from = offset > 0 ? offset + 1 : (page - 1) * pageSize + 1;
+                  const to = offset > 0
+                    ? offset + transactions.length
+                    : (page - 1) * pageSize + transactions.length;
+                  if (from === 1 && to === count) {
+                    return `${count.toLocaleString()} transaction${count !== 1 ? 's' : ''}`;
+                  }
+                  return `${from.toLocaleString()}–${to.toLocaleString()} of ${count.toLocaleString()} transactions`;
+                })()}
+              </Typography>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title="Previous page">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={onPreviousPage}
+                      disabled={!hasPreviousPage}
+                      aria-label="Previous page"
+                    >
+                      <NavigateBeforeIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Next page">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={onNextPage}
+                      disabled={!hasNextPage}
+                      aria-label="Next page"
+                    >
+                      <NavigateNextIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
+            </Box>
+          </>
         )}
       </Paper>
     </>
   );
 }
 
-// ── Private sub-components for non-table states ────────────────────────────────
+// ── Private sub-components ────────────────────────────────────────────────────
 
 function LoadingSkeleton() {
   return (

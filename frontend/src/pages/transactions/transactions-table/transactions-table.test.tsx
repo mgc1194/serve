@@ -14,6 +14,7 @@ vi.mock('@services/transactions', async importOriginal => {
     updateTransactionConcept: vi.fn(),
     updateTransactionLabel: vi.fn(),
     deleteTransaction: vi.fn(),
+    toggleTransactionExclusion: vi.fn(),
   };
 });
 
@@ -48,11 +49,22 @@ const TX2: Transaction = {
   amount: 2400.0,
 };
 
+// A full page of 20 transactions — matches PAGE_SIZE on the backend.
+const PAGE: Transaction[] = Array.from({ length: 20 }, (_, i) => ({
+  ...TX,
+  id: i + 1,
+  date: `2026-03-${String(20 - i).padStart(2, '0')}`,
+  concept: `TRANSACTION ${String(i + 1).padStart(2, '0')}`,
+}));
+
 function setup(props: Partial<React.ComponentProps<typeof TransactionsTable>> = {}) {
   const onRetry = vi.fn();
   const onUpdated = vi.fn();
   const onDeleted = vi.fn();
   const onImport = vi.fn();
+  const onNextPage = vi.fn();
+  const onPreviousPage = vi.fn();
+  const onSortChange = vi.fn();
 
   render(
     <TransactionsTable
@@ -64,11 +76,22 @@ function setup(props: Partial<React.ComponentProps<typeof TransactionsTable>> = 
       onUpdated={onUpdated}
       onDeleted={onDeleted}
       onImport={onImport}
+      count={0}
+      offset={0}
+      page={1}
+      pageSize={20}
+      nextCursor={null}
+      previousCursor={null}
+      onNextPage={onNextPage}
+      onPreviousPage={onPreviousPage}
+      sortKey="date"
+      sortDir="desc"
+      onSortChange={onSortChange}
       {...props}
     />,
   );
 
-  return { onRetry, onUpdated, onDeleted, onImport };
+  return { onRetry, onUpdated, onDeleted, onImport, onNextPage, onPreviousPage, onSortChange };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -142,29 +165,79 @@ describe('TransactionsTable with data', () => {
   });
 
   it('renders a row per transaction', () => {
-    setup({ transactions: [TX, TX2] });
+    setup({ transactions: [TX, TX2], count: 2 });
     expect(screen.getByText('TRADER JOES #123')).toBeDefined();
     expect(screen.getByText('DIRECT DEPOSIT')).toBeDefined();
+  });
+});
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+describe('TransactionsTable pagination', () => {
+  it('shows range on a full first page', () => {
+    setup({ transactions: PAGE, count: 247 });
+    expect(screen.getByText('1–20 of 247 transactions')).toBeDefined();
+  });
+
+  it('shows range on a full second page', () => {
+    setup({ transactions: PAGE, count: 247, page: 2, previousCursor: 'abc' });
+    expect(screen.getByText('21–40 of 247 transactions')).toBeDefined();
+  });
+
+  it('shows total only when all transactions fit on one page', () => {
+    setup({ transactions: PAGE.slice(0, 7), count: 7 });
+    expect(screen.getByText('7 transactions')).toBeDefined();
+  });
+
+  it('next page button is disabled when nextCursor is null', () => {
+    setup({ transactions: PAGE.slice(0, 1), count: 1, nextCursor: null });
+    expect(screen.getByRole('button', { name: /next page/i }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('next page button is enabled when nextCursor is set', () => {
+    setup({ transactions: [TX], count: 51, nextCursor: 'abc123' });
+    expect(screen.getByRole('button', { name: /next page/i }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('previous page button is disabled when previousCursor is null', () => {
+    setup({ transactions: PAGE.slice(0, 1), count: 1, previousCursor: null });
+    expect(screen.getByRole('button', { name: /previous page/i }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('previous page button is enabled when previousCursor is set', () => {
+    setup({ transactions: [TX], count: 51, previousCursor: 'xyz789' });
+    expect(screen.getByRole('button', { name: /previous page/i }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('calls onNextPage when next button is clicked', () => {
+    const { onNextPage } = setup({ transactions: [TX], count: 51, nextCursor: 'abc123' });
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(onNextPage).toHaveBeenCalledOnce();
+  });
+
+  it('calls onPreviousPage when previous button is clicked', () => {
+    const { onPreviousPage } = setup({ transactions: [TX], count: 51, previousCursor: 'xyz789' });
+    fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
+    expect(onPreviousPage).toHaveBeenCalledOnce();
   });
 });
 
 // ── Sorting ───────────────────────────────────────────────────────────────────
 
 describe('TransactionsTable sorting', () => {
-  it('sorts by date descending by default', () => {
-    setup({ transactions: [TX, TX2] });
-    const rows = screen.getAllByRole('row');
-    // TX2 (2026-03-09) is older — with desc default, TX (2026-03-10) should appear first
-    expect(rows[1].textContent).toContain('TRADER JOES #123');
-    expect(rows[2].textContent).toContain('DIRECT DEPOSIT');
+  it('calls onSortChange when a column header is clicked', () => {
+    const { onSortChange } = setup({ transactions: [TX] });
+    fireEvent.click(screen.getByRole('columnheader', { name: /description/i }));
+    expect(onSortChange).toHaveBeenCalledWith('concept', 'asc');
   });
 
-  it('toggles sort direction on repeated header click', () => {
-    setup({ transactions: [TX, TX2] });
-    const descriptionHeader = screen.getByRole('columnheader', { name: /description/i });
-    fireEvent.click(descriptionHeader);
-    fireEvent.click(descriptionHeader);
-    // Just verify it doesn't throw and the table is still rendered
-    expect(screen.getByRole('table')).toBeDefined();
+  it('calls onSortChange with desc when clicking the active sort column', () => {
+    const { onSortChange } = setup({
+      transactions: [TX],
+      sortKey: 'concept',
+      sortDir: 'asc',
+    });
+    fireEvent.click(screen.getByRole('columnheader', { name: /description/i }));
+    expect(onSortChange).toHaveBeenCalledWith('concept', 'desc');
   });
 });
