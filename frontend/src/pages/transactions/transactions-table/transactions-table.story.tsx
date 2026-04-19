@@ -22,6 +22,7 @@ const TRANSACTIONS: Transaction[] = [
     label_color: '#16a34a',
     category: 'Food',
     additional_labels: null,
+    exclude_from_summary: false,
     source: 'csv',
     account_id: 1,
     account_name: "Alice's 360 Savings",
@@ -38,6 +39,7 @@ const TRANSACTIONS: Transaction[] = [
     label_color: null,
     category: null,
     additional_labels: null,
+    exclude_from_summary: false,
     source: 'csv',
     account_id: 2,
     account_name: "Bob's Checking",
@@ -54,6 +56,7 @@ const TRANSACTIONS: Transaction[] = [
     label_color: '#7c3aed',
     category: 'Entertainment',
     additional_labels: null,
+    exclude_from_summary: false,
     source: 'csv',
     account_id: 2,
     account_name: "Bob's Checking",
@@ -70,6 +73,7 @@ const TRANSACTIONS: Transaction[] = [
     label_color: '#2563eb',
     category: null,
     additional_labels: null,
+    exclude_from_summary: true,
     source: 'csv',
     account_id: 1,
     account_name: "Alice's 360 Savings",
@@ -91,6 +95,17 @@ const meta: Meta<typeof TransactionsTable> = {
     onUpdated: () => {},
     onDeleted: () => {},
     onImport: () => {},
+    count: 0,
+    offset: 0,
+    page: 1,
+    pageSize: 20,
+    nextCursor: null,
+    previousCursor: null,
+    onNextPage: () => {},
+    onPreviousPage: () => {},
+    sortKey: 'date',
+    sortDir: 'desc',
+    onSortChange: () => {},
   },
 };
 
@@ -108,14 +123,54 @@ export const Error: Story = {
 export const Empty: Story = {};
 
 export const WithTransactions: Story = {
-  args: { transactions: TRANSACTIONS },
+  args: { transactions: TRANSACTIONS, count: 4 },
 };
 
 export const NoLabels: Story = {
-  args: { transactions: TRANSACTIONS, labels: [] },
+  args: { transactions: TRANSACTIONS, labels: [], count: 4 },
 };
 
 // Single transaction — useful for checking row layout in isolation
 export const SingleRow: Story = {
-  args: { transactions: [TRANSACTIONS[0]] },
+  args: { transactions: [TRANSACTIONS[0]], count: 1 },
+};
+
+// Pagination controls active — shows enabled prev/next buttons
+export const WithPagination: Story = {
+  args: {
+    transactions: TRANSACTIONS,
+    count: 247,
+    offset: 20,
+    page: 2,
+    nextCursor: 'eyJkYXRlIjoiMjAyNi0wMy0wNyIsImlkIjo0fQ==',
+    previousCursor: 'eyJkYXRlIjoiMjAyNi0wMy0xMCIsImlkIjoxfQ==',
+  },
+};
+
+// First page — previous disabled, next enabled
+export const FirstPage: Story = {
+  args: {
+    transactions: TRANSACTIONS,
+    count: 247,
+    nextCursor: 'eyJkYXRlIjoiMjAyNi0wMy0wNyIsImlkIjo0fQ==',
+    previousCursor: null,
+  },
+};
+
+// Last page — previous enabled, next disabled
+export const LastPage: Story = {
+  args: {
+    transactions: TRANSACTIONS,
+    count: 247,
+    nextCursor: null,
+    previousCursor: 'eyJkYXRlIjoiMjAyNi0wMy0xMCIsImlkIjoxfQ==',
+  },
+};
+
+// With an excluded transaction — shows the eye-slash icon on UBER row
+export const WithExcludedRow: Story = {
+  args: {
+    transactions: TRANSACTIONS,
+    count: 4,
+  },
 };

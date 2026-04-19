@@ -194,9 +194,11 @@ class TestErrorHandling:
         mock_logger.error.assert_called_once()
         assert 'nonexistent_file.csv' in mock_logger.error.call_args[0][0]
 
-    def test_returns_none_for_empty_csv(self, mocker):
+    def test_returns_empty_dataframe_for_empty_csv(self, mocker):
         mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(EMPTY_CSV)))
-        assert SimpleHandler().process('fake_path.csv') is None
+        result = SimpleHandler().process('fake_path.csv')
+        assert result is not None
+        assert result.empty
 
     def test_returns_none_for_empty_data_error(self, mocker):
         mocker.patch('pandas.read_csv', side_effect=pd.errors.EmptyDataError)
