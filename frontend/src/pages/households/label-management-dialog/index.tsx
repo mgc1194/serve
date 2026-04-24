@@ -30,6 +30,12 @@ type Mode = 'list' | 'create' | 'edit';
 
 const DEFAULT_COLOR = '#6B7280';
 
+interface ListFetchResult {
+  requestKey: string;
+  labels: Label[];
+  error: string | null;
+}
+
 export function LabelManagementDialog({
   open,
   householdId,
@@ -42,9 +48,24 @@ export function LabelManagementDialog({
   const [mode, setMode] = useState<Mode>(initialMode);
 
   // ── List state ────────────────────────────────────────────────────────────
-  const [labels, setLabels] = useState<Label[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [listError, setListError] = useState<string | null>(null);
+  // A new requestKey is generated each time the dialog opens (or householdId /
+  // initialMode changes). isLoading and the label list are derived from whether
+  // the last fetch result matches the current key — no synchronous setState
+  // needed inside the effect.
+  const requestKey = open ? `${householdId}:${open}` : null;
+  const [fetchResult, setFetchResult] = useState<ListFetchResult | null>(null);
+
+  const isLoading = requestKey !== null && fetchResult?.requestKey !== requestKey;
+  const labels: Label[] = fetchResult?.requestKey === requestKey ? fetchResult.labels : [];
+  const listError: string | null =
+    fetchResult?.requestKey === requestKey ? fetchResult.error : null;
+
+  // Sync mode to initialMode each time the dialog opens, during render.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setMode(initialMode);
+  }
 
   // ── Form state (create / edit) ────────────────────────────────────────────
   const [editingLabel, setEditingLabel] = useState<Label | null>(null);
@@ -54,17 +75,21 @@ export function LabelManagementDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ── Load on open; reset mode to initialMode each time ────────────────────
+  // ── Load labels when dialog opens ─────────────────────────────────────────
   useEffect(() => {
-    if (!open) return;
-    setMode(initialMode);
-    setIsLoading(true);
-    setListError(null);
+    if (requestKey === null) return;
+
+    const key = requestKey;
     listLabels(householdId)
-      .then(setLabels)
-      .catch(() => setListError('Could not load labels. Please try again.'))
-      .finally(() => setIsLoading(false));
-  }, [open, householdId, initialMode]);
+      .then(data => setFetchResult({ requestKey: key, labels: data, error: null }))
+      .catch(() =>
+        setFetchResult({
+          requestKey: key,
+          labels: [],
+          error: 'Could not load labels. Please try again.',
+        }),
+      );
+  }, [requestKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {
@@ -117,12 +142,16 @@ export function LabelManagementDialog({
         });
 
         const updated = [...labels, created];
-        setLabels(updated);
+        setFetchResult(prev =>
+          prev ? { ...prev, labels: updated } : { requestKey: requestKey ?? '', labels: updated, error: null },
+        );
         onLabelsChanged(updated);
       } else if (mode === 'edit' && editingLabel) {
         const updated = await updateLabel(editingLabel.id, { name: trimmedName, color });
         const updatedList = labels.map(l => (l.id === updated.id ? updated : l));
-        setLabels(updatedList);
+        setFetchResult(prev =>
+          prev ? { ...prev, labels: updatedList } : { requestKey: requestKey ?? '', labels: updatedList, error: null },
+        );
         onLabelsChanged(updatedList);
       }
 
@@ -141,7 +170,9 @@ export function LabelManagementDialog({
     try {
       await deleteLabel(labelId);
       const updatedList = labels.filter(l => l.id !== labelId);
-      setLabels(updatedList);
+      setFetchResult(prev =>
+        prev ? { ...prev, labels: updatedList } : { requestKey: requestKey ?? '', labels: updatedList, error: null },
+      );
       onLabelsChanged(updatedList);
       backToList();
     } catch (err) {
