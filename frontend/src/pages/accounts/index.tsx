@@ -17,29 +17,32 @@ import { CreateAccountDialog } from '@pages/accounts/create-account-dialog';
 import type { AccountDetail, Household } from '@serve/types/global';
 import { listAccounts, ApiError } from '@services/accounts';
 
+interface FetchResult {
+  requestKey: string;
+  accounts: AccountDetail[];
+  error: string | null;
+}
+
 export function AccountsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
 
-  const [accounts, setAccounts] = useState<AccountDetail[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   // Filter stored in URL so it survives reload and is shareable
   const householdIdParam = searchParams.get('household_id');
-  const householdIdFilter = 
+  const householdIdFilter =
     householdIdParam !== null
       ? (() => {
-        const parsed = Number(householdIdParam);
-        return isNaN(parsed) ? undefined : parsed;
-      })()
+          const parsed = Number(householdIdParam);
+          return isNaN(parsed) ? undefined : parsed;
+        })()
       : undefined;
 
   const households: Household[] = useMemo(() => user?.households ?? [], [user]);
 
-  const preselectedHousehold = 
+  const preselectedHousehold =
     householdIdFilter !== undefined
       ? (households.find(h => h.id === householdIdFilter) ?? null)
       : null;
@@ -49,28 +52,61 @@ export function AccountsPage() {
       ? households.find(h => h.id === householdIdFilter)
       : undefined;
 
-  function load() {
-    setIsLoading(true);
-    setError(null);
-    listAccounts({ household_id: householdIdFilter })
-      .then(setAccounts)
-      .catch(err => {
-        setError(err instanceof ApiError ? err.message : 'Could not load accounts.');
-      })
-      .finally(() => setIsLoading(false));
-  }
+  // A stable string key representing the current fetch request. isLoading and
+  // accounts are derived from whether the last result matches the current key.
+  const requestKey = String(householdIdFilter ?? 'all');
+  const [fetchResult, setFetchResult] = useState<FetchResult | null>(null);
+
+  const isLoading = fetchResult?.requestKey !== requestKey;
+  const accounts: AccountDetail[] =
+    fetchResult?.requestKey === requestKey ? fetchResult.accounts : [];
+  const error: string | null =
+    fetchResult?.requestKey === requestKey ? fetchResult.error : null;
 
   useEffect(() => {
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [householdIdFilter]);
+    const key = requestKey;
+    listAccounts({ household_id: householdIdFilter })
+      .then(data => setFetchResult({ requestKey: key, accounts: data, error: null }))
+      .catch(err =>
+        setFetchResult({
+          requestKey: key,
+          accounts: [],
+          error: err instanceof ApiError ? err.message : 'Could not load accounts.',
+        }),
+      );
+  }, [requestKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function reload() {
+    // Clear the result so isLoading becomes true, then re-fetch.
+    setFetchResult(null);
+  }
+
+  // Trigger a re-fetch when reload() clears fetchResult.
+  useEffect(() => {
+    if (fetchResult !== null) return;
+
+    const key = requestKey;
+    listAccounts({ household_id: householdIdFilter })
+      .then(data => setFetchResult({ requestKey: key, accounts: data, error: null }))
+      .catch(err =>
+        setFetchResult({
+          requestKey: key,
+          accounts: [],
+          error: err instanceof ApiError ? err.message : 'Could not load accounts.',
+        }),
+      );
+  }, [fetchResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleUpdated(updated: AccountDetail) {
-    setAccounts(prev => prev.map(a => (a.id === updated.id ? updated : a)));
+    setFetchResult(prev =>
+      prev ? { ...prev, accounts: prev.accounts.map(a => (a.id === updated.id ? updated : a)) } : prev,
+    );
   }
 
   function handleDeleted(id: number) {
-    setAccounts(prev => prev.filter(a => a.id !== id));
+    setFetchResult(prev =>
+      prev ? { ...prev, accounts: prev.accounts.filter(a => a.id !== id) } : prev,
+    );
   }
 
   function setHouseholdFilter(id: number | undefined) {
@@ -136,7 +172,7 @@ export function AccountsPage() {
           accounts={accounts}
           isLoading={isLoading}
           error={error}
-          onRetry={load}
+          onRetry={reload}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
           onAddAccount={() => setCreateOpen(true)}
@@ -146,7 +182,7 @@ export function AccountsPage() {
       <CreateAccountDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={load}
+        onCreated={reload}
         preselectedHousehold={preselectedHousehold}
         households={households}
       />

@@ -40,6 +40,12 @@ interface CreateAccountDialogProps {
 
 type Step = 'household' | 'bank' | 'type' | 'name';
 
+interface BanksFetchResult {
+  requestKey: string;
+  banks: Bank[];
+  error: string | null;
+}
+
 export function CreateAccountDialog({
   open,
   onClose,
@@ -51,9 +57,6 @@ export function CreateAccountDialog({
   const [selectedHousehold, setSelectedHousehold] = useState<Household | null>(
     preselectedHousehold ?? null,
   );
-  const [banks, setBanks] = useState<Bank[]>([]);
-  const [banksLoading, setBanksLoading] = useState(false);
-  const [banksError, setBanksError] = useState<string | null>(null);
   const [selectedBank, setSelectedBank] = useState<Bank | null>(null);
   const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
   const [name, setName] = useState('');
@@ -65,19 +68,39 @@ export function CreateAccountDialog({
     if (step === 'name') nameInputRef.current?.focus();
   }, [step]);
 
-  // Load banks when the dialog opens
-  useEffect(() => {
-    if (!open) return;
-    setBanksLoading(true);
-    setBanksError(null);
-    listBanks()
-      .then(setBanks)
-      .catch(() => setBanksError('Could not load banks. Please try again.'))
-      .finally(() => setBanksLoading(false));
-  }, [open]);
+  // ── Banks fetch — requestKey pattern, no sync setState in effect ──────────
+  const banksRequestKey = open ? 'banks' : null;
+  const [banksFetchResult, setBanksFetchResult] = useState<BanksFetchResult | null>(null);
 
-  // Sync pre-selected household when prop changes
+  const banksLoading =
+    banksRequestKey !== null && banksFetchResult?.requestKey !== banksRequestKey;
+  const banks: Bank[] =
+    banksFetchResult?.requestKey === banksRequestKey ? banksFetchResult.banks : [];
+  const banksError: string | null =
+    banksFetchResult?.requestKey === banksRequestKey ? banksFetchResult.error : null;
+
   useEffect(() => {
+    if (banksRequestKey === null) return;
+
+    const key = banksRequestKey;
+    listBanks()
+      .then(data => setBanksFetchResult({ requestKey: key, banks: data, error: null }))
+      .catch(() =>
+        setBanksFetchResult({
+          requestKey: key,
+          banks: [],
+          error: 'Could not load banks. Please try again.',
+        }),
+      );
+  }, [banksRequestKey]);
+  
+  // ── Reset step/selection when dialog opens — render-time adjustment ───────
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevPreselected, setPrevPreselected] = useState(preselectedHousehold);
+
+  if (open !== prevOpen || preselectedHousehold !== prevPreselected) {
+    setPrevOpen(open);
+    setPrevPreselected(preselectedHousehold);
     if (open) {
       if (preselectedHousehold) {
         setSelectedHousehold(preselectedHousehold);
@@ -91,7 +114,7 @@ export function CreateAccountDialog({
       setName('');
       setCreateError(null);
     }
-  }, [open, preselectedHousehold]);
+  }
 
   function handleClose() {
     onClose();
@@ -104,36 +127,21 @@ export function CreateAccountDialog({
     else if (step === 'name') setStep('type');
   }
 
-  function selectHousehold(h: Household) {
-    setSelectedHousehold(h);
-    setStep('bank');
-  }
-
-  function selectBank(bank: Bank) {
-    setSelectedBank(bank);
-    setSelectedTypeId(null);
-    setStep('type');
-  }
-
-  function selectType(typeId: number) {
-    setSelectedTypeId(typeId);
-    setStep('name');
-    setName('');
-  }
-
   async function handleCreate() {
-    if (!selectedHousehold || selectedTypeId == null || !name.trim()) return;
+    if (!selectedHousehold || !selectedBank || !selectedTypeId || !name.trim()) return;
 
     setIsCreating(true);
     setCreateError(null);
+
     try {
       await createAccount({
-        household_id: selectedHousehold.id,
-        account_type_id: selectedTypeId,
         name: name.trim(),
+        household_id: selectedHousehold.id,
+        bank_id: selectedBank.id,
+        account_type_id: selectedTypeId,
       });
       onCreated();
-      handleClose();
+      onClose();
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : 'Could not create account.');
     } finally {
@@ -141,155 +149,132 @@ export function CreateAccountDialog({
     }
   }
 
-  const canGoBack = step !== 'household' && !(step === 'bank' && preselectedHousehold);
-
-  const stepTitles: Record<Step, string> = {
-    household: 'Choose a household',
-    bank: 'Choose a bank',
-    type: `Choose account type`,
-    name: 'Name your account',
-  };
+  const selectedBankTypes = selectedBank?.account_types ?? [];
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, pb: 1 }}>
-        {canGoBack && (
-          <IconButton onClick={handleBack} size="small" aria-label="Go back" sx={{ mr: 0.5 }}>
+        {step !== 'household' && step !== (preselectedHousehold ? 'bank' : 'household') && (
+          <IconButton onClick={handleBack} size="small" sx={{ mr: 0.5 }}>
             <ArrowBackIcon fontSize="small" />
           </IconButton>
         )}
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" component="span">
-            Add account
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ display: 'block' }}>
-            {stepTitles[step]}
-          </Typography>
-        </Box>
+        Add account
       </DialogTitle>
 
-      <DialogContent sx={{ pt: 0 }}>
-        {/* Breadcrumb trail */}
-        <Box sx={{ display: 'flex', gap: 0.5, mb: 2, flexWrap: 'wrap' }}>
-          {selectedHousehold && !preselectedHousehold && (
-            <Typography variant="caption" color="text.secondary">
-              {selectedHousehold.name}
-            </Typography>
-          )}
-          {selectedBank && (
-            <>
-              {selectedHousehold && !preselectedHousehold && (
-                <Typography variant="caption" color="text.disabled">·</Typography>
-              )}
-              <Typography variant="caption" color="text.secondary">
-                {selectedBank.name}
-              </Typography>
-            </>
-          )}
-        </Box>
-
-        {/* Step 1 — Household */}
+      <DialogContent>
         {step === 'household' && (
-          <List disablePadding>
-            {households.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No households found.
-              </Typography>
-            ) : (
-              households.map(h => (
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Which household is this account for?
+            </Typography>
+            <List disablePadding>
+              {households.map(h => (
                 <ListItemButton
                   key={h.id}
-                  onClick={() => selectHousehold(h)}
-                  sx={{ borderRadius: 1, mb: 0.5 }}
+                  onClick={() => {
+                    setSelectedHousehold(h);
+                    setStep('bank');
+                  }}
                 >
                   <ListItemText primary={h.name} />
                 </ListItemButton>
-              ))
-            )}
-          </List>
+              ))}
+            </List>
+          </Box>
         )}
 
-        {/* Step 2 — Bank */}
         {step === 'bank' && (
-          <>
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Choose a bank.
+            </Typography>
             {banksLoading && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                <CircularProgress size={24} />
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={28} />
               </Box>
             )}
             {banksError && (
-              <Alert severity="error">{banksError}</Alert>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {banksError}
+              </Alert>
             )}
             {!banksLoading && !banksError && (
               <List disablePadding>
                 {banks.map(bank => (
                   <ListItemButton
                     key={bank.id}
-                    onClick={() => selectBank(bank)}
-                    sx={{ borderRadius: 1, mb: 0.5 }}
+                    onClick={() => {
+                      setSelectedBank(bank);
+                      setStep('type');
+                    }}
                   >
                     <AccountBalanceOutlinedIcon
-                      sx={{ mr: 1.5, color: 'text.secondary', fontSize: 20 }}
+                      fontSize="small"
+                      sx={{ mr: 1.5, color: 'text.secondary' }}
                     />
                     <ListItemText primary={bank.name} />
                   </ListItemButton>
                 ))}
               </List>
             )}
-          </>
+          </Box>
         )}
 
-        {/* Step 3 — Account type */}
-        {step === 'type' && selectedBank && (
-          <List disablePadding>
-            {selectedBank.account_types.map(at => (
-              <ListItemButton
-                key={at.id}
-                onClick={() => selectType(at.id)}
-                sx={{ borderRadius: 1, mb: 0.5 }}
-              >
-                <ListItemText primary={at.name} />
-              </ListItemButton>
-            ))}
-          </List>
+        {step === 'type' && (
+          <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Choose an account type.
+            </Typography>
+            <List disablePadding>
+              {selectedBankTypes.map(type => (
+                <ListItemButton
+                  key={type.id}
+                  onClick={() => {
+                    setSelectedTypeId(type.id);
+                    setStep('name');
+                  }}
+                >
+                  <ListItemText primary={type.name} />
+                </ListItemButton>
+              ))}
+            </List>
+          </Box>
         )}
 
-        {/* Step 4 — Name */}
         {step === 'name' && (
           <Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Give your account a name.
+            </Typography>
             {createError && (
-              <Alert severity="error" sx={{ mb: 2 }} onClose={() => setCreateError(null)}>
+              <Alert severity="error" sx={{ mb: 2 }}>
                 {createError}
               </Alert>
             )}
             <OutlinedInput
               inputRef={nameInputRef}
+              fullWidth
+              placeholder="e.g. Joint current account"
               value={name}
               onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              placeholder="e.g. Mario's 360 Savings"
-              inputProps={{ 'aria-label': 'Account name' }}
-              size="small"
-              fullWidth
-              disabled={isCreating}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleCreate();
+              }}
               endAdornment={
-                isCreating && (
-                  <InputAdornment position="end">
-                    <CircularProgress size={16} />
-                  </InputAdornment>
-                )
+                <InputAdornment position="end">
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disabled={!name.trim() || isCreating}
+                    onClick={handleCreate}
+                    startIcon={isCreating ? <CircularProgress size={14} /> : <AddIcon />}
+                  >
+                    Create
+                  </Button>
+                </InputAdornment>
               }
-              sx={{ mb: 2 }}
             />
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleCreate}
-              disabled={!name.trim() || isCreating}
-              fullWidth
-            >
-              Add account
-            </Button>
           </Box>
         )}
       </DialogContent>
