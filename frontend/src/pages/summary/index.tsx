@@ -24,6 +24,12 @@ import { SummaryTotalsBar } from '@pages/summary/summary-totals-bar';
 import type { Household, Summary } from '@serve/types/global';
 import { ApiError, getSummary } from '@services/summary';
 
+interface FetchResult {
+  requestKey: string;
+  summary: Summary | null;
+  error: string | null;
+}
+
 export function SummaryPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -45,9 +51,18 @@ export function SummaryPage() {
   const { year: selectedYear, month: selectedMonth } = parseMonthStr(rawMonthParam);
   const monthParam = toMonthStr(selectedYear, selectedMonth);
 
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // A stable key representing the current fetch request. Changes whenever the
+  // filters change, allowing isLoading to be derived rather than set in an effect.
+  const requestKey =
+    householdIdFilter !== undefined ? `${householdIdFilter}:${monthParam}` : null;
+
+  const [fetchResult, setFetchResult] = useState<FetchResult | null>(null);
+
+  // Derived: loading whenever the current request key hasn't resolved yet.
+  const isLoading = requestKey !== null && fetchResult?.requestKey !== requestKey;
+  const summary = fetchResult?.requestKey === requestKey ? fetchResult.summary : null;
+  const error = fetchResult?.requestKey === requestKey ? fetchResult.error : null;
+
   const [activeTab, setActiveTab] = useState<'spending' | 'earnings'>('spending');
 
   // Earliest date comes from the last successful fetch — always household-wide,
@@ -72,23 +87,17 @@ export function SummaryPage() {
   }, [households]);
 
   useEffect(() => {
-    if (householdIdFilter === undefined) {
-      setSummary(null);
-      setIsLoading(false);
-      return;
-    }
+    if (requestKey === null) return;
 
-    setIsLoading(true);
-    setError(null);
-    setSummary(null);
-
-    getSummary({ household_id: householdIdFilter, month: monthParam })
-      .then(data => setSummary(data))
-      .catch(err => {
-        setError(err instanceof ApiError ? err.message : 'Could not load summary.');
-      })
-      .finally(() => setIsLoading(false));
-  }, [householdIdFilter, monthParam]);
+    const key = requestKey;
+    getSummary({ household_id: householdIdFilter!, month: monthParam })
+      .then(data => setFetchResult({ requestKey: key, summary: data, error: null }))
+      .catch(err => setFetchResult({
+        requestKey: key,
+        summary: null,
+        error: err instanceof ApiError ? err.message : 'Could not load summary.',
+      }));
+  }, [requestKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleHouseholdChange(id: number) {
     setSearchParams({ household_id: String(id), month: monthParam });

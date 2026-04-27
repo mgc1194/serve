@@ -20,7 +20,7 @@ import {
   StepLabel,
   Stepper,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { AccountSelection } from '@pages/transactions/import-csv-dialog/account-selection';
 import { CsvUpload } from '@pages/transactions/import-csv-dialog/csv-upload';
@@ -38,6 +38,12 @@ interface ImportCsvDialogProps {
   onClose: () => void;
 }
 
+interface AccountsState {
+  accounts: AccountDetail[];
+  loading: boolean;
+  error: string | null;
+}
+
 // Step 3 is the success screen — excluded from the Stepper.
 const STEPS = ['Select household', 'Select account', 'Upload CSV'];
 
@@ -53,9 +59,11 @@ export function ImportCsvDialog({
   const [householdId, setHouseholdId] = useState<number | ''>('');
 
   // Step 1
-  const [accounts, setAccounts] = useState<AccountDetail[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(false);
-  const [accountsError, setAccountsError] = useState<string | null>(null);
+  const [accountsState, setAccountsState] = useState<AccountsState>({
+    accounts: [],
+    loading: false,
+    error: null,
+  });
   const [accountId, setAccountId] = useState<number | ''>('');
 
   // Step 2
@@ -68,37 +76,35 @@ export function ImportCsvDialog({
   const [importResult, setImportResult] = useState<FileImportResult | null>(null);
 
   // Fetch accounts whenever the user advances to step 1.
-  useEffect(() => {
-    if (step !== 1 || householdId === '') return;
+   function handleNext() {
+    if (step === 0) {
+      setStep(1);
+      setAccountsState({ accounts: [], loading: true, error: null });
+      listAccounts({ household_id: householdId as number })
+        .then(accounts => setAccountsState({ accounts, loading: false, error: null }))
+        .catch(err => setAccountsState({
+          accounts: [],
+          loading: false,
+          error: err instanceof AccountsApiError ? err.message : 'Could not load accounts.',
+        }));
+    } else if (step === 1) {
+      setStep(2);
+    }
+  }
 
-    setAccountsLoading(true);
-    setAccountsError(null);
-    listAccounts({ household_id: householdId })
-      .then(setAccounts)
-      .catch(err => {
-        setAccountsError(
-          err instanceof AccountsApiError ? err.message : 'Could not load accounts.',
-        );
-      })
-      .finally(() => setAccountsLoading(false));
-  }, [step, householdId]);
-
-  useEffect(() => {
-    setAccounts([]);
-    setAccountsLoading(false);
-    setAccountsError(null);
+  function handleHouseholdChange(id: number | '') {
+    setHouseholdId(id);
+    setAccountsState({ accounts: [], loading: false, error: null });
     setAccountId('');
     setFile(null);
     setUploadError(null);
     setImportResult(null);
-  }, [householdId]);
+  }
 
   function reset() {
     setStep(0);
     setHouseholdId('');
-    setAccounts([]);
-    setAccountsLoading(false);
-    setAccountsError(null);
+    setAccountsState({ accounts: [], loading: false, error: null });
     setAccountId('');
     setFile(null);
     setIsDragging(false);
@@ -145,7 +151,7 @@ export function ImportCsvDialog({
   }
 
   const selectedAccount =
-    accountId !== '' ? accounts.find(a => a.id === accountId) : undefined;
+    accountId !== '' ? accountsState.accounts.find(a => a.id === accountId) : undefined;
 
   return (
     <Dialog
@@ -173,16 +179,16 @@ export function ImportCsvDialog({
           <HouseholdSelection
             households={households}
             householdId={householdId}
-            setHouseholdId={setHouseholdId}
+            setHouseholdId={handleHouseholdChange}
           />
         )}
 
         {/* ── Step 1: Account selection ─────────────────────────────── */}
         {step === 1 && (
           <AccountSelection
-            accounts={accounts}
-            accountsLoading={accountsLoading}
-            accountsError={accountsError}
+            accounts={accountsState.accounts}
+            accountsLoading={accountsState.loading}
+            accountsError={accountsState.error}
             accountId={accountId}
             setAccountId={setAccountId}
           />
@@ -224,7 +230,7 @@ export function ImportCsvDialog({
               <Button
                 variant="contained"
                 disabled={householdId === ''}
-                onClick={() => setStep(1)}
+                onClick={handleNext}
               >
                 Next
               </Button>
@@ -233,8 +239,8 @@ export function ImportCsvDialog({
             {step === 1 && (
               <Button
                 variant="contained"
-                disabled={accountId === '' || accountsLoading || !!accountsError}
-                onClick={() => setStep(2)}
+                disabled={accountId === '' || accountsState.loading || !!accountsState.error}
+                onClick={handleNext}
               >
                 Next
               </Button>
