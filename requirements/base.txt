@@ -2,7 +2,7 @@
 pandas==3.0.5
 mysql-connector-python==26.7.0
 gspread==6.2.1
-google-auth==2.56.3
+google-auth==2.57.0
 python-dotenv==1.2.3
 django==6.0.8
 django-ninja==1.6.3
