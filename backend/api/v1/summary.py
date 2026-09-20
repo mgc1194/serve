@@ -40,22 +40,25 @@ def _build_category_rows(
 ) -> list[CategorySummarySchema]:
     """Groups LabelSummarySchema rows into CategorySummarySchema rows.
 
-    Labels without a category land in a bucket with category=''.
-    Categories are sorted alphabetically; uncategorised lands last.
+    Labels without a category land in a bucket keyed by category_id=None.
+    Categories are sorted alphabetically by name; uncategorised lands last.
     Within each category labels are sorted alphabetically by name.
     """
-    buckets: dict[str, list[LabelSummarySchema]] = defaultdict(list)
+    buckets: dict[int | None, list[LabelSummarySchema]] = defaultdict(list)
+    names: dict[int | None, str] = {}
     for row in label_rows:
-        buckets[row.category].append(row)
+        buckets[row.category_id].append(row)
+        names[row.category_id] = row.category_name
 
     result: list[CategorySummarySchema] = []
     # Sort: named categories first (alphabetically), then uncategorised
-    for category in sorted(buckets, key=lambda c: (c == '', c)):
-        labels = sorted(buckets[category], key=lambda r: r.label_name)
+    for category_id in sorted(buckets, key=lambda cid: (names[cid] == '', names[cid])):
+        labels = sorted(buckets[category_id], key=lambda r: r.label_name)
         total = sum(r.total for r in labels)
         result.append(
             CategorySummarySchema(
-                category=category,
+                category_id=category_id,
+                category_name=names[category_id],
                 total=float(total),
                 labels=labels,
             )
@@ -76,7 +79,7 @@ def get_summary(
 
     Transactions are split into earnings (positive net) and spending (negative
     net) sections, each grouped by the label's category.  Labels with no
-    category appear at the bottom of their section under an empty-string key.
+    category appear at the bottom of their section under a category_id=None key.
     Transactions that have no label at all are counted separately in
     ``uncategorised_total`` and are not included in either section.
 
@@ -140,7 +143,8 @@ def get_summary(
             'label__id',
             'label__name',
             'label__color',
-            'label__category',
+            'label__category_id',
+            'label__category__name',
         )
         .annotate(total=Sum('amount'))
     )
@@ -154,7 +158,8 @@ def get_summary(
             label_id=row['label__id'],
             label_name=row['label__name'],
             label_color=row['label__color'],
-            category=row['label__category'] or '',
+            category_id=row['label__category_id'],
+            category_name=row['label__category__name'] or '',
             total=total_val,
         )
         if total_val >= 0:

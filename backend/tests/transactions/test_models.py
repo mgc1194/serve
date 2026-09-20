@@ -8,7 +8,13 @@ tests/banking/test_models.py as part of the banking app extraction.
 import pytest
 from django.db.utils import IntegrityError
 
-from tests.factories import AccountFactory, HouseholdFactory, LabelFactory, TransactionFactory
+from tests.factories import (
+    AccountFactory,
+    CategoryFactory,
+    HouseholdFactory,
+    LabelFactory,
+    TransactionFactory,
+)
 from transactions.models import Label, Transaction
 
 # ── Module-local fixtures ─────────────────────────────────────────────────────
@@ -43,9 +49,9 @@ class TestLabel:
         label = LabelFactory(name='No Color', household=household)
         assert label.color == '#6B7280'
 
-    def test_category_defaults_to_empty_string(self, household):
+    def test_category_defaults_to_none(self, household):
         label = LabelFactory(name='No Category', household=household)
-        assert label.category == ''
+        assert label.category is None
 
     def test_belongs_to_household(self, label, household):
         assert label.household == household
@@ -61,9 +67,11 @@ class TestLabel:
         assert label2.pk is not None
 
     def test_ordered_by_category_then_name(self, household):
-        LabelFactory(name='Groceries', category='Food', household=household)
-        LabelFactory(name='Bars', category='Food', household=household)
-        LabelFactory(name='Electricity', category='Utilities', household=household)
+        food = CategoryFactory(name='Food', household=household)
+        utilities = CategoryFactory(name='Utilities', household=household)
+        LabelFactory(name='Groceries', category=food, household=household)
+        LabelFactory(name='Bars', category=food, household=household)
+        LabelFactory(name='Electricity', category=utilities, household=household)
 
         labels = list(Label.objects.filter(household=household))
         names = [label.name for label in labels]
@@ -75,6 +83,32 @@ class TestLabel:
         label_id = label.pk
         household.delete()
         assert not Label.objects.filter(pk=label_id).exists()
+
+    def test_category_is_optional(self, household):
+        label = LabelFactory(name='Uncategorised', category=None, household=household)
+        assert label.pk is not None
+        assert label.category is None
+
+    def test_category_belongs_to_a_household(self, label, category):
+        assert label.category == category
+
+    def test_category_set_to_null_when_category_is_deleted(self, household):
+        category = CategoryFactory(name='Food', household=household)
+        label = LabelFactory(name='Groceries', category=category, household=household)
+        category.delete()
+        label.refresh_from_db()
+        assert label.category is None
+
+    def test_label_is_preserved_when_category_is_deleted(self, household):
+        category = CategoryFactory(name='Food', household=household)
+        label = LabelFactory(name='Groceries', category=category, household=household)
+        category.delete()
+        assert Label.objects.filter(pk=label.pk).exists()
+
+    def test_category_accessible_through_reverse_relation(self, household):
+        category = CategoryFactory(name='Food', household=household)
+        label = LabelFactory(name='Groceries', category=category, household=household)
+        assert label in category.labels.all()
 
 
 # ── Transaction.label FK ──────────────────────────────────────────────────────

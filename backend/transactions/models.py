@@ -21,13 +21,17 @@ class Label(models.Model):
     """
     A user-defined label that can be assigned to transactions within a household.
 
-    Labels have a name, an optional hex colour for UI
-    display, and an optional free-text category that groups related labels
-    together (e.g. "Groceries", "Transport").  Names are unique per household
-    so the same name can appear in different households without conflict.
+    Labels have a name, an optional hex colour for UI display, and an optional
+    category (budgets.Category) that groups related labels under a shared
+    budget area (e.g. the "Food & Drinks" category might group "Groceries"
+    and "Restaurants" labels). A label belongs to at most one category. Names
+    are unique per household so the same name can appear in different
+    households without conflict.
 
     Deleting a label nulls out the label FK on any associated transactions
     rather than cascading — transactions are never removed implicitly.
+    Deleting a category similarly nulls out the category FK on any labels
+    that referenced it, rather than deleting the labels.
     """
 
     name = models.CharField(max_length=100)
@@ -36,11 +40,12 @@ class Label(models.Model):
         default='#6B7280',
         help_text='Hex colour code, e.g. "#FF5733".  Used for UI display only.',
     )
-    category = models.CharField(
-        max_length=100,
+    category = models.ForeignKey(
+        'budgets.Category',
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        default='',
-        help_text='Optional grouping for related labels (e.g. "Food", "Bills").',
+        related_name='labels',
     )
     household = models.ForeignKey(
         Household,
@@ -53,7 +58,7 @@ class Label(models.Model):
     class Meta:
         db_table = 'labels'
         unique_together = [['household', 'name']]
-        ordering = ['category', 'name']
+        ordering = ['category__name', 'name']
 
     def __str__(self):
         return f'{self.household.name} — {self.name}'

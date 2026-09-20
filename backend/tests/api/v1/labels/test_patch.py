@@ -7,7 +7,7 @@ labels/conftest.py provides: client.
 
 import pytest
 
-from tests.factories import LabelFactory
+from tests.factories import CategoryFactory, LabelFactory
 
 
 @pytest.mark.django_db
@@ -22,16 +22,31 @@ class TestUpdateLabel:
         assert response.status_code == 200
         assert response.json()['color'] == '#00FF00'
 
-    def test_updates_category(self, client, alice, label):
-        response = client.patch(f'/labels/{label.id}/', json={'category': 'Essentials'}, user=alice)
+    def test_updates_category(self, client, alice, household, label):
+        category = CategoryFactory(name='Essentials', household=household)
+        response = client.patch(
+            f'/labels/{label.id}/', json={'category_id': category.id}, user=alice
+        )
         assert response.status_code == 200
-        assert response.json()['category'] == 'Essentials'
+        assert response.json()['category_id'] == category.id
+
+    def test_clears_category(self, client, alice, label):
+        response = client.patch(f'/labels/{label.id}/', json={'category_id': None}, user=alice)
+        assert response.status_code == 200
+        assert response.json()['category_id'] is None
+
+    def test_category_from_other_household_returns_400(self, client, alice, other_household, label):
+        other_category = CategoryFactory(name='Essentials', household=other_household)
+        response = client.patch(
+            f'/labels/{label.id}/', json={'category_id': other_category.id}, user=alice
+        )
+        assert response.status_code == 400
 
     def test_unspecified_fields_are_unchanged(self, client, alice, label):
         response = client.patch(f'/labels/{label.id}/', json={'color': '#00FF00'}, user=alice)
         data = response.json()
         assert data['name'] == label.name
-        assert data['category'] == label.category
+        assert data['category_id'] == label.category_id
 
     def test_persists_to_database(self, client, alice, label):
         client.patch(f'/labels/{label.id}/', json={'name': 'Supermarket'}, user=alice)

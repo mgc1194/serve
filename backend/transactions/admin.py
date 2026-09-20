@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Transaction
+from .models import Label, Transaction
+
+
+@admin.register(Label)
+class LabelAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'category', 'color', 'household')
+    list_filter = ('category', 'household')
+    search_fields = ('name',)
+    list_select_related = ('category', 'household')
 
 
 @admin.register(Transaction)

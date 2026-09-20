@@ -11,7 +11,7 @@ class LabelSchema(Schema):
     id: int
     name: str
     color: str
-    category: str
+    category_id: int | None
     household_id: int
 
 
@@ -20,7 +20,7 @@ class LabelCreateRequest(Schema):
 
     name: str
     color: str = '#6B7280'
-    category: str = ''
+    category_id: int | None = None
     household_id: int
 
 
@@ -28,8 +28,9 @@ class LabelUpdateRequest(Schema):
     """Request schema for updating a label.
 
     At least one field must be provided. Only provided fields are updated.
+    Setting ``category_id`` to null explicitly clears the label's category.
     """
 
     name: str | None = None
     color: str | None = None
-    category: str | None = None
+    category_id: int | None = None
