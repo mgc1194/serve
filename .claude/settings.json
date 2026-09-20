@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git branch)",
+      "Bash(git diff --stat)",
+      "Bash(git diff --name-only)",
+      "Bash(git log --oneline)",
+      "Bash(pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(ruff check .)"
+      "Bash(ruff format .)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm tsc --noEmit)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+"Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.ssh/**)",
+      "Read(**/*.pem)",
+      "Bash(cat .env*)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)"
+    ]
+  }
+}
