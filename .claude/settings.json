@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      { "tool": "Bash", "command": "pytest*" },
+      { "tool": "Bash", "command": "ruff*" },
+      { "tool": "Bash", "command": "pnpm (test|lint|tsc|build)*" },
+      { "tool": "Bash", "command": "git (status|diff|log|branch)*" }
+    ],
+    "deny": [
+      { "tool": "Read", "globs": [".env*", "**/.ssh/**", "**/*.pem"] },
+      { "tool": "Bash", "command": "cat .env*" },
+      { "tool": "Bash", "command": "git push --force*" },
+      { "tool": "Bash", "command": "git reset --hard*" }
+    ]
+  }
+}
