@@ -32,7 +32,8 @@ jobs:
           # so a later run always catches up whatever an earlier run missed.
           boundary=""
           for commit in $(git rev-list --first-parent HEAD); do
-            if [ -n "$(git tag --points-at "$commit" -l 'v*.*.*-*')" ]; then
+            tag=$(git tag --points-at "$commit" -l 'v*.*.*-*' | sort | head -n1)
+            if [ -n "$tag" ] && gh release view "$tag" >/dev/null 2>&1; then
               boundary="$commit"
               break
             fi
@@ -51,7 +52,9 @@ jobs:
           fi
 
           for commit in $commits; do
-            if [ -n "$(git tag --points-at "$commit" -l 'v*.*.*-*')" ]; then
+            existing_tag=$(git tag --points-at "$commit" -l 'v*.*.*-*' | sort | head -n1)
+            if [ -n "$existing_tag" ]; then
+              gh release view "$existing_tag" >/dev/null 2>&1 || gh release create "$existing_tag" --target "$commit" --title "Release ${existing_tag}" --generate-notes
               continue
             fi
 
