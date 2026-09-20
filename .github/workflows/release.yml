@@ -5,6 +5,10 @@ on:
     branches:
       - production
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -16,10 +20,15 @@ jobs:
       - name: Get date-based version
         id: version
         run: |
-          date="$(date -u +'%Y.%m.%d')"
-          last=$(git tag -l "v${date}-*" | sed "s/^v${date}-//" | sort -n | tail -1)
-          next=$([ -z "$last" ] && echo 0 || echo $((last + 1)))
-          echo "tag=v${date}-${next}" >> $GITHUB_OUTPUT
+          existing=$(git tag --points-at HEAD -l 'v*.*.*-*')
+          if [ -n "$existing" ]; then
+            echo "tag=${existing}" >> $GITHUB_OUTPUT
+          else
+            date="$(date -u +'%Y.%m.%d')"
+            last=$(git tag -l "v${date}-*" | sed "s/^v${date}-//" | sort -n | tail -1)
+            next=$([ -z "$last" ] && echo 0 || echo $((last + 1)))
+            echo "tag=v${date}-${next}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
