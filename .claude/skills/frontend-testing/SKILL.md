@@ -16,8 +16,8 @@ description: >
 | **Vitest** | Test runner and assertion library (`describe`, `it`, `expect`, `vi`) |
 | **React Testing Library** | Rendering and DOM queries (`render`, `screen`, `fireEvent`, `waitFor`) |
 | **@testing-library/user-event** | Realistic user interactions (`userEvent.setup()`) — prefer over `fireEvent` for typing and complex interactions |
-| **MSW** | API mocking at the network layer (configured globally in `vitest.setup.ts`) |
-| **@testing-library/jest-dom** | Extended matchers (`toBeInTheDocument` etc.) — available globally via setup |
+| **MSW** | API mocking at the network layer for integration tests (configured in `tests/utils/setup.ts`) |
+| **@testing-library/jest-dom** | Extended matchers configured for integration tests via `tests/utils/setup.ts`; unit tests use the established Vitest assertions |
 
 ## File Conventions
 
@@ -119,7 +119,7 @@ const tx = makeTransaction({ amount: -42.57, label_id: null });
 
 ### Assertions
 - Use `.toBeDefined()` to assert an element exists (not `.toBeInTheDocument()` — jest-dom matchers behave slightly differently under Vitest and `.toBeDefined()` is the established convention in this codebase)
-- Use `.toBeNull()` for "element should not exist": `screen.queryByText('foo').toBeNull()`
+- Use `.toBeNull()` for "element should not exist": `expect(screen.queryByText('foo')).toBeNull()`
 - Use `expect(fn).toHaveBeenCalledOnce()` and `expect(fn).toHaveBeenCalledWith(...)` for spy assertions
 
 ### AppHeader / auth-dependent components
