@@ -1,16 +1,27 @@
 {
   "permissions": {
     "allow": [
-      { "tool": "Bash", "command": "pytest*" },
-      { "tool": "Bash", "command": "ruff*" },
-      { "tool": "Bash", "command": "pnpm (test|lint|tsc|build)*" },
-      { "tool": "Bash", "command": "git (status|diff|log|branch)*" }
+      "Bash(git status)",
+      "Bash(git branch)",
+      "Bash(git diff --stat)",
+      "Bash(git diff --name-only)",
+      "Bash(git log --oneline)",
+      "Bash(pytest *)",
+      "Bash(ruff check .)",
+      "Bash(ruff format .)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm tsc --noEmit)"
     ],
     "deny": [
-      { "tool": "Read", "globs": [".env*", "**/.ssh/**", "**/*.pem"] },
-      { "tool": "Bash", "command": "cat .env*" },
-      { "tool": "Bash", "command": "git push --force*" },
-      { "tool": "Bash", "command": "git reset --hard*" }
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(~/.ssh/**)",
+      "Read(**/*.pem)",
+      "Bash(cat .env*)",
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)"
     ]
   }
 }
