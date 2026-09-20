@@ -34,7 +34,10 @@ export function CsvUpload({
       setUploadError('Only one file can be imported at a time. Please drop a single CSV file.');
       return;
     }
-    if (dropped[0]) setFile(dropped[0]);
+if (dropped[0]) {
+      setUploadError(null);
+      setFile(dropped[0]);
+    }
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
