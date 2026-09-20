@@ -83,6 +83,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(EMPTY_PAGE);
   vi.spyOn(labelsService, 'listLabels').mockResolvedValue([]);
 });
