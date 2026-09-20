@@ -29,13 +29,26 @@ export function CsvUpload({
   function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped) setFile(dropped);
+    const dropped = e.dataTransfer.files;
+    if (dropped.length > 1) {
+      setUploadError('Only one file can be imported at a time. Please drop a single CSV file.');
+      return;
+    }
+    if (dropped[0]) {
+      setUploadError(null);
+      setFile(dropped[0]);
+    }
   }
 
+  // The <input> below has no `multiple` attribute, so the native file
+  // picker only ever yields a single file — no multi-file rejection needed
+  // here (unlike handleFileDrop, which drag-and-drop can still bypass).
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0];
-    if (picked) setFile(picked);
+    if (picked) {
+      setUploadError(null);
+      setFile(picked);
+    }
     e.target.value = '';
   }
 
