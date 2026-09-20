@@ -158,6 +158,24 @@ class WellsFargoSavingsHandler(BaseHandler):
     col_amount = 'AMOUNT'
 
 
+# ── Citi ──────────────────────────────────────────────────────────────────────
+
+
+class CitiCostcoHandler(BaseHandler):
+    account = 'Costco Visa'
+    date_format = '%m/%d/%Y'
+    col_date = 'Date'
+    col_concept = 'Description'
+    col_amount = 'Amount'  # Derived in _apply_amount_logic
+    negate_amount = True
+
+    @staticmethod
+    def _apply_amount_logic(df):
+        df = df.fillna(0)
+        df['Amount'] = df['Debit'] + df['Credit']
+        return df
+
+
 # ── Registry ──────────────────────────────────────────────────────────────────
 # Keys are the display names shown in the UI / used in the CLI.
 # Values are handler instances — one per supported account type.
@@ -173,4 +191,5 @@ ACCOUNT_HANDLERS = {
     HandlerKeys.DISCOVER: DiscoverHandler(),
     HandlerKeys.WF_CHECKING: WellsFargoCheckingHandler(),
     HandlerKeys.WF_SAVINGS: WellsFargoSavingsHandler(),
+    HandlerKeys.CITI_COSTCO: CitiCostcoHandler(),
 }

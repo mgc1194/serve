@@ -23,3 +23,4 @@ class HandlerKeys:
     DISCOVER = 'discover'
     WF_CHECKING = 'wf-checking'
     WF_SAVINGS = 'wf-savings'
+    CITI_COSTCO = 'citi-costco'

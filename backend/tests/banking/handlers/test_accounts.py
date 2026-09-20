@@ -13,6 +13,7 @@ from banking.handlers.accounts import (
     CapitalOneQuicksilverHandler,
     CapitalOneSavingsHandler,
     ChaseHandler,
+    CitiCostcoHandler,
     DiscoverHandler,
     SoFiCheckingHandler,
     SoFiSavingsHandler,
@@ -270,6 +271,51 @@ class TestDiscoverHandler:
 
     def test_concept(self, subject):
         assert subject['Concept'].iloc[0] == 'AMAZON'
+
+
+# ── Citi Costco ───────────────────────────────────────────────────────────────
+
+
+class TestCitiCostcoHandler:
+    PURCHASE_CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,08/04/2026,COSTCO WHSE,89.32,,MARIO GIL CORREA\n'
+    )
+    PAYMENT_CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,08/04/2026,"ONLINE PAYMENT, THANK YOU",,-578.05,MARIO GIL CORREA\n'
+    )
+
+    @pytest.fixture
+    def purchase(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV)))
+        return CitiCostcoHandler().process('fake.csv')
+
+    @pytest.fixture
+    def payment(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PAYMENT_CSV)))
+        return CitiCostcoHandler().process('fake.csv')
+
+    def test_returns_a_dataframe(self, purchase):
+        assert purchase is not None
+
+    def test_account_name(self, purchase):
+        assert purchase['Account'].iloc[0] == 'Costco Visa'
+
+    def test_purchase_amount_is_negative(self, purchase):
+        assert purchase['Amount'].iloc[0] == pytest.approx(-89.32)
+
+    def test_payment_amount_is_positive(self, payment):
+        assert payment['Amount'].iloc[0] == pytest.approx(578.05)
+
+    def test_empty_debit_credit_cells_do_not_produce_nan(self, purchase):
+        assert not purchase['Amount'].isna().any()
+
+    def test_date(self, purchase):
+        assert purchase['Date'].iloc[0] == pd.Timestamp('2026-08-04')
+
+    def test_concept(self, purchase):
+        assert purchase['Concept'].iloc[0] == 'COSTCO WHSE'
 
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────

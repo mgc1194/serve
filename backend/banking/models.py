@@ -48,6 +48,7 @@ class AccountType(models.Model):
         (HandlerKeys.CHASE, 'Chase Card'),
         (HandlerKeys.DISCOVER, 'Discover Card'),
         (HandlerKeys.AMEX_DELTA, 'Delta SkyMiles Card'),
+        (HandlerKeys.CITI_COSTCO, 'Costco Anywhere Visa Card'),
     ]
 
     name = models.CharField(max_length=255)
