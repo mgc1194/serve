@@ -544,9 +544,13 @@ def import_transactions(
         A FileImportResult with counts of inserted, skipped, and total rows.
 
     Raises:
+        HttpError: 400 if more than one file is sent in the request.
         HttpError: 403 if the user is not a member of the account's household.
         HttpError: 404 if the account does not exist.
     """
+    if len(request.FILES.getlist('file')) > 1:
+        raise HttpError(400, 'Only one file can be imported at a time.')
+
     account = get_object_or_404(
         Account.objects.select_related('household'),
         id=account_id,
