@@ -183,6 +183,48 @@ describe('CsvUpload', () => {
     );
   });
 
+  it('clears a prior upload error when a single file is picked via input', () => {
+    const setFile = vi.fn();
+    const setUploadError = vi.fn();
+    render(
+      <CsvUpload
+        selectedAccount={ACCOUNT}
+        file={null}
+        setFile={setFile}
+        isDragging={false}
+        setIsDragging={vi.fn()}
+        uploadError="Only one file can be imported at a time. Please select a single CSV file."
+        setUploadError={setUploadError}
+      />,
+    );
+    const file = new File([''], 'transactions.csv', { type: 'text/csv' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(setUploadError).toHaveBeenCalledWith(null);
+    expect(setFile).toHaveBeenCalledWith(file);
+  });
+
+  it('clears a prior upload error when a single file is dropped', () => {
+    const setFile = vi.fn();
+    const setUploadError = vi.fn();
+    render(
+      <CsvUpload
+        selectedAccount={ACCOUNT}
+        file={null}
+        setFile={setFile}
+        isDragging={false}
+        setIsDragging={vi.fn()}
+        uploadError="Only one file can be imported at a time. Please drop a single CSV file."
+        setUploadError={setUploadError}
+      />,
+    );
+    const file = new File([''], 'transactions.csv', { type: 'text/csv' });
+    const label = document.querySelector('label') as HTMLLabelElement;
+    fireEvent.drop(label, { dataTransfer: { files: [file] } });
+    expect(setUploadError).toHaveBeenCalledWith(null);
+    expect(setFile).toHaveBeenCalledWith(file);
+  });
+
   it('calls setUploadError with null when the error alert is dismissed', () => {
     const setUploadError = vi.fn();
     render(
