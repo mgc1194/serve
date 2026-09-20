@@ -20,7 +20,7 @@ jobs:
       - name: Get date-based version
         id: version
         run: |
-          existing=$(git tag --points-at HEAD -l 'v*.*.*-*')
+          existing=$(git tag --points-at HEAD -l 'v*.*.*-*' | sort | head -n1)
           if [ -n "$existing" ]; then
             echo "tag=${existing}" >> $GITHUB_OUTPUT
           else
@@ -34,6 +34,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           name: Release ${{ steps.version.outputs.tag }}
           generate_release_notes: true
         env:
