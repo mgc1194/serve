@@ -29,13 +29,22 @@ export function CsvUpload({
   function handleFileDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
-    const dropped = e.dataTransfer.files[0];
-    if (dropped) setFile(dropped);
+    const dropped = e.dataTransfer.files;
+    if (dropped.length > 1) {
+      setUploadError('Only one file can be imported at a time. Please drop a single CSV file.');
+      return;
+    }
+    if (dropped[0]) setFile(dropped[0]);
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const picked = e.target.files?.[0];
-    if (picked) setFile(picked);
+    const picked = e.target.files;
+    if (picked && picked.length > 1) {
+      setUploadError('Only one file can be imported at a time. Please select a single CSV file.');
+      e.target.value = '';
+      return;
+    }
+    if (picked?.[0]) setFile(picked[0]);
     e.target.value = '';
   }
 

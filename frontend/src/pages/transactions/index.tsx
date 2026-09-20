@@ -59,7 +59,9 @@ export function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-
+  // Bumped to force a refetch (e.g. after a CSV import) even when none of
+  // the URL-driven params below have changed.
+  const [refreshToken, setRefreshToken] = useState(0);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   // loadRef gives the retry button a stable reference to the latest fetch
@@ -67,6 +69,8 @@ export function TransactionsPage() {
   const loadRef = useRef<() => void>(() => {});
 
   useEffect(() => {
+    let ignore = false;
+
     function load() {
       if (householdId === undefined) {
         setPaginated(null);
@@ -91,22 +95,30 @@ export function TransactionsPage() {
         listLabels(householdId),
       ])
         .then(([page, lbls]) => {
+          if (ignore) return;
           setPaginated(page);
           setLabels(lbls);
         })
         .catch(err => {
+          if (ignore) return;
           setError(
             err instanceof ApiError || err instanceof LabelsApiError
               ? err.message
               : 'Could not load transactions.',
           );
         })
-        .finally(() => setIsLoading(false));
+        .finally(() => {
+          if (!ignore) setIsLoading(false);
+        });
     }
 
     loadRef.current = load;
     load();
-  }, [householdId, cursor, previousCursor, sortKey, sortDir]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [householdId, cursor, previousCursor, sortKey, sortDir, refreshToken]);
 
   // ── URL mutation helpers ────────────────────────────────────────────────────
   function buildParams(overrides: Record<string, string | undefined>) {
@@ -168,6 +180,7 @@ export function TransactionsPage() {
   function handleImported(_result: FileImportResult) {
     setImportOpen(false);
     setSearchParams(buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }));
+    setRefreshToken(t => t + 1);
   }
 
   return (

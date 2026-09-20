@@ -135,6 +135,54 @@ describe('CsvUpload', () => {
     expect(label?.querySelector('input[type="file"]')).not.toBeNull();
   });
 
+  it('sets an upload error and does not call setFile when multiple files are picked via input', () => {
+    const setFile = vi.fn();
+    const setUploadError = vi.fn();
+    render(
+      <CsvUpload
+        selectedAccount={ACCOUNT}
+        file={null}
+        setFile={setFile}
+        isDragging={false}
+        setIsDragging={vi.fn()}
+        uploadError={null}
+        setUploadError={setUploadError}
+      />,
+    );
+    const fileA = new File([''], 'a.csv', { type: 'text/csv' });
+    const fileB = new File([''], 'b.csv', { type: 'text/csv' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [fileA, fileB] } });
+    expect(setFile).not.toHaveBeenCalled();
+    expect(setUploadError).toHaveBeenCalledWith(
+      'Only one file can be imported at a time. Please select a single CSV file.',
+    );
+  });
+
+  it('sets an upload error and does not call setFile when multiple files are dropped', () => {
+    const setFile = vi.fn();
+    const setUploadError = vi.fn();
+    render(
+      <CsvUpload
+        selectedAccount={ACCOUNT}
+        file={null}
+        setFile={setFile}
+        isDragging={false}
+        setIsDragging={vi.fn()}
+        uploadError={null}
+        setUploadError={setUploadError}
+      />,
+    );
+    const fileA = new File([''], 'a.csv', { type: 'text/csv' });
+    const fileB = new File([''], 'b.csv', { type: 'text/csv' });
+    const label = document.querySelector('label') as HTMLLabelElement;
+    fireEvent.drop(label, { dataTransfer: { files: [fileA, fileB] } });
+    expect(setFile).not.toHaveBeenCalled();
+    expect(setUploadError).toHaveBeenCalledWith(
+      'Only one file can be imported at a time. Please drop a single CSV file.',
+    );
+  });
+
   it('calls setUploadError with null when the error alert is dismissed', () => {
     const setUploadError = vi.fn();
     render(
