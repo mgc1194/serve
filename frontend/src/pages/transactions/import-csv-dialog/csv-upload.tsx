@@ -47,7 +47,10 @@ if (dropped[0]) {
       e.target.value = '';
       return;
     }
-    if (picked?.[0]) setFile(picked[0]);
+    if (picked?.[0]) {
+      setFile(picked[0]);
+      setUploadError(null);
+    };
     e.target.value = '';
   }
 
