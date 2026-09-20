@@ -14,7 +14,7 @@ import pytest
 from django.test import Client
 
 from tests.api.v1.summary.conftest import _tx
-from tests.factories import AccountFactory, LabelFactory
+from tests.factories import AccountFactory, CategoryFactory, LabelFactory
 
 # ── Basic access ──────────────────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ class TestSummaryAggregation:
         _tx(account, -42.57, food_label)
         data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
         assert len(data['spending']) == 1
-        assert data['spending'][0]['category'] == 'Food'
+        assert data['spending'][0]['category_name'] == 'Food'
         assert data['spending'][0]['labels'][0]['label_name'] == 'Groceries'
 
     def test_earnings_label_appears_in_earnings(
@@ -72,7 +72,7 @@ class TestSummaryAggregation:
         _tx(account, 2500.00, earnings_label)
         data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
         assert len(data['earnings']) == 1
-        assert data['earnings'][0]['category'] == 'Earnings'
+        assert data['earnings'][0]['category_name'] == 'Earnings'
 
     def test_unlabelled_transaction_goes_to_uncategorised(self, auth_client, account, household):
         _tx(account, -15.00)
@@ -101,7 +101,10 @@ class TestSummaryAggregation:
         other_account = AccountFactory(
             name='Other Account', account_type=account_type, household=other_household
         )
-        other_label = LabelFactory(name='Groceries', category='Food', household=other_household)
+        other_category = CategoryFactory(name='Food', household=other_household)
+        other_label = LabelFactory(
+            name='Groceries', category=other_category, household=other_household
+        )
         _tx(other_account, -100.00, other_label)
         data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
         assert data['total'] == 0.0
