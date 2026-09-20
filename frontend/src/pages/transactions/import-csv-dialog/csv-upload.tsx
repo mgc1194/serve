@@ -48,8 +48,8 @@ if (dropped[0]) {
       return;
     }
     if (picked?.[0]) {
-      setFile(picked[0]);
       setUploadError(null);
+      setFile(picked[0]);
     };
     e.target.value = '';
   }
