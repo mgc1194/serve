@@ -9,6 +9,9 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -17,25 +20,47 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get date-based version
-        id: version
+      - name: Tag and release any untagged production commits
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
-          existing=$(git tag --points-at HEAD -l 'v*.*.*-*' | sort | head -n1)
-          if [ -n "$existing" ]; then
-            echo "tag=${existing}" >> $GITHUB_OUTPUT
+          # GitHub's concurrency group only keeps one pending run, so a burst of
+          # pushes can drop a run entirely. Find the most recently tagged commit
+          # on production's first-parent history and process everything after
+          # it (falling back to this push's own delta if nothing is tagged yet),
+          # so a later run always catches up whatever an earlier run missed.
+          boundary=""
+          for commit in $(git rev-list --first-parent HEAD); do
+            if [ -n "$(git tag --points-at "$commit" -l 'v*.*.*-*')" ]; then
+              boundary="$commit"
+              break
+            fi
+          done
+
+          if [ -z "$boundary" ] && [ -n "$BEFORE_SHA" ] \
+              && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+              && git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            boundary="$BEFORE_SHA"
+          fi
+
+          if [ -n "$boundary" ]; then
+            commits=$(git rev-list --first-parent --reverse "${boundary}..HEAD")
           else
+            commits=$(git rev-parse HEAD)
+          fi
+
+          for commit in $commits; do
+            if [ -n "$(git tag --points-at "$commit" -l 'v*.*.*-*')" ]; then
+              continue
+            fi
+
             date="$(date -u +'%Y.%m.%d')"
             last=$(git tag -l "v${date}-*" | sed "s/^v${date}-//" | sort -n | tail -1)
             next=$([ -z "$last" ] && echo 0 || echo $((last + 1)))
-            echo "tag=v${date}-${next}" >> $GITHUB_OUTPUT
-          fi
+            tag="v${date}-${next}"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: Release ${{ steps.version.outputs.tag }}
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            git tag "$tag" "$commit"
+            git push origin "$tag"
+            gh release create "$tag" --target "$commit" --title "Release ${tag}" --generate-notes
+          done

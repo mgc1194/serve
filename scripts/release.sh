@@ -26,7 +26,7 @@ echo
 TITLE="Release: $(date -u +'%Y-%m-%d') ($HEAD -> $BASE)"
 
 OWNER=$(gh repo view --json owner --jq '.owner.login')
-PR_URL=$(gh pr list --base "$BASE" --head "$OWNER:$HEAD" --json url --jq '.[0].url')
+PR_URL=$(gh pr list --base "$BASE" --head "$OWNER:$HEAD" --json url --jq '.[0].url // empty')
 if [ -n "$PR_URL" ]; then
     echo "Reusing existing PR: $PR_URL"
 else
