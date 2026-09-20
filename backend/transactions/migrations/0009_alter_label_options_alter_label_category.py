@@ -15,8 +15,17 @@ class Migration(migrations.Migration):
             name='label',
             options={'ordering': ['category__name', 'name']},
         ),
+        # The legacy column is NOT NULL (see 0005), so it must be made nullable
+        # before any row can be cleared to NULL ahead of the FK conversion.
+        migrations.AlterField(
+            model_name='label',
+            name='category',
+            field=models.CharField(blank=True, default='', max_length=100, null=True),
+        ),
+        # Every legacy free-text value is cleared, not just '' — none of them
+        # can be coerced into the new numeric FK.
         migrations.RunSQL(
-            sql="UPDATE labels SET category = NULL WHERE category = ''",
+            sql='UPDATE labels SET category = NULL',
             reverse_sql="UPDATE labels SET category = '' WHERE category IS NULL",
         ),
         migrations.AlterField(
