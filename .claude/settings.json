@@ -16,7 +16,8 @@
     "deny": [
       "Read(.env)",
       "Read(.env.*)",
-      "Read(**/.env)",
+"Read(**/.env)",
+      "Read(**/.env.*)",
       "Read(~/.ssh/**)",
       "Read(**/*.pem)",
       "Bash(cat .env*)",
