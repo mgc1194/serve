@@ -9,6 +9,23 @@ jobs:
     name: Backend Tests
     runs-on: ubuntu-latest
 
+    # Matches production's MySQL major version (Railway runs mysql:9) rather
+    # than relying on the runner's preinstalled MySQL, which lagged behind
+    # at 8.0.x and doesn't meet Django 6.1's MySQL 8.4+ requirement.
+    services:
+      mysql:
+        image: mysql:9
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: serve
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
       - uses: actions/checkout@v7
 
@@ -23,14 +40,6 @@ jobs:
       - name: Lint
         working-directory: backend
         run: ruff check .
-
-      - name: Start MySQL
-        run: sudo /etc/init.d/mysql start
-
-      - name: Set up database
-        run: |
-          echo "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '';" | sudo mysql -uroot -proot
-          mysql -uroot -e "CREATE DATABASE IF NOT EXISTS serve;"
 
       - name: Run tests
         working-directory: backend
