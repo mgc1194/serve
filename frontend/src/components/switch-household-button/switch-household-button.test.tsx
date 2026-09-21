@@ -1,6 +1,6 @@
 // components/switch-household-button/switch-household-button.test.tsx
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { SwitchHouseholdButton } from '@components/switch-household-button';
@@ -24,13 +24,16 @@ function makeUser(households: Household[]): User {
   };
 }
 
-function setup(households: Household[] = HOUSEHOLDS) {
+function setup(
+  households: Household[] = HOUSEHOLDS,
+  props: Partial<React.ComponentProps<typeof SwitchHouseholdButton>> = {},
+) {
   return render(
     <AuthProvider
       value={{ user: makeUser(households), setUser: () => {}, isLoading: false, sessionError: false }}
     >
       <ActiveHouseholdProvider>
-        <SwitchHouseholdButton />
+        <SwitchHouseholdButton {...props} />
       </ActiveHouseholdProvider>
     </AuthProvider>,
   );
@@ -58,10 +61,37 @@ describe('SwitchHouseholdButton interactions', () => {
     expect(screen.getByText('Beta Household')).toBeDefined();
   });
 
-  it('updates the button label after selecting a different household', () => {
+  it('updates the button label after selecting a different household', async () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /alpha household/i }));
     fireEvent.click(screen.getByText('Beta Household'));
+    // The dialog's own list item is also named "Beta Household" and briefly
+    // overlaps with the (closing) trigger button during the exit transition
+    // — wait for the dialog to fully close so this only matches the trigger.
+    await waitFor(() => expect(screen.queryByText('Switch household')).toBeNull());
     expect(screen.getByRole('button', { name: /beta household/i })).toBeDefined();
+  });
+});
+
+describe('SwitchHouseholdButton iconOnly', () => {
+  it('renders an icon button labelled "Switch household" instead of the household name', () => {
+    setup(HOUSEHOLDS, { iconOnly: true });
+    expect(screen.getByRole('button', { name: 'Switch household' })).toBeDefined();
+    expect(screen.queryByText('Alpha Household')).toBeNull();
+  });
+
+  it('opens the switch dialog on click', () => {
+    setup(HOUSEHOLDS, { iconOnly: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Switch household' }));
+    expect(screen.getByText('Switch household')).toBeDefined();
+    expect(screen.getByText('Beta Household')).toBeDefined();
+  });
+
+  it('does not change its own label after selecting a different household', async () => {
+    setup(HOUSEHOLDS, { iconOnly: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Switch household' }));
+    fireEvent.click(screen.getByText('Beta Household'));
+    await waitFor(() => expect(screen.queryByText('Switch household')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Switch household' })).toBeDefined();
   });
 });

@@ -1,5 +1,6 @@
 // components/switch-household-button/switch-household-button.story.tsx
 
+import { Box, Typography } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { SwitchHouseholdButton } from '@components/switch-household-button';
@@ -26,6 +27,15 @@ type Story = StoryObj<typeof SwitchHouseholdButton>;
 
 export const Default: Story = {};
 
-export const AsPageTitle: Story = {
-  args: { sx: { typography: 'h4' } },
+// Icon-only trigger placed next to a real heading — used by pages (e.g.
+// TransactionsPage) that already render the household name as their page
+// title. The heading stays a real <h4> in the accessibility tree; this is a
+// separate, clearly-labelled button rather than a restyled heading.
+export const IconOnly: Story = {
+  render: args => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="h4">Smith Household</Typography>
+      <SwitchHouseholdButton {...args} iconOnly />
+    </Box>
+  ),
 };
