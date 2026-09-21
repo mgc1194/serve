@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { TransactionsPage } from '@pages/transactions';
 import type { FileImportResult, PaginatedTransactions } from '@serve/types/global';
 import * as labelsService from '@services/labels';
@@ -77,7 +78,9 @@ const EMPTY_PAGE: PaginatedTransactions = {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <TransactionsPage />
+      <ActiveHouseholdProvider>
+        <TransactionsPage />
+      </ActiveHouseholdProvider>
     </MemoryRouter>,
   );
 }

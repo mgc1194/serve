@@ -1,8 +1,8 @@
 // pages/households/household-detailed-card/index.tsx — Full management card for a single household.
 //
 // Displays household name with inline rename, member list with add-by-email,
-// labels section, account count chip (links to /accounts?household_id=N),
-// add-account shortcut, and delete with inline confirmation.
+// labels section, account count chip (sets this household active and links
+// to /accounts), add-account shortcut, and delete with inline confirmation.
 
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import AddIcon from '@mui/icons-material/Add';
@@ -25,6 +25,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { useActiveHousehold } from '@context/active-household-context';
 import { AddHouseholdMemberForm } from '@pages/households/household-detailed-card/add-household-member-form';
 import { HouseholdLabelsSection } from '@pages/households/household-detailed-card/household-labels-section';
 import { HouseholdMemberList } from '@pages/households/household-detailed-card/household-member-list';
@@ -49,6 +50,7 @@ export function HouseholdDetailCard({
   onAddAccount,
 }: HouseholdDetailCardProps) {
   const navigate = useNavigate();
+  const { setActiveHousehold } = useActiveHousehold();
 
   // Rename
   const [isEditing, setIsEditing] = useState(false);
@@ -116,7 +118,8 @@ export function HouseholdDetailCard({
   }
 
   function handleAccountChipClick() {
-    navigate(`/accounts?household_id=${household.id}`);
+    setActiveHousehold(household);
+    navigate('/accounts');
   }
 
   return (

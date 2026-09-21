@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActiveHouseholdProvider } from '@context/active-household-context';
+import { AuthProvider } from '@context/auth-context';
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
+import type { User } from '@serve/types/global';
 import { renameHousehold, deleteHousehold, addMember, ApiError } from '@services/households';
 
 vi.mock('@services/households', async (importOriginal) => {
@@ -29,6 +32,15 @@ const household = {
   members: [{ id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User' }],
 };
 
+const authUser: User = {
+  id: 1,
+  email: 'test@example.com',
+  first_name: 'Test',
+  last_name: 'User',
+  username: 'test',
+  households: [{ id: household.id, name: household.name }],
+};
+
 function setup(
   overrides: Partial<typeof household> = {},
   accountCount: number | null = 3,
@@ -37,18 +49,25 @@ function setup(
   const onDeleted = vi.fn();
   const onAddAccount = vi.fn();
   render(
-    <HouseholdDetailCard
-      household={{ ...household, ...overrides }}
-      onUpdated={onUpdated}
-      onDeleted={onDeleted}
-      accountCount={accountCount}
-      onAddAccount={onAddAccount}
-    />,
+    <AuthProvider value={{ user: authUser, setUser: vi.fn(), isLoading: false, sessionError: false }}>
+      <ActiveHouseholdProvider>
+        <HouseholdDetailCard
+          household={{ ...household, ...overrides }}
+          onUpdated={onUpdated}
+          onDeleted={onDeleted}
+          accountCount={accountCount}
+          onAddAccount={onAddAccount}
+        />
+      </ActiveHouseholdProvider>
+    </AuthProvider>,
   );
   return { onUpdated, onDeleted, onAddAccount };
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  localStorage.clear();
+});
 
 describe('HouseholdDetailCard rendering', () => {
   it('renders household name', () => {
@@ -90,10 +109,11 @@ describe('HouseholdDetailCard account count chip', () => {
     expect(screen.getByText('Accounts')).toBeDefined();
   });
 
-  it('navigates to the filtered accounts page when clicked', () => {
+  it('sets the household active and navigates to Accounts when clicked', () => {
     setup();
     fireEvent.click(screen.getByText('3 accounts'));
-    expect(mockNavigate).toHaveBeenCalledWith('/accounts?household_id=1');
+    expect(mockNavigate).toHaveBeenCalledWith('/accounts');
+    expect(localStorage.getItem('serve:activeHouseholdId:1')).toBe('1');
   });
 });
 

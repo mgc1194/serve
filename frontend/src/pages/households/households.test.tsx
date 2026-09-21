@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { HouseholdsPage } from '@pages/households';
 import * as accountsService from '@services/accounts';
 import * as service from '@services/households';
@@ -72,7 +73,9 @@ const account = {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <HouseholdsPage />
+      <ActiveHouseholdProvider>
+        <HouseholdsPage />
+      </ActiveHouseholdProvider>
     </MemoryRouter>,
   );
 }

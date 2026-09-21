@@ -1,55 +1,31 @@
-// pages/summary/summary-filters.tsx — Household, year, and month pickers.
+// pages/summary/summary-filters.tsx — Year and month pickers.
+//
+// Household is chosen session-wide via SwitchHouseholdButton, rendered
+// alongside this component by SummaryPage.
 
 import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
 
 import { MONTH_NAMES } from '@pages/summary/date-utils';
-import type { Household } from '@serve/types/global';
-
 
 interface SummaryFiltersProps {
-  households: Household[];
-  householdId: number | undefined;
   selectedYear: number;
   selectedMonth: number;
   years: number[];
   availableMonths: number[];
-  onHouseholdChange: (id: number) => void;
   onYearChange: (year: number) => void;
   onMonthChange: (month: number) => void;
 }
 
 export function SummaryFilters({
-  households,
-  householdId,
   selectedYear,
   selectedMonth,
   years,
   availableMonths,
-  onHouseholdChange,
   onYearChange,
   onMonthChange,
 }: SummaryFiltersProps) {
   return (
-    <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-      {households.length > 1 && (
-        <FormControl size="small" sx={{ minWidth: 200 }}>
-          <InputLabel id="summary-household-label">Household</InputLabel>
-          <Select
-            labelId="summary-household-label"
-            id="summary-household-select"
-            value={householdId ?? ''}
-            label="Household"
-            onChange={e => onHouseholdChange(Number(e.target.value))}
-          >
-            {households.map(h => (
-              <MenuItem key={h.id} value={h.id}>
-                {h.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      )}
-
+    <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
       <FormControl size="small" sx={{ minWidth: 110 }}>
         <InputLabel id="summary-year-label">Year</InputLabel>
         <Select

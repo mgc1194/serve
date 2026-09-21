@@ -1,6 +1,7 @@
 // pages/summary/index.tsx — Detailed summary page.
 //
-// Orchestrates data fetching and URL-driven filter state.
+// Household comes from the session-wide useActiveHousehold() context; only
+// `month` remains URL-driven state.
 // Rendering is delegated to SummaryFilters, SummaryTotalsBar, and SummarySection.
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -8,7 +9,8 @@ import { Alert, Box, Button, CircularProgress, Container, Typography } from '@mu
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { useAuth } from '@context/auth-context';
+import { SwitchHouseholdButton } from '@components/switch-household-button';
+import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
 import {
   availableMonths,
@@ -21,22 +23,15 @@ import {
 import { SummaryFilters } from '@pages/summary/summary-filters';
 import { SummarySection } from '@pages/summary/summary-section';
 import { SummaryTotalsBar } from '@pages/summary/summary-totals-bar';
-import type { Household, Summary } from '@serve/types/global';
+import type { Summary } from '@serve/types/global';
 import { ApiError, getSummary } from '@services/summary';
 
 export function SummaryPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { activeHousehold } = useActiveHousehold();
 
-  const households: Household[] = useMemo(() => user?.households ?? [], [user]);
-
-  const householdIdParam = searchParams.get('household_id');
-  const householdIdFilter: number | undefined = (() => {
-    if (householdIdParam == null || householdIdParam.trim() === '') return undefined;
-    const parsed = Number(householdIdParam);
-    return Number.isNaN(parsed) ? undefined : parsed;
-  })();
+  const householdId = activeHousehold?.id;
 
   // Sanitise the month URL param — parseMonthStr falls back to the current
   // month on invalid input, so we re-derive the canonical string from the
@@ -60,19 +55,8 @@ export function SummaryPage() {
     [selectedYear, earliestDate],
   );
 
-  // Redirect to first household when none is selected yet.
   useEffect(() => {
-    if (householdIdFilter === undefined && households.length > 0) {
-      setSearchParams(
-        { household_id: String(households[0].id), month: monthParam },
-        { replace: true },
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [households]);
-
-  useEffect(() => {
-    if (householdIdFilter === undefined) {
+    if (householdId === undefined) {
       // Resets summary state; part of the same synchronize-with-fetch effect
       // as the loading branch below.
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -85,36 +69,26 @@ export function SummaryPage() {
     setError(null);
     setSummary(null);
 
-    getSummary({ household_id: householdIdFilter, month: monthParam })
+    getSummary({ household_id: householdId, month: monthParam })
       .then(data => setSummary(data))
       .catch(err => {
         setError(err instanceof ApiError ? err.message : 'Could not load summary.');
       })
       .finally(() => setIsLoading(false));
-  }, [householdIdFilter, monthParam]);
-
-  function handleHouseholdChange(id: number) {
-    setSearchParams({ household_id: String(id), month: monthParam });
-  }
+  }, [householdId, monthParam]);
 
   function handleYearChange(year: number) {
     // Clamp selected month if it is not valid in the new year.
     const available = availableMonths(year, earliestDate);
     const newMonth = available.includes(selectedMonth) ? selectedMonth : available[0];
     if (newMonth !== undefined) {
-      const params: Record<string, string> = { month: toMonthStr(year, newMonth) };
-      if (householdIdFilter != null) params.household_id = String(householdIdFilter);
-      setSearchParams(params);
+      setSearchParams({ month: toMonthStr(year, newMonth) });
     }
   }
 
   function handleMonthChange(month: number) {
-    const params: Record<string, string> = { month: toMonthStr(selectedYear, month) };
-    if (householdIdFilter != null) params.household_id = String(householdIdFilter);
-    setSearchParams(params);
+    setSearchParams({ month: toMonthStr(selectedYear, month) });
   }
-
-  const activeHousehold = households.find(h => h.id === householdIdFilter);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -137,17 +111,17 @@ export function SummaryPage() {
           Transactions aggregated by label and category.
         </Typography>
 
-        <SummaryFilters
-          households={households}
-          householdId={householdIdFilter}
-          selectedYear={selectedYear}
-          selectedMonth={selectedMonth}
-          years={years}
-          availableMonths={months}
-          onHouseholdChange={handleHouseholdChange}
-          onYearChange={handleYearChange}
-          onMonthChange={handleMonthChange}
-        />
+        <Box sx={{ display: 'flex', gap: 2, mb: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SwitchHouseholdButton />
+          <SummaryFilters
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            years={years}
+            availableMonths={months}
+            onYearChange={handleYearChange}
+            onMonthChange={handleMonthChange}
+          />
+        </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 3 }}>

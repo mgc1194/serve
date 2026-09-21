@@ -3,23 +3,23 @@
 // Owns all URL-driven state: cursor, sort, sort_dir.
 // Fetch logic lives in a useEffect; loadRef gives the Retry button a
 // stable reference without adding load as an effect dependency.
-// Active household is the user's first household — household switching
-// will be handled globally in a follow-up PR.
+// Active household comes from the session-wide useActiveHousehold() context;
+// the header's household name doubles as the switch-household button.
 // Rendering is delegated to TransactionsTable and ImportCsvDialog.
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import { Box, Button, Container, Typography } from '@mui/material';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { useAuth } from '@context/auth-context';
+import { SwitchHouseholdButton } from '@components/switch-household-button';
+import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
 import type {
   FileImportResult,
-  Household,
   Label,
   PaginatedTransactions,
   SortDir,
@@ -37,13 +37,8 @@ const PAGE_SIZE = 20;
 export function TransactionsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { activeHousehold, households } = useActiveHousehold();
 
-  const households: Household[] = useMemo(() => user?.households ?? [], [user]);
-
-  // Use the first household as the active one until global household
-  // switching is implemented (tracked separately).
-  const activeHousehold = households[0] ?? null;
   const householdId = activeHousehold?.id;
 
   // ── URL-driven state ────────────────────────────────────────────────────────
@@ -198,9 +193,18 @@ export function TransactionsPage() {
         </Button>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">
-            {activeHousehold ? activeHousehold.name : 'Transactions'}
-          </Typography>
+          {activeHousehold ? (
+            <SwitchHouseholdButton
+              sx={{ typography: 'h4', ml: -1 }}
+              onChange={() =>
+                setSearchParams(
+                  buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }),
+                )
+              }
+            />
+          ) : (
+            <Typography variant="h4">Transactions</Typography>
+          )}
           <Button
             variant="outlined"
             startIcon={<FileUploadOutlinedIcon />}
