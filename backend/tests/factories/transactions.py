@@ -33,7 +33,6 @@ class LabelFactory(factory.django.DjangoModelFactory):
 
     name = factory.Sequence(lambda n: f'Label {n}')
     color = '#6B7280'
-    category = ''
     household = factory.SubFactory(HouseholdFactory)
 
 

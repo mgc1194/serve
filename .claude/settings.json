@@ -8,7 +8,7 @@
       "Bash(git log --oneline)",
       "Bash(pytest *)",
       "Bash(python -m pytest *)",
-      "Bash(ruff check .)"
+      "Bash(ruff check .)",
       "Bash(ruff format .)",
       "Bash(pnpm test *)",
       "Bash(pnpm lint)",

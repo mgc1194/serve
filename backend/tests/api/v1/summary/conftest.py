@@ -12,7 +12,7 @@ Root conftest provides: household, other_household, account_type.
 import pytest
 from django.test import Client
 
-from tests.factories import AccountFactory, LabelFactory, UserFactory
+from tests.factories import AccountFactory, CategoryFactory, LabelFactory, UserFactory
 from transactions.models import Transaction
 
 
@@ -41,27 +41,31 @@ def account(db, account_type, household):
 
 @pytest.fixture
 def food_label(db, household):
-    return LabelFactory(name='Groceries', color='#16a34a', category='Food', household=household)
+    category = CategoryFactory(name='Food', household=household)
+    return LabelFactory(name='Groceries', color='#16a34a', category=category, household=household)
 
 
 @pytest.fixture
 def income_label(db, household):
-    return LabelFactory(name='Income', color='#036628', category='Income', household=household)
+    category = CategoryFactory(name='Income', household=household)
+    return LabelFactory(name='Income', color='#036628', category=category, household=household)
 
 
 @pytest.fixture
 def transport_label(db, household):
-    return LabelFactory(name='Gas', color='#2563eb', category='Transport', household=household)
+    category = CategoryFactory(name='Transport', household=household)
+    return LabelFactory(name='Gas', color='#2563eb', category=category, household=household)
 
 
 @pytest.fixture
 def earnings_label(db, household):
-    return LabelFactory(name='Paycheck', color='#059669', category='Earnings', household=household)
+    category = CategoryFactory(name='Earnings', household=household)
+    return LabelFactory(name='Paycheck', color='#059669', category=category, household=household)
 
 
 @pytest.fixture
 def no_category_label(db, household):
-    return LabelFactory(name='Miscellaneous', color='#6B7280', category='', household=household)
+    return LabelFactory(name='Miscellaneous', color='#6B7280', category=None, household=household)
 
 
 @pytest.fixture

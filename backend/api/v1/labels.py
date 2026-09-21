@@ -16,6 +16,7 @@ from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
+from budgets.models import Category
 from schemas.labels import LabelCreateRequest, LabelSchema, LabelUpdateRequest
 from transactions.models import Label
 from users.models import Household
@@ -54,9 +55,29 @@ def _serialize(label: Label) -> dict:
         'id': label.id,
         'name': label.name,
         'color': label.color,
-        'category': label.category,
+        'category_id': label.category_id,
         'household_id': label.household_id,
     }
+
+
+def _get_category_for_household(category_id: int, household_id: int) -> Category:
+    """Fetches a category and verifies it belongs to the given household.
+
+    Args:
+        category_id: Primary key of the category to fetch.
+        household_id: Household the category must belong to.
+
+    Returns:
+        The Category instance.
+
+    Raises:
+        HttpError: 404 if the category does not exist.
+        HttpError: 400 if the category belongs to a different household.
+    """
+    category = get_object_or_404(Category, pk=category_id)
+    if category.household_id != household_id:
+        raise HttpError(400, 'Category does not belong to the same household as this label.')
+    return category
 
 
 # ── GET /labels/ ──────────────────────────────────────────────────────────────
@@ -106,7 +127,7 @@ def create_label(request, payload: LabelCreateRequest):
 
     Args:
         request: The HTTP request object. Must be authenticated.
-        payload: LabelCreateRequest with name, color, category, and household_id.
+        payload: LabelCreateRequest with name, color, category_id, and household_id.
 
     Returns:
         The created LabelSchema.
@@ -114,8 +135,9 @@ def create_label(request, payload: LabelCreateRequest):
     Raises:
         HttpError: 400 if the name is blank.
         HttpError: 400 if a label with that name already exists in the household.
+        HttpError: 400 if category_id references a category from a different household.
         HttpError: 403 if the user is not a member of the household.
-        HttpError: 404 if the household does not exist.
+        HttpError: 404 if the household or category does not exist.
     """
     name = payload.name.strip()
     if not name:
@@ -125,11 +147,15 @@ def create_label(request, payload: LabelCreateRequest):
     if not household.users.filter(pk=request.user.pk).exists():
         raise HttpError(403, 'You are not a member of this household.')
 
+    category = None
+    if payload.category_id is not None:
+        category = _get_category_for_household(payload.category_id, household.pk)
+
     try:
         label = Label.objects.create(
             name=name,
             color=payload.color,
-            category=payload.category.strip(),
+            category=category,
             household=household,
         )
     except IntegrityError:
@@ -152,12 +178,13 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
 
     At least one field must be provided. Only modified fields are written to
     the database via ``update_fields``, so ``updated_at`` is not bumped unless
-    something actually changed.
+    something actually changed. Setting ``category_id`` to null explicitly
+    clears the label's category.
 
     Args:
         request: The HTTP request object. Must be authenticated.
         label_id: Primary key of the label to update.
-        payload: LabelUpdateRequest with at least one of name, color, category.
+        payload: LabelUpdateRequest with at least one of name, color, category_id.
 
     Returns:
         The updated LabelSchema.
@@ -166,8 +193,9 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
         HttpError: 400 if no fields are provided.
         HttpError: 400 if the new name is blank.
         HttpError: 400 if another label in the household already has that name.
+        HttpError: 400 if category_id references a category from a different household.
         HttpError: 403 if the user is not a member of the household.
-        HttpError: 404 if the label does not exist.
+        HttpError: 404 if the label or category does not exist.
     """
     label = _get_label_for_member(label_id, request.user)
 
@@ -184,8 +212,15 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
         label.color = payload.color
         update_fields.append('color')
 
-    if payload.category is not None:
-        label.category = payload.category.strip()
+    # category_id requires special handling: None means "clear the category",
+    # so we cannot use "is not None" to detect whether the field was sent.
+    # Instead we check model_fields_set, which pydantic populates with the
+    # keys that were explicitly included in the request body.
+    if 'category_id' in payload.model_fields_set:
+        if payload.category_id is None:
+            label.category = None
+        else:
+            label.category = _get_category_for_household(payload.category_id, label.household_id)
         update_fields.append('category')
 
     if not update_fields:

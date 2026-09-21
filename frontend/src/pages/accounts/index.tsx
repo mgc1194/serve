@@ -61,6 +61,9 @@ export function AccountsPage() {
   }
 
   useEffect(() => {
+    // load() kicks off a network fetch; loading/error state must flip
+    // synchronously before it resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdIdFilter]);

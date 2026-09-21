@@ -11,14 +11,16 @@ class LabelSummarySchema(Schema):
     label_id: int
     label_name: str
     label_color: str
-    category: str  # empty string when uncategorised
+    category_id: int | None
+    category_name: str  # empty string when uncategorised
     total: float
 
 
 class CategorySummarySchema(Schema):
     """A category header row with its nested label totals."""
 
-    category: str  # empty string for the "Uncategorised" bucket
+    category_id: int | None
+    category_name: str  # empty string for the "Uncategorised" bucket
     total: float
     labels: list[LabelSummarySchema]
 
