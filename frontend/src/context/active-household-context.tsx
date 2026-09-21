@@ -72,14 +72,15 @@ export function ActiveHouseholdProvider({ children }: ActiveHouseholdProviderPro
     null,
   );
   const explicitId = explicit && explicit.userId === userId ? explicit.householdId : null;
+  const hasValidExplicitId = explicitId !== null && households.some(h => h.id === explicitId);
 
   const storedId = userId !== null ? readStoredId(userId) : null;
-
   const hasValidStoredId = storedId !== null && households.some(h => h.id === storedId);
+
   const fallback = alphabeticalFirst(households);
 
   const resolvedId =
-    (explicitId !== null && households.some(h => h.id === explicitId) ? explicitId : null) ??
+    (hasValidExplicitId ? explicitId : null) ??
     (hasValidStoredId ? storedId : null) ??
     (fallback?.id ?? null);
 
@@ -90,11 +91,13 @@ export function ActiveHouseholdProvider({ children }: ActiveHouseholdProviderPro
   // otherwise renaming or creating a household that now sorts earlier would
   // silently change the active household on the next render, even though the
   // user never switched. Once persisted, hasValidStoredId is true and this
-  // no-ops; it never overrides an explicit or already-stored choice.
+  // no-ops. Guarded on hasValidExplicitId (not merely explicitId !== null) so
+  // that an explicit pick which is later deleted doesn't permanently block
+  // the fallback from ever being persisted.
   useEffect(() => {
-    if (userId === null || explicitId !== null || hasValidStoredId || !fallback) return;
+    if (userId === null || hasValidExplicitId || hasValidStoredId || !fallback) return;
     writeStoredId(userId, fallback.id);
-  }, [userId, explicitId, hasValidStoredId, fallback]);
+  }, [userId, hasValidExplicitId, hasValidStoredId, fallback]);
 
   function setActiveHousehold(household: Household) {
     setExplicit({ userId, householdId: household.id });

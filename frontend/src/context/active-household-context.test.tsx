@@ -140,6 +140,72 @@ describe('useActiveHousehold fallback', () => {
 
     expect(screen.getByText('Alpha Household')).toBeDefined();
   });
+
+  // Regression: an explicit pick that's later deleted must not permanently
+  // block the fallback from being persisted — otherwise it keeps
+  // recomputing fresh on every render, and a subsequently-added household
+  // that sorts earlier can silently become active.
+  it('persists the fallback once an explicit selection is deleted, so it stays sticky afterward', async () => {
+    function Harness() {
+      const { setUser } = useAuth();
+      const { activeHousehold, setActiveHousehold } = useActiveHousehold();
+      return (
+        <div>
+          <span>{activeHousehold?.name ?? 'none'}</span>
+          <button type="button" onClick={() => setActiveHousehold(HOUSEHOLDS[0])}>
+            Pick Zeta
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setUser(prev =>
+                prev ? { ...prev, households: prev.households.filter(h => h.id !== 2) } : prev,
+              )
+            }
+          >
+            Delete Zeta
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setUser(prev =>
+                prev
+                  ? { ...prev, households: [...prev.households, { id: 3, name: 'AAA Household' }] }
+                  : prev,
+              )
+            }
+          >
+            Add AAA Household
+          </button>
+        </div>
+      );
+    }
+
+    render(
+      <AuthProvider
+        value={{ user: makeUser(), setUser: () => {}, isLoading: false, sessionError: false }}
+      >
+        <ActiveHouseholdProvider>
+          <Harness />
+        </ActiveHouseholdProvider>
+      </AuthProvider>,
+    );
+
+    // Explicitly pick Zeta.
+    fireEvent.click(screen.getByRole('button', { name: /pick zeta/i }));
+    expect(screen.getByText('Zeta Household')).toBeDefined();
+
+    // Delete Zeta — falls back to Alpha, the only remaining household.
+    // explicitId is still non-null here (just no longer valid), which is
+    // exactly the case that must not block persisting the fallback.
+    fireEvent.click(screen.getByRole('button', { name: /delete zeta/i }));
+    await screen.findByText('Alpha Household');
+    await waitFor(() => expect(localStorage.getItem('serve:activeHouseholdId:1')).toBe('1'));
+
+    // Adding a household that would sort before "Alpha" must not un-seat it.
+    fireEvent.click(screen.getByRole('button', { name: /add aaa household/i }));
+    expect(screen.getByText('Alpha Household')).toBeDefined();
+  });
 });
 
 describe('useActiveHousehold outside provider', () => {
