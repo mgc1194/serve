@@ -4,10 +4,10 @@ import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router';
 
-import { ActiveHouseholdProvider } from '../src/context/active-household-context';
-import { AuthProvider } from '../src/context/auth-context';
-import theme from '../src/theme';
-import type { User } from '../src/types/global';
+import { ActiveHouseholdProvider } from '@context/active-household-context';
+import { AuthProvider } from '@context/auth-context';
+import theme from '@serve/theme';
+import type { User } from '@serve/types/global';
 
 export const themeDecorator: Decorator = (Story) => (
   <ThemeProvider theme={theme}>

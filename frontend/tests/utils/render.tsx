@@ -12,9 +12,9 @@ import type { RenderOptions, RenderResult } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { BrowserRouter } from 'react-router';
 
-import { ActiveHouseholdProvider } from '../../src/context/active-household-context';
-import { AuthProvider } from '../../src/context/auth-context';
-import theme from '../../src/theme';
+import { ActiveHouseholdProvider } from '@context/active-household-context';
+import { AuthProvider } from '@context/auth-context';
+import theme from '@serve/theme';
 
 function makeQueryClient() {
   return new QueryClient({
