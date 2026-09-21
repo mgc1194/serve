@@ -4,14 +4,11 @@ import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router';
 
-// Relative imports only, deliberately — the '@context'/'@serve' aliases
-// (defined in this file's own viteFinal in main.ts) resolve fine for files
-// under src/, but for files here in .storybook/ they produce a second,
-// separate module instance of auth-context/active-household-context under
-// Storybook's Vite dev server. That splits AuthContext/ActiveHouseholdContext
-// into two distinct React Context objects, so every story's useAuth() throws
-// "must be used within an AuthProvider" even though authDecorator renders
-// one right here. Do not "fix" these back to the alias form.
+// Relative imports here, per prior experience in this repo that the
+// '@context'/'@serve' aliases (defined in this file's own viteFinal in
+// main.ts) don't render reliably for files under .storybook/ itself, even
+// though the same aliases work fine for story files under src/. If you're
+// tempted to switch these back, verify all stories still render first.
 import { ActiveHouseholdProvider } from '../src/context/active-household-context';
 import { AuthProvider } from '../src/context/auth-context';
 import theme from '../src/theme';
