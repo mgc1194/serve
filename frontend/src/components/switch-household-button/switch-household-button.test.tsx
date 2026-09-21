@@ -1,5 +1,6 @@
 // components/switch-household-button/switch-household-button.test.tsx
 
+import { Typography } from '@mui/material';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -39,6 +40,20 @@ function setup(
   );
 }
 
+function setupNestedInHeading(households: Household[] = HOUSEHOLDS) {
+  return render(
+    <AuthProvider
+      value={{ user: makeUser(households), setUser: () => {}, isLoading: false, sessionError: false }}
+    >
+      <ActiveHouseholdProvider>
+        <Typography variant="h4">
+          <SwitchHouseholdButton sx={{ font: 'inherit' }} />
+        </Typography>
+      </ActiveHouseholdProvider>
+    </AuthProvider>,
+  );
+}
+
 beforeEach(() => localStorage.clear());
 
 describe('SwitchHouseholdButton rendering', () => {
@@ -73,25 +88,20 @@ describe('SwitchHouseholdButton interactions', () => {
   });
 });
 
-describe('SwitchHouseholdButton iconOnly', () => {
-  it('renders an icon button labelled "Switch household" instead of the household name', () => {
-    setup(HOUSEHOLDS, { iconOnly: true });
-    expect(screen.getByRole('button', { name: 'Switch household' })).toBeDefined();
-    expect(screen.queryByText('Alpha Household')).toBeNull();
+describe('SwitchHouseholdButton nested inside a heading', () => {
+  it('keeps the heading in the accessibility tree, with the button as its content', () => {
+    setupNestedInHeading();
+    const heading = screen.getByRole('heading', { level: 4, name: /alpha household/i });
+    expect(heading).toBeDefined();
+    expect(
+      screen.getByRole('button', { name: /alpha household/i }).closest('h4'),
+    ).toBe(heading);
   });
 
-  it('opens the switch dialog on click', () => {
-    setup(HOUSEHOLDS, { iconOnly: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Switch household' }));
+  it('still opens the switch dialog on click', () => {
+    setupNestedInHeading();
+    fireEvent.click(screen.getByRole('button', { name: /alpha household/i }));
     expect(screen.getByText('Switch household')).toBeDefined();
     expect(screen.getByText('Beta Household')).toBeDefined();
-  });
-
-  it('does not change its own label after selecting a different household', async () => {
-    setup(HOUSEHOLDS, { iconOnly: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Switch household' }));
-    fireEvent.click(screen.getByText('Beta Household'));
-    await waitFor(() => expect(screen.queryByText('Switch household')).toBeNull());
-    expect(screen.getByRole('button', { name: 'Switch household' })).toBeDefined();
   });
 });

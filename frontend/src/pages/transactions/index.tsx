@@ -193,21 +193,20 @@ export function TransactionsPage() {
         </Button>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {activeHousehold ? (
             <Typography variant="h4">
-              {activeHousehold ? activeHousehold.name : 'Transactions'}
-            </Typography>
-            {activeHousehold && (
               <SwitchHouseholdButton
-                iconOnly
+                sx={{ font: 'inherit', ml: -1 }}
                 onChange={() =>
                   setSearchParams(
                     buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }),
                   )
                 }
               />
-            )}
-          </Box>
+            </Typography>
+          ) : (
+            <Typography variant="h4">Transactions</Typography>
+          )}
           <Button
             variant="outlined"
             startIcon={<FileUploadOutlinedIcon />}
