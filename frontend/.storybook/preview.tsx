@@ -1,9 +1,9 @@
 import type { Preview } from '@storybook/react-vite';
 
-import { authDecorator, routerDecorator, themeDecorator } from './decorators';
+import { activeHouseholdDecorator, authDecorator, routerDecorator, themeDecorator } from './decorators';
 
 const preview: Preview = {
-  decorators: [themeDecorator, routerDecorator, authDecorator],
+  decorators: [themeDecorator, routerDecorator, authDecorator, activeHouseholdDecorator],
 
   parameters: {
     layout: 'fullscreen',

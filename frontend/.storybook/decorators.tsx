@@ -4,6 +4,7 @@ import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router';
 
+import { ActiveHouseholdProvider } from '../src/context/active-household-context';
 import { AuthProvider } from '../src/context/auth-context';
 import theme from '../src/theme';
 import type { User } from '../src/types/global';
@@ -46,3 +47,12 @@ export const authDecorator: Decorator = (Story, { parameters }) => {
 
   return <AuthDecorator />;
 };
+
+// Nests inside authDecorator — useActiveHousehold() reads user.households via
+// useAuth(), so stories set the active household through the same
+// `parameters.auth.user` config as authDecorator rather than a separate knob.
+export const activeHouseholdDecorator: Decorator = (Story) => (
+  <ActiveHouseholdProvider>
+    <Story />
+  </ActiveHouseholdProvider>
+);

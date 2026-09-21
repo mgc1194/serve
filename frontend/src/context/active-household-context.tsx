@@ -8,8 +8,11 @@
 // Default is deterministic (alphabetically-first household) rather than a
 // backend-persisted preference — see issue #263. The chosen id is persisted
 // to localStorage per user so it survives reloads on the same browser.
+//
+// Resolution is a pure render-time computation (no effect) so a page never
+// renders a transient "no household" state before settling on the real one.
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { useAuth } from '@context/auth-context';
@@ -60,32 +63,29 @@ interface ActiveHouseholdProviderProps {
 export function ActiveHouseholdProvider({ children }: ActiveHouseholdProviderProps) {
   const { user } = useAuth();
   const households: Household[] = useMemo(() => user?.households ?? [], [user]);
+  const userId = user?.id ?? null;
 
-  const [activeHouseholdId, setActiveHouseholdId] = useState<number | null>(null);
+  // An in-session choice made via setActiveHousehold(), tagged with the user
+  // it was made for so it doesn't leak across a logout/login. Falls through
+  // to the stored/default household below until the user picks one.
+  const [explicit, setExplicit] = useState<{ userId: number | null; householdId: number } | null>(
+    null,
+  );
+  const explicitId = explicit && explicit.userId === userId ? explicit.householdId : null;
 
-  // Resolve the active household whenever the signed-in user (or their
-  // households) changes: prefer the stored id, falling back to the
-  // alphabetical-first household when nothing is stored or the stored id no
-  // longer matches one of the user's current households.
-  useEffect(() => {
-    if (!user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveHouseholdId(null);
-      return;
-    }
+  const storedId = userId !== null ? readStoredId(userId) : null;
 
-    const storedId = readStoredId(user.id);
-    const stored = households.find(h => h.id === storedId);
+  const resolvedId =
+    (explicitId !== null && households.some(h => h.id === explicitId) ? explicitId : null) ??
+    (storedId !== null && households.some(h => h.id === storedId) ? storedId : null) ??
+    (alphabeticalFirst(households)?.id ?? null);
 
-    setActiveHouseholdId(stored ? stored.id : (alphabeticalFirst(households)?.id ?? null));
-  }, [user, households]);
+  const activeHousehold = households.find(h => h.id === resolvedId) ?? null;
 
   function setActiveHousehold(household: Household) {
-    setActiveHouseholdId(household.id);
-    if (user) writeStoredId(user.id, household.id);
+    setExplicit({ userId, householdId: household.id });
+    if (userId !== null) writeStoredId(userId, household.id);
   }
-
-  const activeHousehold = households.find(h => h.id === activeHouseholdId) ?? null;
 
   return (
     <ActiveHouseholdContext.Provider value={{ activeHousehold, households, setActiveHousehold }}>

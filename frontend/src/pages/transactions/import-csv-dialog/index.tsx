@@ -1,15 +1,16 @@
 // pages/transactions/import-csv-dialog/index.tsx — Multi-step CSV import dialog.
 //
-// Step 0 — Household selection: user picks which household to import into.
-// Step 1 — Account selection: user picks the account the CSV belongs to.
-// Step 2 — File upload: drag-and-drop or browse for a CSV, then import.
-// Step 3 — Success: import summary with a close button.
+// Step 0 — Account selection: user picks the account the CSV belongs to,
+//          scoped to the session-wide active household.
+// Step 1 — File upload: drag-and-drop or browse for a CSV, then import.
+// Step 2 — Success: import summary with a close button.
 //
 // On successful import the dialog advances to a success screen.
 // On error an inline alert is shown on the upload step so the user can retry
-// without losing their household/account selection.
+// without losing their account selection.
 
 import {
+  Alert,
   Button,
   CircularProgress,
   Dialog,
@@ -22,60 +23,59 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 
+import { useActiveHousehold } from '@context/active-household-context';
 import { AccountSelection } from '@pages/transactions/import-csv-dialog/account-selection';
 import { CsvUpload } from '@pages/transactions/import-csv-dialog/csv-upload';
-import { HouseholdSelection } from '@pages/transactions/import-csv-dialog/household-selection';
 import { ImportSuccess } from '@pages/transactions/import-csv-dialog/import-success';
-import type { AccountDetail, FileImportResult, Household } from '@serve/types/global';
+import type { AccountDetail, FileImportResult } from '@serve/types/global';
 import { listAccounts, ApiError as AccountsApiError } from '@services/accounts';
 import { importTransactionsCsv, ApiError } from '@services/transactions';
 
 interface ImportCsvDialogProps {
   open: boolean;
-  households: Household[];
   /** Called after a successful import so the parent can refresh. */
   onImported: (result: FileImportResult) => void;
   onClose: () => void;
 }
 
-// Step 3 is the success screen — excluded from the Stepper.
-const STEPS = ['Select household', 'Select account', 'Upload CSV'];
+// Step 2 is the success screen — excluded from the Stepper.
+const STEPS = ['Select account', 'Upload CSV'];
 
-export function ImportCsvDialog({
-  open,
-  households,
-  onImported,
-  onClose,
-}: ImportCsvDialogProps) {
+export function ImportCsvDialog({ open, onImported, onClose }: ImportCsvDialogProps) {
+  const { activeHousehold } = useActiveHousehold();
+  const householdId = activeHousehold?.id;
+
   const [step, setStep] = useState(0);
 
   // Step 0
-  const [householdId, setHouseholdId] = useState<number | ''>('');
-
-  // Step 1
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [accountsError, setAccountsError] = useState<string | null>(null);
   const [accountId, setAccountId] = useState<number | ''>('');
 
-  // Step 2
+  // Step 1
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
-  // Step 3
+  // Step 2
   const [importResult, setImportResult] = useState<FileImportResult | null>(null);
 
-  // Fetch accounts whenever the user advances to step 1.
+  // Fetch accounts for the active household whenever the dialog opens, and
+  // reset downstream selection if the active household changes underneath
+  // an already-open dialog.
   useEffect(() => {
-    if (step !== 1 || householdId === '') return;
+    if (!open || householdId === undefined) return;
 
     // Kicks off a network fetch; loading/error state must flip synchronously
     // before it resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setAccountsLoading(true);
     setAccountsError(null);
+    setAccountId('');
+    setFile(null);
+    setUploadError(null);
     listAccounts({ household_id: householdId })
       .then(setAccounts)
       .catch(err => {
@@ -84,24 +84,10 @@ export function ImportCsvDialog({
         );
       })
       .finally(() => setAccountsLoading(false));
-  }, [step, householdId]);
-
-  // Reset downstream step state whenever the selected household changes.
-  const [prevHouseholdId, setPrevHouseholdId] = useState(householdId);
-  if (householdId !== prevHouseholdId) {
-    setPrevHouseholdId(householdId);
-    setAccounts([]);
-    setAccountsLoading(false);
-    setAccountsError(null);
-    setAccountId('');
-    setFile(null);
-    setUploadError(null);
-    setImportResult(null);
-  }
+  }, [open, householdId]);
 
   function reset() {
     setStep(0);
-    setHouseholdId('');
     setAccounts([]);
     setAccountsLoading(false);
     setAccountsError(null);
@@ -139,7 +125,7 @@ export function ImportCsvDialog({
       } else {
         onImported(result);
         setImportResult(result);
-        setStep(3);
+        setStep(2);
       }
     } catch (err) {
       setUploadError(
@@ -164,7 +150,7 @@ export function ImportCsvDialog({
       <DialogTitle>Import transactions from CSV</DialogTitle>
 
       <DialogContent>
-        {step < 3 && (
+        {step < 2 && (
           <Stepper activeStep={step} sx={{ mb: 4 }}>
             {STEPS.map(label => (
               <Step key={label}>
@@ -174,28 +160,25 @@ export function ImportCsvDialog({
           </Stepper>
         )}
 
-        {/* ── Step 0: Household selection ───────────────────────────── */}
+        {/* ── Step 0: Account selection ─────────────────────────────── */}
         {step === 0 && (
-          <HouseholdSelection
-            households={households}
-            householdId={householdId}
-            setHouseholdId={setHouseholdId}
-          />
+          activeHousehold ? (
+            <AccountSelection
+              accounts={accounts}
+              accountsLoading={accountsLoading}
+              accountsError={accountsError}
+              accountId={accountId}
+              setAccountId={setAccountId}
+            />
+          ) : (
+            <Alert severity="warning">
+              No household selected. Create a household before importing transactions.
+            </Alert>
+          )
         )}
 
-        {/* ── Step 1: Account selection ─────────────────────────────── */}
+        {/* ── Step 1: File upload ───────────────────────────────────── */}
         {step === 1 && (
-          <AccountSelection
-            accounts={accounts}
-            accountsLoading={accountsLoading}
-            accountsError={accountsError}
-            accountId={accountId}
-            setAccountId={setAccountId}
-          />
-        )}
-
-        {/* ── Step 2: File upload ───────────────────────────────────── */}
-        {step === 2 && (
           <CsvUpload
             selectedAccount={selectedAccount}
             file={file}
@@ -207,14 +190,14 @@ export function ImportCsvDialog({
           />
         )}
 
-        {/* ── Step 3: Import success ────────────────────────────────── */}
-        {step === 3 && importResult && (
+        {/* ── Step 2: Import success ────────────────────────────────── */}
+        {step === 2 && importResult && (
           <ImportSuccess result={importResult} />
         )}
       </DialogContent>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        {step < 3 ? (
+        {step < 2 ? (
           <>
             <Button onClick={handleClose} disabled={isUploading}>
               Cancel
@@ -229,7 +212,7 @@ export function ImportCsvDialog({
             {step === 0 && (
               <Button
                 variant="contained"
-                disabled={householdId === ''}
+                disabled={accountId === '' || accountsLoading || !!accountsError}
                 onClick={() => setStep(1)}
               >
                 Next
@@ -237,16 +220,6 @@ export function ImportCsvDialog({
             )}
 
             {step === 1 && (
-              <Button
-                variant="contained"
-                disabled={accountId === '' || accountsLoading || !!accountsError}
-                onClick={() => setStep(2)}
-              >
-                Next
-              </Button>
-            )}
-
-            {step === 2 && (
               <Button
                 variant="contained"
                 disabled={!file || isUploading}

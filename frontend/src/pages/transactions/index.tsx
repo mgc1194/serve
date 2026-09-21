@@ -37,7 +37,7 @@ const PAGE_SIZE = 20;
 export function TransactionsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeHousehold, households } = useActiveHousehold();
+  const { activeHousehold } = useActiveHousehold();
 
   const householdId = activeHousehold?.id;
 
@@ -238,7 +238,6 @@ export function TransactionsPage() {
 
         <ImportCsvDialog
           open={importOpen}
-          households={households}
           onImported={handleImported}
           onClose={() => setImportOpen(false)}
         />

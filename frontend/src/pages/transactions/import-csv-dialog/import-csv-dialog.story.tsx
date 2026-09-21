@@ -3,19 +3,17 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
-
-const HOUSEHOLDS = [
-  { id: 1, name: 'Smith Household' },
-  { id: 2, name: 'Johnson Household' },
-];
+import { makeHousehold, makeUser } from '@serve/mocks';
 
 const meta: Meta<typeof ImportCsvDialog> = {
   title: 'Transactions/ImportCsvDialog',
   component: ImportCsvDialog,
-  parameters: { layout: 'centered' },
+  parameters: {
+    layout: 'centered',
+    auth: { user: makeUser({ households: [makeHousehold()] }) },
+  },
   args: {
     open: true,
-    households: HOUSEHOLDS,
     onImported: () => {},
     onClose: () => {},
   },
@@ -24,10 +22,10 @@ const meta: Meta<typeof ImportCsvDialog> = {
 export default meta;
 type Story = StoryObj<typeof ImportCsvDialog>;
 
-// Step 0 — household selection
-export const HouseholdSelection: Story = {};
+// Step 0 — account selection, scoped to the session's active household
+export const AccountSelection: Story = {};
 
-// No households available
-export const NoHouseholds: Story = {
-  args: { households: [] },
+// No household in session — nothing to import into yet
+export const NoHousehold: Story = {
+  parameters: { auth: { user: makeUser({ households: [] }) } },
 };
