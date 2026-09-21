@@ -9,13 +9,10 @@ const meta: Meta<typeof SummaryFilters> = {
   component: SummaryFilters,
   parameters: { layout: 'padded' },
   args: {
-    households: [{ id: 1, name: 'Smith Household' }],
-    householdId: 1,
     selectedYear: 2026,
     selectedMonth: 3,
     years: [2026, 2025, 2024],
     availableMonths: [1, 2, 3],
-    onHouseholdChange: () => {},
     onYearChange: () => {},
     onMonthChange: () => {},
   },
@@ -24,19 +21,7 @@ const meta: Meta<typeof SummaryFilters> = {
 export default meta;
 type Story = StoryObj<typeof SummaryFilters>;
 
-// Single household — household picker is hidden
-export const SingleHousehold: Story = {};
-
-// Multiple households — household picker is shown
-export const MultipleHouseholds: Story = {
-  args: {
-    households: [
-      { id: 1, name: 'Smith Household' },
-      { id: 2, name: 'Johnson Household' },
-    ],
-    householdId: 2,
-  },
-};
+export const Default: Story = {};
 
 // Mid-year: some months are disabled (future) and some are before earliest
 export const MidYear: Story = {

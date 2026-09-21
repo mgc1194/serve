@@ -6,6 +6,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 
 import { ProtectedRoute } from '@components/protected-route';
 import { PublicRoute } from '@components/public-route';
+import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
 import { AccountsPage } from '@pages/accounts';
 import { DashboardPage } from '@pages/dashboard';
@@ -25,76 +26,78 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <LoginPage />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/register"
-                element={
-                  <PublicRoute>
-                    <RegisterPage />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/households"
-                element={
-                  <ProtectedRoute>
-                    <HouseholdsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/accounts"
-                element={
-                  <ProtectedRoute>
-                    <AccountsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/summary"
-                element={
-                  <ProtectedRoute>
-                    <SummaryPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/transactions"
-                element={
-                  <ProtectedRoute>
-                    <TransactionsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <SettingsPage />
-                  </ProtectedRoute>
-                }
-              />
-              {/* Catch-all: redirect unknown paths to the dashboard. */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
+          <ActiveHouseholdProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route
+                  path="/login"
+                  element={
+                    <PublicRoute>
+                      <LoginPage />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/register"
+                  element={
+                    <PublicRoute>
+                      <RegisterPage />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/households"
+                  element={
+                    <ProtectedRoute>
+                      <HouseholdsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/accounts"
+                  element={
+                    <ProtectedRoute>
+                      <AccountsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/summary"
+                  element={
+                    <ProtectedRoute>
+                      <SummaryPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/transactions"
+                  element={
+                    <ProtectedRoute>
+                      <TransactionsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* Catch-all: redirect unknown paths to the dashboard. */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </BrowserRouter>
+          </ActiveHouseholdProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
