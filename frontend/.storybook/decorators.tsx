@@ -4,10 +4,18 @@ import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
 import { BrowserRouter } from 'react-router';
 
-import { ActiveHouseholdProvider } from '@context/active-household-context';
-import { AuthProvider } from '@context/auth-context';
-import theme from '@serve/theme';
-import type { User } from '@serve/types/global';
+// Relative imports only, deliberately — the '@context'/'@serve' aliases
+// (defined in this file's own viteFinal in main.ts) resolve fine for files
+// under src/, but for files here in .storybook/ they produce a second,
+// separate module instance of auth-context/active-household-context under
+// Storybook's Vite dev server. That splits AuthContext/ActiveHouseholdContext
+// into two distinct React Context objects, so every story's useAuth() throws
+// "must be used within an AuthProvider" even though authDecorator renders
+// one right here. Do not "fix" these back to the alias form.
+import { ActiveHouseholdProvider } from '../src/context/active-household-context';
+import { AuthProvider } from '../src/context/auth-context';
+import theme from '../src/theme';
+import type { User } from '../src/types/global';
 
 export const themeDecorator: Decorator = (Story) => (
   <ThemeProvider theme={theme}>
