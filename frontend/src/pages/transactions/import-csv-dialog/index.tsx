@@ -71,6 +71,9 @@ export function ImportCsvDialog({
   useEffect(() => {
     if (step !== 1 || householdId === '') return;
 
+    // Kicks off a network fetch; loading/error state must flip synchronously
+    // before it resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setAccountsLoading(true);
     setAccountsError(null);
     listAccounts({ household_id: householdId })
@@ -83,7 +86,10 @@ export function ImportCsvDialog({
       .finally(() => setAccountsLoading(false));
   }, [step, householdId]);
 
-  useEffect(() => {
+  // Reset downstream step state whenever the selected household changes.
+  const [prevHouseholdId, setPrevHouseholdId] = useState(householdId);
+  if (householdId !== prevHouseholdId) {
+    setPrevHouseholdId(householdId);
     setAccounts([]);
     setAccountsLoading(false);
     setAccountsError(null);
@@ -91,7 +97,7 @@ export function ImportCsvDialog({
     setFile(null);
     setUploadError(null);
     setImportResult(null);
-  }, [householdId]);
+  }
 
   function reset() {
     setStep(0);

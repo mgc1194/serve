@@ -6,11 +6,9 @@ household creates (see budget roadmap doc, section 2.1). It is intentionally
 NOT scoped per-budget — one set of categories serves both the existing
 summary page and every future Budget/BudgetLine.
 
-transactions.Label.default_category will hold a nullable FK to this model
-(via the lazy string reference 'budgets.Category', added in PR 3). That FK is
-a default, not a binding assignment — a single transaction can count toward
-more than one budget at once, so "category" is never locked onto the
-transaction or label itself.
+transactions.Label.category holds a nullable FK to this model (via the lazy
+string reference 'budgets.Category'). A label belongs to at most one
+category; categories group related labels under a shared budget area.
 """
 
 from django.db import models

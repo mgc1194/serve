@@ -68,6 +68,9 @@ export function CreateAccountDialog({
   // Load banks when the dialog opens
   useEffect(() => {
     if (!open) return;
+    // Kicks off a network fetch; loading/error state must flip synchronously
+    // before it resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setBanksLoading(true);
     setBanksError(null);
     listBanks()
@@ -76,10 +79,14 @@ export function CreateAccountDialog({
       .finally(() => setBanksLoading(false));
   }, [open]);
 
-  // Sync pre-selected household when prop changes
+  // Sync pre-selected household when prop changes. Resets several related
+  // fields together when the dialog (re)opens; not restructured as a
+  // render-time adjustment since there's no test coverage on this component
+  // yet to safely validate that refactor.
   useEffect(() => {
     if (open) {
       if (preselectedHousehold) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSelectedHousehold(preselectedHousehold);
         setStep('bank');
       } else {

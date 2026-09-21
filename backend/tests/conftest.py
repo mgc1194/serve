@@ -11,7 +11,7 @@ Fixture relationships
     household ← alice (member)
                seth  (non-member, used for 403 tests)
     household → account_type → account
-    household → label
+    household → category → label
     account   → transaction
     account   → labeled_transaction (has label)
 """
@@ -23,6 +23,7 @@ from tests.factories import (
     AccountFactory,
     AccountTypeFactory,
     BankFactory,
+    CategoryFactory,
     HouseholdFactory,
     LabelFactory,
     TransactionFactory,
@@ -92,12 +93,18 @@ def account(db, account_type, household):
 
 
 @pytest.fixture
-def label(db, household):
-    """A Groceries label in ``household``."""
+def category(db, household):
+    """A Food category in ``household``."""
+    return CategoryFactory(name='Food', household=household)
+
+
+@pytest.fixture
+def label(db, household, category):
+    """A Groceries label in ``household``, under the Food category."""
     return LabelFactory(
         name='Groceries',
         color='#16a34a',
-        category='Food',
+        category=category,
         household=household,
     )
 

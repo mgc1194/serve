@@ -52,7 +52,9 @@ export function TransactionConceptCell({
 
   // Register on the ref every render so TransactionRow can forward it to
   // TransactionActionsCell without lifting edit state up.
-  startEditingRef.current = startEditing;
+  useEffect(() => {
+    startEditingRef.current = startEditing;
+  });
 
   function cancelEditing() {
     setIsEditing(false);
