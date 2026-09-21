@@ -68,6 +68,8 @@ export function ImportCsvDialog({ open, onImported, onClose }: ImportCsvDialogPr
   useEffect(() => {
     if (!open || householdId === undefined) return;
 
+    let ignore = false;
+
     // Kicks off a network fetch; loading/error state must flip synchronously
     // before it resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -77,13 +79,22 @@ export function ImportCsvDialog({ open, onImported, onClose }: ImportCsvDialogPr
     setFile(null);
     setUploadError(null);
     listAccounts({ household_id: householdId })
-      .then(setAccounts)
+      .then(result => {
+        if (!ignore) setAccounts(result);
+      })
       .catch(err => {
+        if (ignore) return;
         setAccountsError(
           err instanceof AccountsApiError ? err.message : 'Could not load accounts.',
         );
       })
-      .finally(() => setAccountsLoading(false));
+      .finally(() => {
+        if (!ignore) setAccountsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [open, householdId]);
 
   function reset() {

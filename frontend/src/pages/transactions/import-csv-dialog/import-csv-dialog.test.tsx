@@ -3,10 +3,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ActiveHouseholdProvider } from '@context/active-household-context';
+import { ActiveHouseholdProvider, useActiveHousehold } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
 import { makeAccount, makeFileImportResult, makeHousehold, makeUser } from '@serve/mocks';
-import type { Household } from '@serve/types/global';
+import type { AccountDetail, Household } from '@serve/types/global';
 import * as accountsService from '@services/accounts';
 import * as transactionsService from '@services/transactions';
 
@@ -46,6 +46,14 @@ function renderDialog(
       </ActiveHouseholdProvider>
     </AuthProvider>,
   );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
 
 // Advance from step 0 → step 1.
@@ -217,5 +225,81 @@ describe('ImportCsvDialog', () => {
 
     await screen.findByText('Import successful');
     expect(document.querySelector('.MuiStepper-root')).toBeNull();
+  });
+});
+
+describe('ImportCsvDialog stale request regression', () => {
+  // Regresses to a bug where a slow listAccounts() request for the previous
+  // household could resolve after the request for the newly-active
+  // household and replace the account picker with the wrong household's
+  // accounts — risking an import into the wrong account.
+  it('ignores a stale accounts response for the previous household after switching', async () => {
+    const HOUSEHOLD_A = makeHousehold({ id: 1, name: 'Alpha Household' });
+    const HOUSEHOLD_B = makeHousehold({ id: 2, name: 'Beta Household' });
+
+    const forA = deferred<AccountDetail[]>();
+    const forB = deferred<AccountDetail[]>();
+    vi.mocked(accountsService.listAccounts).mockReturnValueOnce(forA.promise).mockReturnValueOnce(forB.promise);
+
+    function Harness() {
+      const { setActiveHousehold } = useActiveHousehold();
+      return (
+        <>
+          <button type="button" onClick={() => setActiveHousehold(HOUSEHOLD_B)}>
+            Switch to Beta
+          </button>
+          <ImportCsvDialog open onImported={vi.fn()} onClose={vi.fn()} />
+        </>
+      );
+    }
+
+    render(
+      <AuthProvider
+        value={{
+          user: makeUser({ households: [HOUSEHOLD_A, HOUSEHOLD_B] }),
+          setUser: vi.fn(),
+          isLoading: false,
+          sessionError: false,
+        }}
+      >
+        <ActiveHouseholdProvider>
+          <Harness />
+        </ActiveHouseholdProvider>
+      </AuthProvider>,
+    );
+
+    await waitFor(() =>
+      expect(accountsService.listAccounts).toHaveBeenCalledWith({ household_id: 1 }),
+    );
+
+    // Switch to household B while A's request is still pending. The switch
+    // trigger is a plain sibling button, not something reachable through the
+    // dialog's own UI (the open modal makes background content inert) — it
+    // stands in for the real trigger (a page's SwitchHouseholdButton), which
+    // is genuinely unreachable while this dialog is open. Query by text
+    // since the modal's aria-hidden management on background content
+    // excludes it from role-based queries.
+    fireEvent.click(screen.getByText('Switch to Beta'));
+
+    await waitFor(() =>
+      expect(accountsService.listAccounts).toHaveBeenCalledWith({ household_id: 2 }),
+    );
+
+    // B's request resolves first...
+    forB.resolve([
+      makeAccount({ id: 2, name: "Beta's Checking", household_id: 2, household_name: 'Beta Household' }),
+    ]);
+    await waitFor(() => expect(screen.getByRole('combobox').getAttribute('aria-disabled')).toBeNull());
+    fireEvent.mouseDown(screen.getByRole('combobox'));
+    await screen.findByText("Beta's Checking");
+
+    // ...then A's stale request resolves late. It must not clobber the picker.
+    forA.resolve([
+      makeAccount({ id: 1, name: "Alpha's Savings", household_id: 1, household_name: 'Alpha Household' }),
+    ]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(screen.getByText("Beta's Checking")).toBeDefined();
+    expect(screen.queryByText("Alpha's Savings")).toBeNull();
   });
 });
