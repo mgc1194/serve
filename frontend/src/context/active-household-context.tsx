@@ -12,7 +12,7 @@
 // Resolution is a pure render-time computation (no effect) so a page never
 // renders a transient "no household" state before settling on the real one.
 
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { useAuth } from '@context/auth-context';
@@ -75,12 +75,26 @@ export function ActiveHouseholdProvider({ children }: ActiveHouseholdProviderPro
 
   const storedId = userId !== null ? readStoredId(userId) : null;
 
+  const hasValidStoredId = storedId !== null && households.some(h => h.id === storedId);
+  const fallback = alphabeticalFirst(households);
+
   const resolvedId =
     (explicitId !== null && households.some(h => h.id === explicitId) ? explicitId : null) ??
-    (storedId !== null && households.some(h => h.id === storedId) ? storedId : null) ??
-    (alphabeticalFirst(households)?.id ?? null);
+    (hasValidStoredId ? storedId : null) ??
+    (fallback?.id ?? null);
 
   const activeHousehold = households.find(h => h.id === resolvedId) ?? null;
+
+  // The alphabetical-first fallback is recomputed from the current household
+  // list every render, so it must be persisted the first time it's used —
+  // otherwise renaming or creating a household that now sorts earlier would
+  // silently change the active household on the next render, even though the
+  // user never switched. Once persisted, hasValidStoredId is true and this
+  // no-ops; it never overrides an explicit or already-stored choice.
+  useEffect(() => {
+    if (userId === null || explicitId !== null || hasValidStoredId || !fallback) return;
+    writeStoredId(userId, fallback.id);
+  }, [userId, explicitId, hasValidStoredId, fallback]);
 
   function setActiveHousehold(household: Household) {
     setExplicit({ userId, householdId: household.id });
