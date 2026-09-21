@@ -73,6 +73,9 @@ export function SummaryPage() {
 
   useEffect(() => {
     if (householdIdFilter === undefined) {
+      // Resets summary state; part of the same synchronize-with-fetch effect
+      // as the loading branch below.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSummary(null);
       setIsLoading(false);
       return;

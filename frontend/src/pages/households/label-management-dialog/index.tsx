@@ -57,6 +57,9 @@ export function LabelManagementDialog({
   // ── Load on open; reset mode to initialMode each time ────────────────────
   useEffect(() => {
     if (!open) return;
+    // Resets mode and kicks off a network fetch; loading/error state must
+    // flip synchronously before it resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode(initialMode);
     setIsLoading(true);
     setListError(null);
