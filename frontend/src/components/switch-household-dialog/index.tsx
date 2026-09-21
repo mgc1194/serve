@@ -33,6 +33,7 @@ export function SwitchHouseholdDialog({
           <ListItemButton
             key={h.id}
             selected={h.id === activeHouseholdId}
+            aria-current={h.id === activeHouseholdId ? 'true' : undefined}
             onClick={() => onSelect(h)}
             sx={{ mx: 1, my: 0.25, borderRadius: 1 }}
           >

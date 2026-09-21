@@ -46,6 +46,16 @@ describe('SwitchHouseholdDialog rendering', () => {
       screen.getByText('Johnson Household').closest('.MuiListItemButton-root')?.className,
     ).toContain('Mui-selected');
   });
+
+  it('exposes the active household to screen readers via aria-current', () => {
+    setup({ activeHouseholdId: 2 });
+    expect(
+      screen.getByText('Johnson Household').closest('[role="button"]')?.getAttribute('aria-current'),
+    ).toBe('true');
+    expect(
+      screen.getByText('Smith Household').closest('[role="button"]')?.getAttribute('aria-current'),
+    ).toBeNull();
+  });
 });
 
 describe('SwitchHouseholdDialog interactions', () => {
