@@ -6,7 +6,7 @@
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Box, Button, Container, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { SwitchHouseholdButton } from '@components/switch-household-button';
@@ -28,30 +28,44 @@ export function AccountsPage() {
 
   const householdId = activeHousehold?.id;
 
-  function load() {
-    if (householdId === undefined) {
-      setAccounts([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-    listAccounts({ household_id: householdId })
-      .then(setAccounts)
-      .catch(err => {
-        setError(err instanceof ApiError ? err.message : 'Could not load accounts.');
-      })
-      .finally(() => setIsLoading(false));
-  }
+  // loadRef gives the retry button and CreateAccountDialog's onCreated a
+  // stable reference to the latest fetch without making it a useEffect
+  // dependency.
+  const loadRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    // load() kicks off a network fetch; loading/error state must flip
-    // synchronously before it resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    let ignore = false;
+
+    function load() {
+      if (householdId === undefined) {
+        setAccounts([]);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      listAccounts({ household_id: householdId })
+        .then(result => {
+          if (ignore) return;
+          setAccounts(result);
+        })
+        .catch(err => {
+          if (ignore) return;
+          setError(err instanceof ApiError ? err.message : 'Could not load accounts.');
+        })
+        .finally(() => {
+          if (!ignore) setIsLoading(false);
+        });
+    }
+
+    loadRef.current = load;
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      ignore = true;
+    };
   }, [householdId]);
 
   function handleUpdated(updated: AccountDetail) {
@@ -112,7 +126,7 @@ export function AccountsPage() {
           accounts={accounts}
           isLoading={isLoading}
           error={error}
-          onRetry={load}
+          onRetry={() => loadRef.current()}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
           onAddAccount={() => setCreateOpen(true)}
@@ -122,7 +136,7 @@ export function AccountsPage() {
       <CreateAccountDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={load}
+        onCreated={() => loadRef.current()}
         preselectedHousehold={activeHousehold}
         households={households}
       />

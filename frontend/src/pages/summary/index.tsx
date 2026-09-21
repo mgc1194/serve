@@ -56,13 +56,17 @@ export function SummaryPage() {
   );
 
   useEffect(() => {
+    let ignore = false;
+
     if (householdId === undefined) {
       // Resets summary state; part of the same synchronize-with-fetch effect
       // as the loading branch below.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSummary(null);
       setIsLoading(false);
-      return;
+      return () => {
+        ignore = true;
+      };
     }
 
     setIsLoading(true);
@@ -70,11 +74,21 @@ export function SummaryPage() {
     setSummary(null);
 
     getSummary({ household_id: householdId, month: monthParam })
-      .then(data => setSummary(data))
-      .catch(err => {
-        setError(err instanceof ApiError ? err.message : 'Could not load summary.');
+      .then(data => {
+        if (!ignore) setSummary(data);
       })
-      .finally(() => setIsLoading(false));
+      .catch(err => {
+        if (!ignore) {
+          setError(err instanceof ApiError ? err.message : 'Could not load summary.');
+        }
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [householdId, monthParam]);
 
   function handleYearChange(year: number) {
