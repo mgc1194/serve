@@ -3,7 +3,7 @@
 // selected label as a colored chip and reverts on API failure.
 
 import { Autocomplete, Box, Chip, TableCell, TextField } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import {
   autocompleteSx,
@@ -42,10 +42,13 @@ export function TransactionLabelCell({
   const selectedLabel = labels.find(lbl => lbl.id === transaction.label_id) ?? undefined;
   const options = [NO_LABEL, ...labels];
 
-  const [inputValue, setInputValue] = useState(selectedLabel?.name ?? '');
-  useEffect(() => {
-    setInputValue(selectedLabel?.name ?? '');
-  }, [selectedLabel?.name]);
+  const selectedLabelName = selectedLabel?.name ?? '';
+  const [inputValue, setInputValue] = useState(selectedLabelName);
+  const [prevSelectedLabelName, setPrevSelectedLabelName] = useState(selectedLabelName);
+  if (selectedLabelName !== prevSelectedLabelName) {
+    setPrevSelectedLabelName(selectedLabelName);
+    setInputValue(selectedLabelName);
+  }
 
   async function handleChange(
     _event: React.SyntheticEvent,
