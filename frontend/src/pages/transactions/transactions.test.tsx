@@ -10,7 +10,7 @@
 // on the default URL, completes an import via a stubbed ImportCsvDialog, and
 // asserts listTransactions is called again and the dialog stays open.
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -325,6 +325,90 @@ describe('TransactionsPage label filter', () => {
   });
 });
 
+describe('TransactionsPage date range filter', () => {
+  it('refetches with date_from and date_to when a range is picked', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_from: '2026-01-01' }),
+      ),
+    );
+
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-01-31' } });
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_from: '2026-01-01', date_to: '2026-01-31' }),
+      ),
+    );
+  });
+
+  it('keeps the date range active after changing the sort column', async () => {
+    vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(PAGE_WITH_A_ROW);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_from: '2026-01-01' }),
+      ),
+    );
+
+    await userEvent.click(screen.getByText('Account'));
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_from: '2026-01-01', sort: 'account' }),
+      ),
+    );
+  });
+
+  it('keeps the date range active alongside an active label filter', async () => {
+    vi.spyOn(labelsService, 'listLabels').mockResolvedValue(LABELS);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickLabelFilter('Groceries');
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ label_id: 5 }),
+      ),
+    );
+
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ label_id: 5, date_from: '2026-01-01' }),
+      ),
+    );
+  });
+
+  it('shows "No matching transactions." when a date range filter has zero results', async () => {
+    renderPage(['/?date_from=2026-01-01&date_to=2026-01-31']);
+
+    await screen.findByText('No matching transactions.');
+    expect(screen.queryByText('No transactions yet.')).toBeNull();
+  });
+
+  // Regression guard: a hand-edited or malformed date in the URL (not
+  // "YYYY-MM-DD") must never reach the backend's date param, since it would
+  // come back as a validation error rather than self-correcting.
+  it.each(['2026-1-1', 'not-a-date', '2026/01/01'])(
+    'treats a malformed date_from (%s) as no filter, never sending it to the backend',
+    async malformed => {
+      renderPage([`/?date_from=${malformed}`]);
+      await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+      expect(transactionsService.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ date_from: undefined }),
+      );
+    },
+  );
+});
+
 // Regression: the household-switch button preserved label_id, but the
 // filter is household-scoped — after switching, the previously-selected
 // label can't appear in the new household's options while the request
@@ -354,6 +438,26 @@ describe('TransactionsPage household switch', () => {
     await waitFor(() =>
       expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ label_id: undefined }),
+      ),
+    );
+  });
+
+  // Unlike label_id, the date range isn't household-scoped — a date range
+  // stays meaningful across households, so switching shouldn't clear it.
+  it('does not clear the date range when switching households', async () => {
+    renderPage(['/?date_from=2026-01-01']);
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ date_from: '2026-01-01' }),
+      ),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Test Household' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Test Household' }));
+
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_from: '2026-01-01', label_id: undefined }),
       ),
     );
   });

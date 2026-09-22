@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
+import { DateRangeFilter } from '@pages/transactions/date-range-filter';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
@@ -64,6 +65,18 @@ export function TransactionsPage() {
     return Number.isInteger(parsed) ? parsed : undefined;
   })();
 
+  // "YYYY-MM-DD" is the only shape both <input type="date"> and the
+  // backend's date param accept — anything else (a hand-edited or malformed
+  // bookmarked URL) is treated as absent rather than sent through and
+  // rejected as a validation error.
+  const DATE_PARAM_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function parseDateParam(key: string): string | undefined {
+    const raw = searchParams.get(key);
+    return raw !== null && DATE_PARAM_RE.test(raw) ? raw : undefined;
+  }
+  const dateFrom = parseDateParam('date_from');
+  const dateTo = parseDateParam('date_to');
+
   // ── Component state ─────────────────────────────────────────────────────────
   const [paginated, setPaginated] = useState<PaginatedTransactions | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
@@ -99,6 +112,8 @@ export function TransactionsPage() {
         listTransactions({
           household_id: householdId,
           label_id: labelId,
+          date_from: dateFrom,
+          date_to: dateTo,
           cursor,
           previous_cursor: previousCursor,
           sort: sortKey,
@@ -130,7 +145,7 @@ export function TransactionsPage() {
     return () => {
       ignore = true;
     };
-  }, [householdId, labelId, cursor, previousCursor, sortKey, sortDir, refreshToken]);
+  }, [householdId, labelId, dateFrom, dateTo, cursor, previousCursor, sortKey, sortDir, refreshToken]);
 
   // Self-corrects a stale/invalid label_id (a bookmarked URL, a label
   // deleted since, or browser history from another household) once the
@@ -169,7 +184,16 @@ export function TransactionsPage() {
   // params happen to change — merging into a plain object first and only
   // then reading it back out in KEY_ORDER means insertion order (which
   // JS objects otherwise preserve) never leaks into the result.
-  const KEY_ORDER = ['sort', 'sort_dir', 'page', 'label_id', 'cursor', 'previous_cursor'] as const;
+  const KEY_ORDER = [
+    'sort',
+    'sort_dir',
+    'page',
+    'label_id',
+    'date_from',
+    'date_to',
+    'cursor',
+    'previous_cursor',
+  ] as const;
 
   function buildParams(overrides: Record<string, string | undefined>) {
     const merged: Record<string, string | undefined> = {
@@ -177,6 +201,8 @@ export function TransactionsPage() {
       sort_dir: sortDir !== DEFAULT_DIR ? sortDir : undefined,
       page: page > 1 ? String(page) : undefined,
       label_id: labelId !== undefined ? String(labelId) : undefined,
+      date_from: dateFrom,
+      date_to: dateTo,
       ...overrides,
     };
 
@@ -191,6 +217,24 @@ export function TransactionsPage() {
   function handleLabelFilterChange(id: number | undefined) {
     setSearchParams(buildParams({
       label_id: id !== undefined ? String(id) : undefined,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
+  }
+
+  function handleDateFromChange(value: string | undefined) {
+    setSearchParams(buildParams({
+      date_from: value,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
+  }
+
+  function handleDateToChange(value: string | undefined) {
+    setSearchParams(buildParams({
+      date_to: value,
       cursor: undefined,
       previous_cursor: undefined,
       page: undefined,
@@ -304,18 +348,26 @@ export function TransactionsPage() {
           </Button>
         </Box>
 
-        <LabelFilterBar
-          labels={labels}
-          labelId={labelId}
-          onLabelChange={handleLabelFilterChange}
-        />
+        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+          <LabelFilterBar
+            labels={labels}
+            labelId={labelId}
+            onLabelChange={handleLabelFilterChange}
+          />
+          <DateRangeFilter
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={handleDateFromChange}
+            onDateToChange={handleDateToChange}
+          />
+        </Box>
 
         <TransactionsTable
           transactions={paginated?.results ?? []}
           labels={labels}
           isLoading={isLoading}
           error={error}
-          hasActiveFilter={labelId !== undefined}
+          hasActiveFilter={labelId !== undefined || dateFrom !== undefined || dateTo !== undefined}
           onRetry={() => loadRef.current()}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
