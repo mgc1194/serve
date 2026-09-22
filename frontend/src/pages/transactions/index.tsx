@@ -68,11 +68,25 @@ export function TransactionsPage() {
   // "YYYY-MM-DD" is the only shape both <input type="date"> and the
   // backend's date param accept — anything else (a hand-edited or malformed
   // bookmarked URL) is treated as absent rather than sent through and
-  // rejected as a validation error.
+  // rejected as a validation error. The regex only checks the shape, so an
+  // impossible calendar date (e.g. "2026-02-31") still needs to round-trip
+  // through Date.UTC to be confirmed real — JS silently rolls those over
+  // into the following month rather than rejecting them. Year 0000 round-trips
+  // fine but isn't a date either <input type="date"> or the backend accepts.
   const DATE_PARAM_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function isValidCalendarDate(value: string): boolean {
+    const [year, month, day] = value.split('-').map(Number);
+    if (year === 0) return false;
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }
   function parseDateParam(key: string): string | undefined {
     const raw = searchParams.get(key);
-    return raw !== null && DATE_PARAM_RE.test(raw) ? raw : undefined;
+    return raw !== null && DATE_PARAM_RE.test(raw) && isValidCalendarDate(raw) ? raw : undefined;
   }
   const dateFrom = parseDateParam('date_from');
   const dateTo = parseDateParam('date_to');

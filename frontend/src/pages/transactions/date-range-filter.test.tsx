@@ -1,6 +1,7 @@
 // pages/transactions/date-range-filter.test.tsx
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DateRangeFilter } from '@pages/transactions/date-range-filter';
@@ -34,40 +35,47 @@ describe('DateRangeFilter rendering', () => {
     expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('2026-01-01');
     expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('2026-01-31');
   });
-
-  it('clamps the "From" field max to the current "To" value', () => {
-    setup({ dateTo: '2026-01-31' });
-    expect((screen.getByLabelText('From') as HTMLInputElement).max).toBe('2026-01-31');
-  });
-
-  it('clamps the "To" field min to the current "From" value', () => {
-    setup({ dateFrom: '2026-01-01' });
-    expect((screen.getByLabelText('To') as HTMLInputElement).min).toBe('2026-01-01');
-  });
 });
 
 describe('DateRangeFilter interactions', () => {
-  it('calls onDateFromChange with the typed value', () => {
+  it('calls onDateFromChange with the typed date once it is complete', async () => {
     const { onDateFromChange } = setup();
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-02-01' } });
-    expect(onDateFromChange).toHaveBeenCalledWith('2026-02-01');
+    await userEvent.type(screen.getByLabelText('From'), '2026-02-01');
+    expect(onDateFromChange).toHaveBeenLastCalledWith('2026-02-01');
   });
 
-  it('calls onDateToChange with the typed value', () => {
+  it('calls onDateToChange with the typed date once it is complete', async () => {
     const { onDateToChange } = setup();
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-02-15' } });
-    expect(onDateToChange).toHaveBeenCalledWith('2026-02-15');
+    await userEvent.type(screen.getByLabelText('To'), '2026-02-15');
+    expect(onDateToChange).toHaveBeenLastCalledWith('2026-02-15');
   });
 
-  it('calls onDateFromChange with undefined when cleared', () => {
+  it('calls onDateFromChange with undefined when cleared', async () => {
     const { onDateFromChange } = setup({ dateFrom: '2026-01-01' });
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '' } });
-    expect(onDateFromChange).toHaveBeenCalledWith(undefined);
+    await userEvent.clear(screen.getByLabelText('From'));
+    expect(onDateFromChange).toHaveBeenLastCalledWith(undefined);
   });
 
-  it('calls onDateToChange with undefined when cleared', () => {
+  it('calls onDateToChange with undefined when cleared', async () => {
     const { onDateToChange } = setup({ dateTo: '2026-01-31' });
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '' } });
-    expect(onDateToChange).toHaveBeenCalledWith(undefined);
+    await userEvent.clear(screen.getByLabelText('To'));
+    expect(onDateToChange).toHaveBeenLastCalledWith(undefined);
+  });
+
+  // maxDate/minDate don't block typing an out-of-range date outright — they
+  // mark the field invalid (the backend is still the source of truth for
+  // rejecting an inverted range) rather than silently discarding keystrokes.
+  it('marks "From" invalid when the typed date is after the current "To" value', async () => {
+    setup({ dateTo: '2026-01-31' });
+    const from = screen.getByLabelText('From');
+    await userEvent.type(from, '2026-02-15');
+    expect(from.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('marks "To" invalid when the typed date is before the current "From" value', async () => {
+    setup({ dateFrom: '2026-01-31' });
+    const to = screen.getByLabelText('To');
+    await userEvent.type(to, '2026-01-01');
+    expect(to.getAttribute('aria-invalid')).toBe('true');
   });
 });

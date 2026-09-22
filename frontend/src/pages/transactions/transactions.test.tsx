@@ -10,7 +10,7 @@
 // on the default URL, completes an import via a stubbed ImportCsvDialog, and
 // asserts listTransactions is called again and the dialog stays open.
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -330,14 +330,14 @@ describe('TransactionsPage date range filter', () => {
     renderPage();
     await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    await userEvent.type(screen.getByLabelText('From'), '2026-01-01');
     await waitFor(() =>
       expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ date_from: '2026-01-01' }),
       ),
     );
 
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-01-31' } });
+    await userEvent.type(screen.getByLabelText('To'), '2026-01-31');
     await waitFor(() =>
       expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ date_from: '2026-01-01', date_to: '2026-01-31' }),
@@ -351,7 +351,7 @@ describe('TransactionsPage date range filter', () => {
     renderPage();
     await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    await userEvent.type(screen.getByLabelText('From'), '2026-01-01');
     await waitFor(() =>
       expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ date_from: '2026-01-01' }),
@@ -379,7 +379,7 @@ describe('TransactionsPage date range filter', () => {
       ),
     );
 
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    await userEvent.type(screen.getByLabelText('From'), '2026-01-01');
     await waitFor(() =>
       expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ label_id: 5, date_from: '2026-01-01' }),
@@ -397,7 +397,7 @@ describe('TransactionsPage date range filter', () => {
   // Regression guard: a hand-edited or malformed date in the URL (not
   // "YYYY-MM-DD") must never reach the backend's date param, since it would
   // come back as a validation error rather than self-correcting.
-  it.each(['2026-1-1', 'not-a-date', '2026/01/01'])(
+  it.each(['2026-1-1', 'not-a-date', '2026/01/01', '2026-02-31', '2026-13-01', '0000-01-01'])(
     'treats a malformed date_from (%s) as no filter, never sending it to the backend',
     async malformed => {
       renderPage([`/?date_from=${malformed}`]);
