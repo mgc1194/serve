@@ -34,6 +34,9 @@ const DEFAULT_SORT: SortField = 'date';
 const DEFAULT_DIR: SortDir = 'desc';
 // Must match PAGE_SIZE in backend/api/v1/transactions.py
 const PAGE_SIZE = 20;
+// -1 is the "unlabeled" sentinel already established by NO_LABEL
+// (transaction-label-cell.tsx) and UNLABELED_OPTION (label-filter-bar.tsx).
+const UNLABELED_SENTINEL = -1;
 
 export function TransactionsPage() {
   const navigate = useNavigate();
@@ -124,6 +127,26 @@ export function TransactionsPage() {
     };
   }, [householdId, labelId, cursor, previousCursor, sortKey, sortDir, refreshToken]);
 
+  // Self-corrects a stale/invalid label_id (a bookmarked URL, a label
+  // deleted since, or browser history from another household) once the
+  // definitive label list has loaded — otherwise the filter control shows
+  // "All labels" (labelId matches no option) while the request keeps
+  // filtering by an id that can't match anything, and the table stays
+  // empty with no way to tell why.
+  useEffect(() => {
+    if (isLoading || labelId === undefined || labelId === UNLABELED_SENTINEL) return;
+    if (labels.some(l => l.id === labelId)) return;
+
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('label_id');
+      next.delete('cursor');
+      next.delete('previous_cursor');
+      next.delete('page');
+      return next;
+    });
+  }, [isLoading, labelId, labels, setSearchParams]);
+
   // ── URL mutation helpers ────────────────────────────────────────────────────
   // Fixed key order so the resulting URL is stable regardless of which
   // params happen to change — merging into a plain object first and only
@@ -186,9 +209,6 @@ export function TransactionsPage() {
   }
 
   function handleUpdated(updated: Transaction) {
-    // -1 is the "unlabeled" sentinel already established by NO_LABEL
-    // (transaction-label-cell.tsx) and UNLABELED_OPTION (label-filter-bar.tsx).
-    const UNLABELED_SENTINEL = -1;
     const stillMatchesFilter =
       labelId === undefined ||
       (labelId === UNLABELED_SENTINEL ? updated.label_id === null : updated.label_id === labelId);

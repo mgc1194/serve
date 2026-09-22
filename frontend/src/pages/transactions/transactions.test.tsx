@@ -100,9 +100,9 @@ function LocationSearchProbe() {
   return <div data-testid="url-search">{params.toString()}</div>;
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <ActiveHouseholdProvider>
         <TransactionsPage />
       </ActiveHouseholdProvider>
@@ -345,5 +345,53 @@ describe('TransactionsPage household switch', () => {
         expect.objectContaining({ label_id: undefined }),
       ),
     );
+  });
+});
+
+// Regression: a stale/invalid label_id in the URL (a bookmark, a label
+// deleted since, or browser history from another household) made the
+// filter control show "All labels" (labelId matched no option) while
+// TransactionsPage still sent that id, filtering the table to no rows —
+// silently, with no way to tell the control and the request disagreed.
+describe('TransactionsPage stale label_id', () => {
+  beforeEach(() => {
+    vi.spyOn(labelsService, 'listLabels').mockResolvedValue(LABELS);
+  });
+
+  it('clears an invalid label_id from the URL once the labels have loaded', async () => {
+    renderPage(['/?label_id=999']);
+
+    // The first request goes out with the stale id, before labels are known.
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ label_id: 999 }),
+      ),
+    );
+
+    // Once labels load and 999 isn't among them, it self-corrects: cleared
+    // from the URL and refetched with no filter.
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ label_id: undefined }),
+      ),
+    );
+    expect(screen.getByTestId('url-search').textContent).not.toContain('label_id');
+  });
+
+  it('does not clear label_id=-1, the always-valid "Unlabeled" sentinel', async () => {
+    renderPage(['/?label_id=-1']);
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ label_id: -1 }),
+      ),
+    );
+
+    // Give the self-correction effect a tick to (incorrectly) fire if this regresses.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ label_id: -1 }),
+    );
+    expect(screen.getByTestId('url-search').textContent).toContain('label_id=-1');
   });
 });
