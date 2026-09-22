@@ -10,7 +10,7 @@
 // on the default URL, completes an import via a stubbed ImportCsvDialog, and
 // asserts listTransactions is called again and the dialog stays open.
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -255,5 +255,95 @@ describe('TransactionsPage label filter', () => {
       .map(pair => pair.split('=')[0]);
 
     expect(descendingKeys).toEqual(ascendingKeys);
+  });
+
+  // Regression: with an active label filter, handleUpdated() always patched
+  // the edited transaction in place, even when the edit moved it out of the
+  // filter (e.g. assigning a label to a row while filtered to "Unlabeled").
+  // The now-non-matching row stayed visible and count/pagination went stale
+  // until a manual reload.
+  it('refetches when a label edit moves a transaction out of the active "Unlabeled" filter', async () => {
+    const unlabelledTx = makeTransaction({
+      id: 42,
+      concept: 'CORNER STORE',
+      label_id: null,
+      label_name: null,
+      label_color: null,
+    });
+    vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue({
+      ...EMPTY_PAGE,
+      results: [unlabelledTx],
+      count: 1,
+    });
+    vi.spyOn(transactionsService, 'updateTransactionLabel').mockResolvedValue({
+      ...unlabelledTx,
+      label_id: 5,
+      label_name: 'Groceries',
+      label_color: '#22c55e',
+    });
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickLabelFilter('Unlabeled');
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ label_id: -1 }),
+      ),
+    );
+    const callsBeforeEdit = vi.mocked(transactionsService.listTransactions).mock.calls.length;
+
+    // Assign a real label to the row — it no longer belongs under "Unlabeled".
+    // Scoped to the row (rather than getByRole('combobox', { name })) since
+    // that's the combination proven to work in TransactionLabelCell's own
+    // tests — there's also the filter bar's combobox on the page to avoid.
+    const row = screen.getByText('CORNER STORE').closest('tr')!;
+    await userEvent.click(within(row).getByRole('combobox'));
+    await waitFor(() => within(document.body).getByRole('listbox'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
+
+    await waitFor(() =>
+      expect(
+        vi.mocked(transactionsService.listTransactions).mock.calls.length,
+      ).toBeGreaterThan(callsBeforeEdit),
+    );
+    // The refetch must still be scoped to the active filter, not drop it.
+    expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ label_id: -1 }),
+    );
+  });
+});
+
+// Regression: the household-switch button preserved label_id, but the
+// filter is household-scoped — after switching, the previously-selected
+// label can't appear in the new household's options while the request
+// still filters by its old id, so the control looks cleared but the table
+// comes back empty.
+describe('TransactionsPage household switch', () => {
+  beforeEach(() => {
+    vi.spyOn(labelsService, 'listLabels').mockResolvedValue(LABELS);
+  });
+
+  it('clears the label filter when switching households', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickLabelFilter('Groceries');
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ label_id: 5 }),
+      ),
+    );
+
+    // Open the switcher and pick a household (even the current one — the
+    // fix must clear label_id regardless of which household is chosen).
+    await userEvent.click(screen.getByRole('button', { name: 'Test Household' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Test Household' }));
+
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ label_id: undefined }),
+      ),
+    );
   });
 });

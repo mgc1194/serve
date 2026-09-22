@@ -186,6 +186,21 @@ export function TransactionsPage() {
   }
 
   function handleUpdated(updated: Transaction) {
+    // -1 is the "unlabeled" sentinel already established by NO_LABEL
+    // (transaction-label-cell.tsx) and UNLABELED_OPTION (label-filter-bar.tsx).
+    const UNLABELED_SENTINEL = -1;
+    const stillMatchesFilter =
+      labelId === undefined ||
+      (labelId === UNLABELED_SENTINEL ? updated.label_id === null : updated.label_id === labelId);
+
+    if (!stillMatchesFilter) {
+      // The edit moved this transaction out of the active label filter —
+      // refetch rather than trying to locally patch count/pagination for a
+      // row that's no longer part of the filtered result set.
+      setRefreshToken(t => t + 1);
+      return;
+    }
+
     setPaginated(prev =>
       prev
         ? { ...prev, results: prev.results.map(t => (t.id === updated.id ? updated : t)) }
@@ -230,7 +245,12 @@ export function TransactionsPage() {
                 sx={{ font: 'inherit', ml: -1 }}
                 onChange={() =>
                   setSearchParams(
-                    buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }),
+                    buildParams({
+                      label_id: undefined,
+                      cursor: undefined,
+                      previous_cursor: undefined,
+                      page: undefined,
+                    }),
                   )
                 }
               />
