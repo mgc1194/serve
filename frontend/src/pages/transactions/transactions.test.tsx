@@ -182,6 +182,17 @@ describe('TransactionsPage label filter', () => {
     );
   });
 
+  // A filter narrowing to zero matches doesn't mean the household has no
+  // transactions at all — TransactionsTable's generic "No transactions
+  // yet." + Import CSV prompt would be misleading here.
+  it('shows "No matching transactions." (not the Import CSV prompt) when a filter has zero results', async () => {
+    renderPage(['/?label_id=5']);
+
+    await screen.findByText('No matching transactions.');
+    expect(screen.queryByText('No transactions yet.')).toBeNull();
+    expect(screen.queryByRole('button', { name: /import a csv/i })).toBeNull();
+  });
+
   it('keeps the label filter active after changing the sort column', async () => {
     // A sortable column header only renders once there's at least one row.
     vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(PAGE_WITH_A_ROW);

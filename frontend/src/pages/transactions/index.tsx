@@ -315,6 +315,7 @@ export function TransactionsPage() {
           labels={labels}
           isLoading={isLoading}
           error={error}
+          hasActiveFilter={labelId !== undefined}
           onRetry={() => loadRef.current()}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
