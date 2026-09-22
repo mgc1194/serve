@@ -87,6 +87,20 @@ describe('listTransactions', () => {
     expect(url).not.toContain('account_id');
   });
 
+  it('includes label_id when provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1, label_id: 5 });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).toContain('label_id=5');
+  });
+
+  it('omits label_id when not provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1 });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).not.toContain('label_id');
+  });
+
   it('uses GET', async () => {
     const spy = mockFetch(200, []);
     await listTransactions({ household_id: 1 });

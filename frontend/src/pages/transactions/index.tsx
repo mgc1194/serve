@@ -17,6 +17,7 @@ import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
+import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
 import type {
   FileImportResult,
@@ -47,6 +48,13 @@ export function TransactionsPage() {
   const cursor = searchParams.get('cursor') ?? undefined;
   const previousCursor = searchParams.get('previous_cursor') ?? undefined;
   const page = Number(searchParams.get('page') ?? '1');
+
+  const labelIdParam = searchParams.get('label_id');
+  const labelId: number | undefined = (() => {
+    if (labelIdParam == null) return undefined;
+    const parsed = Number(labelIdParam);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  })();
 
   // ── Component state ─────────────────────────────────────────────────────────
   const [paginated, setPaginated] = useState<PaginatedTransactions | null>(null);
@@ -82,6 +90,7 @@ export function TransactionsPage() {
       Promise.all([
         listTransactions({
           household_id: householdId,
+          label_id: labelId,
           cursor,
           previous_cursor: previousCursor,
           sort: sortKey,
@@ -113,19 +122,39 @@ export function TransactionsPage() {
     return () => {
       ignore = true;
     };
-  }, [householdId, cursor, previousCursor, sortKey, sortDir, refreshToken]);
+  }, [householdId, labelId, cursor, previousCursor, sortKey, sortDir, refreshToken]);
 
   // ── URL mutation helpers ────────────────────────────────────────────────────
+  // Fixed key order so the resulting URL is stable regardless of which
+  // params happen to change — merging into a plain object first and only
+  // then reading it back out in KEY_ORDER means insertion order (which
+  // JS objects otherwise preserve) never leaks into the result.
+  const KEY_ORDER = ['sort', 'sort_dir', 'page', 'label_id', 'cursor', 'previous_cursor'] as const;
+
   function buildParams(overrides: Record<string, string | undefined>) {
+    const merged: Record<string, string | undefined> = {
+      sort: sortKey !== DEFAULT_SORT ? sortKey : undefined,
+      sort_dir: sortDir !== DEFAULT_DIR ? sortDir : undefined,
+      page: page > 1 ? String(page) : undefined,
+      label_id: labelId !== undefined ? String(labelId) : undefined,
+      ...overrides,
+    };
+
     const base: Record<string, string> = {};
-    if (sortKey !== DEFAULT_SORT) base.sort = sortKey;
-    if (sortDir !== DEFAULT_DIR) base.sort_dir = sortDir;
-    if (page > 1) base.page = String(page);
-    for (const [k, v] of Object.entries(overrides)) {
-      if (v !== undefined) base[k] = v;
-      else delete base[k];
+    for (const key of KEY_ORDER) {
+      const value = merged[key];
+      if (value !== undefined) base[key] = value;
     }
     return base;
+  }
+
+  function handleLabelFilterChange(id: number | undefined) {
+    setSearchParams(buildParams({
+      label_id: id !== undefined ? String(id) : undefined,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
   }
 
   function handleSortChange(field: SortField, dir: SortDir) {
@@ -173,7 +202,9 @@ export function TransactionsPage() {
   }
 
   function handleImported(_result: FileImportResult) {
-    setImportOpen(false);
+    // Leave the dialog open — it shows its own success screen and only
+    // closes when the user clicks Close (onClose below). Refresh the table
+    // underneath in the meantime.
     setSearchParams(buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }));
     setRefreshToken(t => t + 1);
   }
@@ -215,6 +246,12 @@ export function TransactionsPage() {
             Import CSV
           </Button>
         </Box>
+
+        <LabelFilterBar
+          labels={labels}
+          labelId={labelId}
+          onLabelChange={handleLabelFilterChange}
+        />
 
         <TransactionsTable
           transactions={paginated?.results ?? []}

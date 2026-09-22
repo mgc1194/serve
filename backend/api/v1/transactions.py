@@ -44,6 +44,11 @@ router = Router(tags=['Transactions'], auth=django_auth)
 
 PAGE_SIZE = 20
 
+# label_id filter value meaning "transactions with no label" — matches the
+# frontend's existing NO_LABEL sentinel (transaction-label-cell.tsx), which
+# reuses -1 since it's never a real Label id.
+UNLABELED_SENTINEL = -1
+
 
 class SortField(StrEnum):
     date = 'date'
@@ -208,6 +213,7 @@ def list_transactions(
     request,
     household_id: int,
     account_id: int | None = None,
+    label_id: int | None = None,
     cursor: str | None = None,
     previous_cursor: str | None = None,
     sort: SortField = SortField.date,
@@ -230,6 +236,8 @@ def list_transactions(
         request:         The HTTP request. Must be authenticated.
         household_id:    The household to list transactions for.
         account_id:      Optional account filter.
+        label_id:        Optional label filter. Pass UNLABELED_SENTINEL (-1)
+                         to filter to transactions with no label.
         cursor:          Opaque forward-pagination cursor. Mutually exclusive
                          with previous_cursor.
         previous_cursor: Opaque backward-pagination cursor. Mutually exclusive
@@ -272,6 +280,14 @@ def list_transactions(
     )
     if account_id is not None:
         base_qs = base_qs.filter(account_id=account_id)
+    if label_id is not None:
+        # -1 is the sentinel the frontend already uses (see NO_LABEL in
+        # transaction-label-cell.tsx) to mean "unlabelled" rather than a real
+        # Label id.
+        if label_id == UNLABELED_SENTINEL:
+            base_qs = base_qs.filter(label__isnull=True)
+        else:
+            base_qs = base_qs.filter(label_id=label_id)
 
     count = base_qs.count()
 
