@@ -34,6 +34,9 @@ import type { Label, SortDir, SortField, Transaction } from '@serve/types/global
 interface TransactionsTableProps {
   transactions: Transaction[];
   labels?: Label[];
+  /** category_id -> category_name for the selected budget's lines; null (or
+   * omitted) hides the "Budget category" column entirely. */
+  budgetCategoryMap?: Map<number, string> | null;
   isLoading: boolean;
   error: string | null;
   /** Whether a filter (e.g. label) is currently narrowing the results —
@@ -63,6 +66,7 @@ interface TransactionsTableProps {
 export function TransactionsTable({
   transactions,
   labels = [],
+  budgetCategoryMap = null,
   isLoading,
   error,
   hasActiveFilter = false,
@@ -137,6 +141,7 @@ export function TransactionsTable({
                 sortDir={sortDir}
                 dragOver={dragOver}
                 heldKey={heldKey}
+                showBudgetColumn={budgetCategoryMap != null}
                 onMouseDown={handleMouseDown}
                 onDragStart={handleDragStart}
                 onDragOver={handleDragOver}
@@ -158,6 +163,7 @@ export function TransactionsTable({
                     transaction={tx}
                     columnOrder={columnOrder}
                     labels={labels}
+                    budgetCategoryMap={budgetCategoryMap}
                     onUpdated={onUpdated}
                     onDeleted={onDeleted}
                   />

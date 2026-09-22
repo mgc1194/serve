@@ -26,8 +26,8 @@ const mockUpdateConcept = vi.mocked(transactionsService.updateTransactionConcept
 const mockDeleteTransaction = vi.mocked(transactionsService.deleteTransaction);
 
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category_id: null }),
+  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category_id: null }),
 ];
  
 const TX = makeTransaction({ category: 'Groceries' });
@@ -87,6 +87,46 @@ describe('TransactionRow rendering', () => {
   it('renders — when category is null', () => {
     setup({ transaction: { ...TX, category: null } });
     expect(screen.getByText('—')).toBeDefined();
+  });
+
+  it('renders no extra dash for a budget category column when budgetCategoryMap is not provided', () => {
+    // TX has a real (non-null) `category`, so the existing category column
+    // never renders a dash either — any '—' present would have to come from
+    // a Budget category column that shouldn't exist here.
+    setup();
+    expect(screen.queryAllByText('—')).toHaveLength(0);
+  });
+});
+
+// ── Budget category column ────────────────────────────────────────────────────
+
+describe('TransactionRow budget category column', () => {
+  it('renders the budget category name when the row label maps to one', () => {
+    setup({
+      transaction: { ...TX, label_id: 1 },
+      labels: [makeLabel({ id: 1, name: 'Groceries', category_id: 7 })],
+      budgetCategoryMap: new Map([[7, 'Utilities']]),
+    });
+    expect(screen.getByText('Utilities')).toBeDefined();
+  });
+
+  it('renders a dash when the row has no label', () => {
+    setup({
+      transaction: { ...TX, label_id: null },
+      budgetCategoryMap: new Map([[7, 'Utilities']]),
+    });
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThan(0);
+  });
+
+  it('renders a dash when the label\'s category is not in the selected budget', () => {
+    setup({
+      transaction: { ...TX, label_id: 1 },
+      labels: [makeLabel({ id: 1, name: 'Groceries', category_id: 99 })],
+      budgetCategoryMap: new Map([[7, 'Utilities']]),
+    });
+    const dashes = screen.getAllByText('—');
+    expect(dashes.length).toBeGreaterThan(0);
   });
 });
 

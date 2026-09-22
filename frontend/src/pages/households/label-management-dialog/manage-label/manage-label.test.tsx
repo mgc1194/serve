@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ManageLabel } from '@serve/pages/households/label-management-dialog/manage-label';
 import type { Label } from '@serve/types/global';
 
-const LABEL: Label = { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 };
+const LABEL: Label = { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 };
 
 const defaultProps: React.ComponentProps<typeof ManageLabel> = {
   mode: 'create',

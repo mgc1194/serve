@@ -7,7 +7,7 @@ export function makeLabel(overrides: Partial<Label> = {}): Label {
     id: 1,
     name: 'Groceries',
     color: '#16a34a',
-    category: 'Food',
+    category_id: null,
     household_id: 1,
     ...overrides,
   };

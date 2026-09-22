@@ -4,6 +4,6 @@ export interface Label {
   id: number;
   name: string;
   color: string;
-  category: string;
+  category_id: number | null;
   household_id: number;
 }

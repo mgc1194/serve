@@ -32,8 +32,8 @@ const mockUpdateLabel = vi.mocked(updateLabel);
 const mockDeleteLabel = vi.mocked(deleteLabel);
 
 const LABELS = [
-  { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 },
-  { id: 2, name: 'Transport', color: '#2563eb', category: '', household_id: 1 },
+  { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
+  { id: 2, name: 'Transport', color: '#2563eb', category_id: null, household_id: 1 },
 ];
 
 function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDialog>> = {}) {
@@ -160,7 +160,7 @@ describe('LabelManagementDialog mode transitions', () => {
 describe('LabelManagementDialog create', () => {
   it('calls createLabel with name, color, and householdId on save', async () => {
     mockCreateLabel.mockResolvedValueOnce(
-      { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 },
+      { id: 99, name: 'Bills', color: '#6B7280', category_id: null, household_id: 1 },
     );
 
     setup();
@@ -173,14 +173,13 @@ describe('LabelManagementDialog create', () => {
       expect(mockCreateLabel).toHaveBeenCalledWith({
         name: 'Bills',
         color: '#6B7280',
-        category: '',
         household_id: 1,
       }),
     );
   });
 
   it('calls onLabelsChanged after successful create', async () => {
-    const newLabel = { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 };
+    const newLabel = { id: 99, name: 'Bills', color: '#6B7280', category_id: null, household_id: 1 };
     mockCreateLabel.mockResolvedValueOnce(newLabel);
 
     const { onLabelsChanged } = setup();
@@ -195,7 +194,7 @@ describe('LabelManagementDialog create', () => {
 
   it('returns to list mode after successful create', async () => {
     mockCreateLabel.mockResolvedValueOnce(
-      { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 },
+      { id: 99, name: 'Bills', color: '#6B7280', category_id: null, household_id: 1 },
     );
 
     setup();
