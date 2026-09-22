@@ -16,11 +16,14 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
+import { BudgetFilterBar } from '@pages/transactions/budget-filter-bar';
 import { DateRangeFilter } from '@pages/transactions/date-range-filter';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
 import type {
+  Budget,
+  BudgetLine,
   FileImportResult,
   Label,
   PaginatedTransactions,
@@ -28,6 +31,7 @@ import type {
   SortField,
   Transaction,
 } from '@serve/types/global';
+import { listBudgetLines, listBudgets, ApiError as BudgetsApiError } from '@services/budgets';
 import { listLabels, ApiError as LabelsApiError } from '@services/labels';
 import { listTransactions, ApiError } from '@services/transactions';
 
@@ -62,6 +66,13 @@ export function TransactionsPage() {
     // backend's int label_id param, and come back as a validation error.
     // Number.isInteger rejects those too (as well as NaN itself), matching
     // what the backend actually accepts.
+    return Number.isInteger(parsed) ? parsed : undefined;
+  })();
+
+  const budgetIdParam = searchParams.get('budget_id');
+  const budgetId: number | undefined = (() => {
+    if (budgetIdParam == null) return undefined;
+    const parsed = Number(budgetIdParam);
     return Number.isInteger(parsed) ? parsed : undefined;
   })();
 
@@ -101,6 +112,8 @@ export function TransactionsPage() {
   // ── Component state ─────────────────────────────────────────────────────────
   const [paginated, setPaginated] = useState<PaginatedTransactions | null>(null);
   const [labels, setLabels] = useState<Label[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [budgetLines, setBudgetLines] = useState<BudgetLine[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -120,6 +133,8 @@ export function TransactionsPage() {
       if (householdId === undefined) {
         setPaginated(null);
         setLabels([]);
+        setBudgets([]);
+        setBudgetLines([]);
         setError(null);
         setIsLoading(false);
         return;
@@ -141,16 +156,20 @@ export function TransactionsPage() {
           sort_dir: sortDir,
         }),
         listLabels(householdId),
+        listBudgets(householdId),
+        budgetId !== undefined ? listBudgetLines(budgetId) : Promise.resolve([]),
       ])
-        .then(([page, lbls]) => {
+        .then(([page, lbls, bgts, lines]) => {
           if (ignore) return;
           setPaginated(page);
           setLabels(lbls);
+          setBudgets(bgts);
+          setBudgetLines(lines);
         })
         .catch(err => {
           if (ignore) return;
           setError(
-            err instanceof ApiError || err instanceof LabelsApiError
+            err instanceof ApiError || err instanceof LabelsApiError || err instanceof BudgetsApiError
               ? err.message
               : 'Could not load transactions.',
           );
@@ -166,7 +185,18 @@ export function TransactionsPage() {
     return () => {
       ignore = true;
     };
-  }, [householdId, labelId, dateFrom, dateTo, cursor, previousCursor, sortKey, sortDir, refreshToken]);
+  }, [
+    householdId,
+    labelId,
+    budgetId,
+    dateFrom,
+    dateTo,
+    cursor,
+    previousCursor,
+    sortKey,
+    sortDir,
+    refreshToken,
+  ]);
 
   // Self-corrects a stale/invalid label_id (a bookmarked URL, a label
   // deleted since, or browser history from another household) once the
@@ -210,6 +240,7 @@ export function TransactionsPage() {
     'sort_dir',
     'page',
     'label_id',
+    'budget_id',
     'date_from',
     'date_to',
     'cursor',
@@ -222,6 +253,7 @@ export function TransactionsPage() {
       sort_dir: sortDir !== DEFAULT_DIR ? sortDir : undefined,
       page: page > 1 ? String(page) : undefined,
       label_id: labelId !== undefined ? String(labelId) : undefined,
+      budget_id: budgetId !== undefined ? String(budgetId) : undefined,
       date_from: dateFrom,
       date_to: dateTo,
       ...overrides,
@@ -238,6 +270,15 @@ export function TransactionsPage() {
   function handleLabelFilterChange(id: number | undefined) {
     setSearchParams(buildParams({
       label_id: id !== undefined ? String(id) : undefined,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
+  }
+
+  function handleBudgetFilterChange(id: number | undefined) {
+    setSearchParams(buildParams({
+      budget_id: id !== undefined ? String(id) : undefined,
       cursor: undefined,
       previous_cursor: undefined,
       page: undefined,
@@ -349,6 +390,7 @@ export function TransactionsPage() {
                   setSearchParams(
                     buildParams({
                       label_id: undefined,
+                      budget_id: undefined,
                       cursor: undefined,
                       previous_cursor: undefined,
                       page: undefined,
@@ -381,11 +423,21 @@ export function TransactionsPage() {
             onDateFromChange={handleDateFromChange}
             onDateToChange={handleDateToChange}
           />
+          <BudgetFilterBar
+            budgets={budgets}
+            budgetId={budgetId}
+            onBudgetChange={handleBudgetFilterChange}
+          />
         </Box>
 
         <TransactionsTable
           transactions={paginated?.results ?? []}
           labels={labels}
+          budgetCategoryMap={
+            budgetId !== undefined
+              ? new Map(budgetLines.map(line => [line.category_id, line.category_name]))
+              : null
+          }
           isLoading={isLoading}
           error={error}
           hasActiveFilter={labelId !== undefined || dateFrom !== undefined || dateTo !== undefined}

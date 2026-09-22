@@ -21,8 +21,8 @@ vi.mock('@services/transactions', async importOriginal => {
 });
 
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category_id: null }),
+  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category_id: null }),
 ];
 
 const TX = makeTransaction();
@@ -147,6 +147,16 @@ describe('TransactionsTable with data', () => {
     expect(screen.getByText('Label')).toBeDefined();
     expect(screen.getByText('Category')).toBeDefined();
     expect(screen.getByText('Actions')).toBeDefined();
+  });
+
+  it('does not render a Budget category header when budgetCategoryMap is not provided', () => {
+    setup({ transactions: [TX] });
+    expect(screen.queryByText('Budget category')).toBeNull();
+  });
+
+  it('renders a Budget category header when budgetCategoryMap is provided', () => {
+    setup({ transactions: [TX], budgetCategoryMap: new Map([[7, 'Utilities']]) });
+    expect(screen.getByText('Budget category')).toBeDefined();
   });
 
   it('renders transaction concept', () => {

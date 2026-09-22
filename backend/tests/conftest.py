@@ -12,6 +12,7 @@ Fixture relationships
                seth  (non-member, used for 403 tests)
     household → account_type → account
     household → category → label
+    household → budget
     account   → transaction
     account   → labeled_transaction (has label)
 """
@@ -23,6 +24,7 @@ from tests.factories import (
     AccountFactory,
     AccountTypeFactory,
     BankFactory,
+    BudgetFactory,
     CategoryFactory,
     HouseholdFactory,
     LabelFactory,
@@ -96,6 +98,12 @@ def account(db, account_type, household):
 def category(db, household):
     """A Food category in ``household``."""
     return CategoryFactory(name='Food', household=household)
+
+
+@pytest.fixture
+def budget(db, household):
+    """A spending budget in ``household``, with a January 2026 period."""
+    return BudgetFactory(name='January Budget', household=household)
 
 
 @pytest.fixture

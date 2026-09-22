@@ -16,6 +16,9 @@ interface TransactionRowProps {
   transaction: Transaction;
   columnOrder: ColumnKey[];
   labels?: Label[];
+  /** category_id -> category_name for the selected budget's lines; null
+   * when no budget is selected, hiding the "Budget category" column. */
+  budgetCategoryMap?: Map<number, string> | null;
   onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
 }
@@ -41,6 +44,7 @@ export function TransactionRow({
   transaction,
   columnOrder,
   labels = [],
+  budgetCategoryMap = null,
   onUpdated,
   onDeleted,
 }: TransactionRowProps) {
@@ -51,8 +55,8 @@ export function TransactionRow({
   // so TransactionActionsCell can trigger it without lifting edit state up.
   const startEditingRef = useRef<(() => void) | null>(null);
 
-  // +1 for the pinned Actions column
-  const colspan = columnOrder.length + 1;
+  // +1 for the pinned Actions column, +1 more if the Budget category column is shown
+  const colspan = columnOrder.length + 1 + (budgetCategoryMap ? 1 : 0);
 
   function renderCell(key: ColumnKey) {
     switch (key) {
@@ -128,10 +132,28 @@ export function TransactionRow({
     }
   }
 
+  const label = labels.find(l => l.id === transaction.label_id);
+  const budgetCategoryName =
+    budgetCategoryMap && label?.category_id != null
+      ? budgetCategoryMap.get(label.category_id)
+      : undefined;
+
   return (
     <>
       <TableRow sx={{ '&:last-child td': { border: 0 } }}>
         {columnOrder.map(key => renderCell(key))}
+
+        {budgetCategoryMap && (
+          <TableCell sx={{ py: 1.5 }}>
+            {budgetCategoryName ? (
+              <Chip label={budgetCategoryName} size="small" variant="outlined" />
+            ) : (
+              <Typography variant="body2" color="text.disabled">
+                —
+              </Typography>
+            )}
+          </TableCell>
+        )}
 
         <TransactionActionsCell
           transaction={transaction}

@@ -5,9 +5,9 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ListLabels } from '@pages/households/label-management-dialog/list-labels';
 
 const LABELS = [
-  { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 },
-  { id: 2, name: 'Transport', color: '#2563eb', category: '', household_id: 1 },
-  { id: 3, name: 'Subscriptions', color: '#9333ea', category: '', household_id: 1 },
+  { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
+  { id: 2, name: 'Transport', color: '#2563eb', category_id: null, household_id: 1 },
+  { id: 3, name: 'Subscriptions', color: '#9333ea', category_id: null, household_id: 1 },
 ];
 
 const meta: Meta<typeof ListLabels> = {

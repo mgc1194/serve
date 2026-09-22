@@ -18,8 +18,8 @@ vi.mock('@services/transactions', async importOriginal => {
 const mockUpdateTransactionLabel = vi.mocked(transactionsService.updateTransactionLabel);
 
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category_id: null }),
+  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category_id: null }),
 ];
 
 const TX = makeTransaction({

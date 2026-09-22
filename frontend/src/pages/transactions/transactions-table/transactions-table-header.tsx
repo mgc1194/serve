@@ -24,6 +24,8 @@ interface TransactionsTableHeaderProps {
   sortDir: SortDir;
   dragOver: ColumnKey | null;
   heldKey: ColumnKey | null;
+  /** Shows the pinned "Budget category" column — only when a budget is selected. */
+  showBudgetColumn?: boolean;
   onMouseDown: (e: React.MouseEvent) => void;
   onDragStart: (key: ColumnKey) => void;
   onDragOver: (e: React.DragEvent, key: ColumnKey) => void;
@@ -40,6 +42,7 @@ export function TransactionsTableHeader({
   sortDir,
   dragOver,
   heldKey,
+  showBudgetColumn = false,
   onMouseDown,
   onDragStart,
   onDragOver,
@@ -70,6 +73,18 @@ export function TransactionsTableHeader({
             onHandleKeyDown={onHandleKeyDown}
           />
         ))}
+
+        {/* Budget category column — pinned, not sortable or reorderable,
+            shown only while a budget is selected on the page. */}
+        {showBudgetColumn && (
+          <TableCell
+            component="th"
+            scope="col"
+            sx={{ ...HEADER_CELL_SX, color: 'text.secondary', cursor: 'default' }}
+          >
+            Budget category
+          </TableCell>
+        )}
 
         {/* Actions column — pinned, not sortable or reorderable */}
         <TableCell

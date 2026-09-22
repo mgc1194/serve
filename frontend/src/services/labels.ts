@@ -12,7 +12,7 @@ export async function listLabels(householdId: number): Promise<Label[]> {
 export async function createLabel(payload: {
   name: string;
   color: string;
-  category: string;
+  category_id?: number | null;
   household_id: number;
 }): Promise<Label> {
   return apiFetch<Label>('/labels/', {
@@ -23,7 +23,7 @@ export async function createLabel(payload: {
 
 export async function updateLabel(
   id: number,
-  payload: { name?: string; color?: string; category?: string },
+  payload: { name?: string; color?: string; category_id?: number | null },
 ): Promise<Label> {
   return apiFetch<Label>(`/labels/${id}/`, {
     method: 'PATCH',

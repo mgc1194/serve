@@ -27,7 +27,7 @@ const NO_LABEL: Label = {
   id: -1,
   name: 'No label',
   color: '',
-  category: '',
+  category_id: null,
   household_id: -1,
 };
 

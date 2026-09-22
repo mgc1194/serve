@@ -19,6 +19,7 @@ import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { TransactionsPage } from '@pages/transactions';
 import { makeTransaction } from '@serve/mocks';
 import type { FileImportResult, PaginatedTransactions } from '@serve/types/global';
+import * as budgetsService from '@services/budgets';
 import * as labelsService from '@services/labels';
 import * as transactionsService from '@services/transactions';
 
@@ -84,7 +85,7 @@ const EMPTY_PAGE: PaginatedTransactions = {
 };
 
 const LABELS = [
-  { id: 5, name: 'Groceries', color: '#22c55e', category: '', household_id: 1 },
+  { id: 5, name: 'Groceries', color: '#22c55e', category_id: null, household_id: 1 },
 ];
 
 const PAGE_WITH_A_ROW: PaginatedTransactions = {
@@ -115,6 +116,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(EMPTY_PAGE);
   vi.spyOn(labelsService, 'listLabels').mockResolvedValue([]);
+  vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([]);
+  vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([]);
 });
 
 describe('TransactionsPage import refresh', () => {
@@ -430,6 +433,73 @@ describe('TransactionsPage date range filter', () => {
 // label can't appear in the new household's options while the request
 // still filters by its old id, so the control looks cleared but the table
 // comes back empty.
+// Opens the budget filter's Autocomplete dropdown and picks the given option.
+async function pickBudgetFilter(name: string) {
+  await userEvent.click(screen.getByRole('combobox', { name: /^budget$/i }));
+  await userEvent.click(await screen.findByRole('option', { name }));
+}
+
+describe('TransactionsPage budget filter', () => {
+  const BUDGETS = [{ id: 9, name: 'January Budget', type: 'spending' as const, period_start: '2026-01-01', period_end: '2026-01-31', is_active: true, household_id: 1 }];
+  const BUDGET_LINES = [
+    { id: 1, budget_id: 9, category_id: 7, category_name: 'Utilities', category_type: 'spending' as const, planned_amount: '0.00', notes: '' },
+  ];
+
+  beforeEach(() => {
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue(BUDGETS);
+  });
+
+  it('does not show the Budget category column by default', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Budget category')).toBeNull();
+  });
+
+  it('shows the Budget category column once a budget is picked', async () => {
+    vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(PAGE_WITH_A_ROW);
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue(BUDGET_LINES);
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickBudgetFilter('January Budget');
+
+    await waitFor(() => expect(screen.getByText('Budget category')).toBeDefined());
+    expect(budgetsService.listBudgetLines).toHaveBeenCalledWith(9);
+  });
+
+  it('keeps the budget filter active after changing the sort column', async () => {
+    vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(PAGE_WITH_A_ROW);
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue(BUDGET_LINES);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickBudgetFilter('January Budget');
+    await waitFor(() => expect(screen.getByTestId('url-search').textContent).toContain('budget_id=9'));
+
+    await userEvent.click(screen.getByText('Account'));
+    await waitFor(() =>
+      expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sort: 'account' }),
+      ),
+    );
+    expect(screen.getByTestId('url-search').textContent).toContain('budget_id=9');
+  });
+
+  it('hides the Budget category column again when the budget selection is cleared', async () => {
+    vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(PAGE_WITH_A_ROW);
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue(BUDGET_LINES);
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickBudgetFilter('January Budget');
+    await waitFor(() => expect(screen.getByText('Budget category')).toBeDefined());
+
+    await userEvent.click(screen.getByTitle('Clear'));
+    await waitFor(() => expect(screen.queryByText('Budget category')).toBeNull());
+  });
+});
+
 describe('TransactionsPage household switch', () => {
   beforeEach(() => {
     vi.spyOn(labelsService, 'listLabels').mockResolvedValue(LABELS);
@@ -455,6 +525,25 @@ describe('TransactionsPage household switch', () => {
       expect(transactionsService.listTransactions).toHaveBeenLastCalledWith(
         expect.objectContaining({ label_id: undefined }),
       ),
+    );
+  });
+
+  it('clears the budget filter when switching households', async () => {
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([
+      { id: 9, name: 'January Budget', type: 'spending', period_start: '2026-01-01', period_end: '2026-01-31', is_active: true, household_id: 1 },
+    ]);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await pickBudgetFilter('January Budget');
+    await waitFor(() => expect(screen.getByTestId('url-search').textContent).toContain('budget_id=9'));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Test Household' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Test Household' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('url-search').textContent).not.toContain('budget_id'),
     );
   });
 

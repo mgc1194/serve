@@ -16,9 +16,9 @@ const tableDecorator: Decorator = Story => (
 );
 
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Subscriptions', color: '#7c3aed', category: 'Entertainment' }),
-  makeLabel({ id: 3, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category_id: null }),
+  makeLabel({ id: 2, name: 'Subscriptions', color: '#7c3aed', category_id: null }),
+  makeLabel({ id: 3, name: 'Transport', color: '#2563eb', category_id: null }),
 ];
 
 const meta: Meta<typeof TransactionRow> = {
