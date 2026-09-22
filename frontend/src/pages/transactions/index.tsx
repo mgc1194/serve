@@ -65,19 +65,26 @@ export function TransactionsPage() {
     return Number.isInteger(parsed) ? parsed : undefined;
   })();
 
-  // "YYYY-MM-DD" is the only shape both <input type="date"> and the
-  // backend's date param accept — anything else (a hand-edited or malformed
+  // "YYYY-MM-DD" is the only shape both the date picker and the backend's
+  // date param accept — anything else (a hand-edited or malformed
   // bookmarked URL) is treated as absent rather than sent through and
   // rejected as a validation error. The regex only checks the shape, so an
   // impossible calendar date (e.g. "2026-02-31") still needs to round-trip
-  // through Date.UTC to be confirmed real — JS silently rolls those over
-  // into the following month rather than rejecting them. Year 0000 round-trips
-  // fine but isn't a date either <input type="date"> or the backend accepts.
+  // through a Date to be confirmed real — JS silently rolls those over into
+  // the following month rather than rejecting them. Year 0000 round-trips
+  // fine but isn't a date either the date picker or the backend accepts.
+  //
+  // Built via `new Date(0)` + setUTCFullYear rather than `Date.UTC(...)`
+  // directly — Date.UTC (like the `Date(...)` constructor) applies a legacy
+  // two-digit-year offset, silently mapping years 0-99 to 1900-1999, which
+  // would wrongly fail the round-trip for a valid ISO year like "0001".
+  // setUTCFullYear has no such special-casing.
   const DATE_PARAM_RE = /^\d{4}-\d{2}-\d{2}$/;
   function isValidCalendarDate(value: string): boolean {
     const [year, month, day] = value.split('-').map(Number);
     if (year === 0) return false;
-    const date = new Date(Date.UTC(year, month - 1, day));
+    const date = new Date(0);
+    date.setUTCFullYear(year, month - 1, day);
     return (
       date.getUTCFullYear() === year &&
       date.getUTCMonth() === month - 1 &&

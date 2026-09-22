@@ -407,6 +407,22 @@ describe('TransactionsPage date range filter', () => {
       );
     },
   );
+
+  // Regression guard: Date.UTC (and the `new Date(...)` constructor) apply a
+  // legacy two-digit-year offset — years 0-99 get silently mapped to
+  // 1900-1999 — so a valid ISO year like "0001" failed the round-trip check
+  // and was wrongly discarded even though the backend's date type accepts
+  // it. Years outside that 0-99 range aren't affected and were already fine.
+  it.each(['0001-01-01', '0099-12-31'])(
+    'accepts a valid ISO date_from (%s) with a year in the legacy two-digit range',
+    async valid => {
+      renderPage([`/?date_from=${valid}`]);
+      await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+      expect(transactionsService.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ date_from: valid }),
+      );
+    },
+  );
 });
 
 // Regression: the household-switch button preserved label_id, but the

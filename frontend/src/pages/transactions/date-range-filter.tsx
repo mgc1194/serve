@@ -42,7 +42,7 @@ export function DateRangeFilter({
 }: DateRangeFilterProps) {
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
         <DatePicker
           label="From"
           format={DATE_FORMAT}

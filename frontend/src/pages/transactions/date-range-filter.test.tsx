@@ -35,6 +35,16 @@ describe('DateRangeFilter rendering', () => {
     expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('2026-01-01');
     expect((screen.getByLabelText('To') as HTMLInputElement).value).toBe('2026-01-31');
   });
+
+  // Regression: the two 170px fields plus the gap need 356px, which doesn't
+  // fit every narrow viewport even though the outer filter row (in
+  // TransactionsPage) already wraps — this inner row must be allowed to
+  // wrap too, or it overflows instead of dropping to two lines.
+  it('allows the From/To fields to wrap onto separate lines', () => {
+    setup();
+    const row = screen.getByLabelText('From').closest('.MuiFormControl-root')!.parentElement!;
+    expect(getComputedStyle(row).flexWrap).toBe('wrap');
+  });
 });
 
 describe('DateRangeFilter interactions', () => {
