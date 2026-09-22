@@ -30,45 +30,43 @@ export function LabelFilterBar({ labels, labelId, onLabelChange }: LabelFilterBa
   const selected = options.find(l => l.id === labelId) ?? null;
 
   return (
-    <Box sx={{ mb: 3 }}>
-      <Autocomplete
-        value={selected}
-        onChange={(_event, value) => onLabelChange(value?.id)}
-        options={options}
-        getOptionLabel={l => l.name}
-        isOptionEqualToValue={(a, b) => a.id === b.id}
-        size="small"
-        sx={{ width: 260 }}
-        renderInput={params => (
-          <TextField {...params} label="Filter by label" placeholder="All labels" />
-        )}
-        renderOption={(props, label) => {
-          const { key, ...rest } = props;
-          if (label.id === UNLABELED_OPTION.id) {
-            return (
-              <li key={key} {...rest}>
-                <Box component="span" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-                  Unlabeled
-                </Box>
-              </li>
-            );
-          }
+    <Autocomplete
+      value={selected}
+      onChange={(_event, value) => onLabelChange(value?.id)}
+      options={options}
+      getOptionLabel={l => l.name}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      size="small"
+      sx={{ width: 260 }}
+      renderInput={params => (
+        <TextField {...params} label="Filter by label" placeholder="All labels" />
+      )}
+      renderOption={(props, label) => {
+        const { key, ...rest } = props;
+        if (label.id === UNLABELED_OPTION.id) {
           return (
             <li key={key} {...rest}>
-              <Chip
-                label={label.name}
-                size="small"
-                sx={{
-                  bgcolor: label.color,
-                  color: contrastTextColor(label.color),
-                  fontWeight: 500,
-                  pointerEvents: 'none',
-                }}
-              />
+              <Box component="span" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
+                Unlabeled
+              </Box>
             </li>
           );
-        }}
-      />
-    </Box>
+        }
+        return (
+          <li key={key} {...rest}>
+            <Chip
+              label={label.name}
+              size="small"
+              sx={{
+                bgcolor: label.color,
+                color: contrastTextColor(label.color),
+                fontWeight: 500,
+                pointerEvents: 'none',
+              }}
+            />
+          </li>
+        );
+      }}
+    />
   );
 }

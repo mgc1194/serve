@@ -101,6 +101,22 @@ describe('listTransactions', () => {
     expect(url).not.toContain('label_id');
   });
 
+  it('includes date_from and date_to when provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1, date_from: '2026-01-01', date_to: '2026-01-31' });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).toContain('date_from=2026-01-01');
+    expect(url).toContain('date_to=2026-01-31');
+  });
+
+  it('omits date_from and date_to when not provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1 });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).not.toContain('date_from');
+    expect(url).not.toContain('date_to');
+  });
+
   it('uses GET', async () => {
     const spy = mockFetch(200, []);
     await listTransactions({ household_id: 1 });

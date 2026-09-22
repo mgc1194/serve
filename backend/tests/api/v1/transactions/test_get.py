@@ -106,6 +106,59 @@ class TestLabelFilter:
         assert data[0]['concept'] == 'UNLABELLED'
 
 
+# ── GET /transactions/ — date range filter ───────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestDateRangeFilter:
+    def test_filters_to_transactions_within_the_range_inclusive(
+        self, client, alice, account, household
+    ):
+        TransactionFactory(account=account, date='2026-01-14', concept='BEFORE', amount=-5.00)
+        TransactionFactory(account=account, date='2026-01-15', concept='LOWER_BOUND', amount=-10.00)
+        TransactionFactory(account=account, date='2026-01-20', concept='MIDDLE', amount=-15.00)
+        TransactionFactory(account=account, date='2026-01-31', concept='UPPER_BOUND', amount=-20.00)
+        TransactionFactory(account=account, date='2026-02-01', concept='AFTER', amount=-25.00)
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&date_from=2026-01-15&date_to=2026-01-31',
+            user=alice,
+        )
+        concepts = {t['concept'] for t in response.json()['results']}
+        assert concepts == {'LOWER_BOUND', 'MIDDLE', 'UPPER_BOUND'}
+
+    def test_date_from_alone_filters_to_that_date_and_later(
+        self, client, alice, account, household
+    ):
+        TransactionFactory(account=account, date='2026-01-14', concept='BEFORE', amount=-5.00)
+        TransactionFactory(account=account, date='2026-01-15', concept='ON_OR_AFTER', amount=-10.00)
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&date_from=2026-01-15', user=alice
+        )
+        concepts = {t['concept'] for t in response.json()['results']}
+        assert concepts == {'ON_OR_AFTER'}
+
+    def test_date_to_alone_filters_to_that_date_and_earlier(
+        self, client, alice, account, household
+    ):
+        TransactionFactory(account=account, date='2026-01-15', concept='ON_OR_BEFORE', amount=-5.00)
+        TransactionFactory(account=account, date='2026-01-16', concept='AFTER', amount=-10.00)
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&date_to=2026-01-15', user=alice
+        )
+        concepts = {t['concept'] for t in response.json()['results']}
+        assert concepts == {'ON_OR_BEFORE'}
+
+    def test_returns_400_when_date_from_is_after_date_to(self, client, alice, household):
+        response = client.get(
+            f'/transactions/?household_id={household.id}&date_from=2026-02-01&date_to=2026-01-01',
+            user=alice,
+        )
+        assert response.status_code == 400
+
+
 # ── GET /transactions/ — pagination ──────────────────────────────────────────
 
 

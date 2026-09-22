@@ -12,6 +12,7 @@ Endpoints:
 import hashlib
 import io
 import logging
+from datetime import date
 from enum import StrEnum
 
 from django.db import IntegrityError
@@ -214,6 +215,8 @@ def list_transactions(
     household_id: int,
     account_id: int | None = None,
     label_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     cursor: str | None = None,
     previous_cursor: str | None = None,
     sort: SortField = SortField.date,
@@ -238,6 +241,8 @@ def list_transactions(
         account_id:      Optional account filter.
         label_id:        Optional label filter. Pass UNLABELED_SENTINEL (-1)
                          to filter to transactions with no label.
+        date_from:       Optional inclusive lower bound on transaction date.
+        date_to:         Optional inclusive upper bound on transaction date.
         cursor:          Opaque forward-pagination cursor. Mutually exclusive
                          with previous_cursor.
         previous_cursor: Opaque backward-pagination cursor. Mutually exclusive
@@ -249,8 +254,9 @@ def list_transactions(
         PaginatedTransactionsSchema.
 
     Raises:
-        HttpError 400: invalid sort_dir, unparseable cursor, or both cursor
-                     and previous_cursor provided simultaneously.
+        HttpError 400: invalid sort_dir, unparseable cursor, both cursor and
+                     previous_cursor provided simultaneously, or date_from
+                     after date_to.
         HttpError 403: user not a household member.
         HttpError 404: household not found.
     """
@@ -259,6 +265,9 @@ def list_transactions(
 
     if cursor is not None and previous_cursor is not None:
         raise HttpError(400, "'cursor' and 'previous_cursor' are mutually exclusive.")
+
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HttpError(400, "'date_from' must not be after 'date_to'.")
 
     household = get_object_or_404(Household, pk=household_id)
     if not household.users.filter(pk=request.user.pk).exists():
@@ -288,6 +297,10 @@ def list_transactions(
             base_qs = base_qs.filter(label__isnull=True)
         else:
             base_qs = base_qs.filter(label_id=label_id)
+    if date_from is not None:
+        base_qs = base_qs.filter(date__gte=date_from)
+    if date_to is not None:
+        base_qs = base_qs.filter(date__lte=date_to)
 
     count = base_qs.count()
 
