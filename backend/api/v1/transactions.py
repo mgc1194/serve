@@ -12,6 +12,7 @@ Endpoints:
 import hashlib
 import io
 import logging
+from datetime import date
 from enum import StrEnum
 
 from django.db import IntegrityError
@@ -43,6 +44,11 @@ logger = logging.getLogger(__name__)
 router = Router(tags=['Transactions'], auth=django_auth)
 
 PAGE_SIZE = 20
+
+# label_id filter value meaning "transactions with no label" — matches the
+# frontend's existing NO_LABEL sentinel (transaction-label-cell.tsx), which
+# reuses -1 since it's never a real Label id.
+UNLABELED_SENTINEL = -1
 
 
 class SortField(StrEnum):
@@ -208,6 +214,9 @@ def list_transactions(
     request,
     household_id: int,
     account_id: int | None = None,
+    label_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     cursor: str | None = None,
     previous_cursor: str | None = None,
     sort: SortField = SortField.date,
@@ -230,6 +239,10 @@ def list_transactions(
         request:         The HTTP request. Must be authenticated.
         household_id:    The household to list transactions for.
         account_id:      Optional account filter.
+        label_id:        Optional label filter. Pass UNLABELED_SENTINEL (-1)
+                         to filter to transactions with no label.
+        date_from:       Optional inclusive lower bound on transaction date.
+        date_to:         Optional inclusive upper bound on transaction date.
         cursor:          Opaque forward-pagination cursor. Mutually exclusive
                          with previous_cursor.
         previous_cursor: Opaque backward-pagination cursor. Mutually exclusive
@@ -241,8 +254,9 @@ def list_transactions(
         PaginatedTransactionsSchema.
 
     Raises:
-        HttpError 400: invalid sort_dir, unparseable cursor, or both cursor
-                     and previous_cursor provided simultaneously.
+        HttpError 400: invalid sort_dir, unparseable cursor, both cursor and
+                     previous_cursor provided simultaneously, or date_from
+                     after date_to.
         HttpError 403: user not a household member.
         HttpError 404: household not found.
     """
@@ -251,6 +265,9 @@ def list_transactions(
 
     if cursor is not None and previous_cursor is not None:
         raise HttpError(400, "'cursor' and 'previous_cursor' are mutually exclusive.")
+
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HttpError(400, "'date_from' must not be after 'date_to'.")
 
     household = get_object_or_404(Household, pk=household_id)
     if not household.users.filter(pk=request.user.pk).exists():
@@ -272,6 +289,18 @@ def list_transactions(
     )
     if account_id is not None:
         base_qs = base_qs.filter(account_id=account_id)
+    if label_id is not None:
+        # -1 is the sentinel the frontend already uses (see NO_LABEL in
+        # transaction-label-cell.tsx) to mean "unlabelled" rather than a real
+        # Label id.
+        if label_id == UNLABELED_SENTINEL:
+            base_qs = base_qs.filter(label__isnull=True)
+        else:
+            base_qs = base_qs.filter(label_id=label_id)
+    if date_from is not None:
+        base_qs = base_qs.filter(date__gte=date_from)
+    if date_to is not None:
+        base_qs = base_qs.filter(date__lte=date_to)
 
     count = base_qs.count()
 

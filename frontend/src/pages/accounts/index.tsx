@@ -1,72 +1,72 @@
 // pages/accounts/index.tsx — Accounts management page.
 //
-// Orchestrates data fetching and URL-driven filter state.
-// Rendering is delegated to AccountsFilterBar and AccountsTable.
+// Orchestrates data fetching for the session-wide active household.
+// Rendering is delegated to AccountsTable.
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Box, Button, Container, Typography } from '@mui/material';
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 
-import { useAuth } from '@context/auth-context';
+import { SwitchHouseholdButton } from '@components/switch-household-button';
+import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
-import { AccountsFilterBar } from '@pages/accounts/accounts-filter-bar';
 import { AccountsTable } from '@pages/accounts/accounts-table';
 import { CreateAccountDialog } from '@pages/accounts/create-account-dialog';
-import type { AccountDetail, Household } from '@serve/types/global';
+import type { AccountDetail } from '@serve/types/global';
 import { listAccounts, ApiError } from '@services/accounts';
 
 export function AccountsPage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { activeHousehold, households } = useActiveHousehold();
 
   const [accounts, setAccounts] = useState<AccountDetail[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Filter stored in URL so it survives reload and is shareable
-  const householdIdParam = searchParams.get('household_id');
-  const householdIdFilter = 
-    householdIdParam !== null
-      ? (() => {
-        const parsed = Number(householdIdParam);
-        return isNaN(parsed) ? undefined : parsed;
-      })()
-      : undefined;
+  const householdId = activeHousehold?.id;
 
-  const households: Household[] = useMemo(() => user?.households ?? [], [user]);
-
-  const preselectedHousehold = 
-    householdIdFilter !== undefined
-      ? (households.find(h => h.id === householdIdFilter) ?? null)
-      : null;
-
-  const activeHousehold =
-    householdIdFilter !== undefined
-      ? households.find(h => h.id === householdIdFilter)
-      : undefined;
-
-  function load() {
-    setIsLoading(true);
-    setError(null);
-    listAccounts({ household_id: householdIdFilter })
-      .then(setAccounts)
-      .catch(err => {
-        setError(err instanceof ApiError ? err.message : 'Could not load accounts.');
-      })
-      .finally(() => setIsLoading(false));
-  }
+  // loadRef gives the retry button and CreateAccountDialog's onCreated a
+  // stable reference to the latest fetch without making it a useEffect
+  // dependency.
+  const loadRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    // load() kicks off a network fetch; loading/error state must flip
-    // synchronously before it resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    let ignore = false;
+
+    function load() {
+      if (householdId === undefined) {
+        setAccounts([]);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+      listAccounts({ household_id: householdId })
+        .then(result => {
+          if (ignore) return;
+          setAccounts(result);
+        })
+        .catch(err => {
+          if (ignore) return;
+          setError(err instanceof ApiError ? err.message : 'Could not load accounts.');
+        })
+        .finally(() => {
+          if (!ignore) setIsLoading(false);
+        });
+    }
+
+    loadRef.current = load;
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [householdIdFilter]);
+
+    return () => {
+      ignore = true;
+    };
+  }, [householdId]);
 
   function handleUpdated(updated: AccountDetail) {
     setAccounts(prev => prev.map(a => (a.id === updated.id ? updated : a)));
@@ -74,16 +74,6 @@ export function AccountsPage() {
 
   function handleDeleted(id: number) {
     setAccounts(prev => prev.filter(a => a.id !== id));
-  }
-
-  function setHouseholdFilter(id: number | undefined) {
-    const next = new URLSearchParams(searchParams);
-    if (id == null) {
-      next.delete('household_id');
-    } else {
-      next.set('household_id', String(id));
-    }
-    setSearchParams(next, { replace: true });
   }
 
   return (
@@ -117,29 +107,26 @@ export function AccountsPage() {
             <Typography color="text.secondary">
               {activeHousehold
                 ? `Showing accounts in ${activeHousehold.name}`
-                : 'All accounts across your households.'}
+                : 'No household selected.'}
             </Typography>
           </Box>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setCreateOpen(true)}
-          >
-            Add account
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <SwitchHouseholdButton />
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateOpen(true)}
+            >
+              Add account
+            </Button>
+          </Box>
         </Box>
-
-        <AccountsFilterBar
-          households={households}
-          householdId={householdIdFilter}
-          onHouseholdChange={setHouseholdFilter}
-        />
 
         <AccountsTable
           accounts={accounts}
           isLoading={isLoading}
           error={error}
-          onRetry={load}
+          onRetry={() => loadRef.current()}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
           onAddAccount={() => setCreateOpen(true)}
@@ -149,8 +136,8 @@ export function AccountsPage() {
       <CreateAccountDialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onCreated={load}
-        preselectedHousehold={preselectedHousehold}
+        onCreated={() => loadRef.current()}
+        preselectedHousehold={activeHousehold}
         households={households}
       />
     </Box>

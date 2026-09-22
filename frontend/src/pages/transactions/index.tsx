@@ -3,23 +3,25 @@
 // Owns all URL-driven state: cursor, sort, sort_dir.
 // Fetch logic lives in a useEffect; loadRef gives the Retry button a
 // stable reference without adding load as an effect dependency.
-// Active household is the user's first household — household switching
-// will be handled globally in a follow-up PR.
+// Active household comes from the session-wide useActiveHousehold() context;
+// the header's household name doubles as the switch-household button.
 // Rendering is delegated to TransactionsTable and ImportCsvDialog.
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import { Box, Button, Container, Typography } from '@mui/material';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { useAuth } from '@context/auth-context';
+import { SwitchHouseholdButton } from '@components/switch-household-button';
+import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
+import { DateRangeFilter } from '@pages/transactions/date-range-filter';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
+import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
 import type {
   FileImportResult,
-  Household,
   Label,
   PaginatedTransactions,
   SortDir,
@@ -33,17 +35,15 @@ const DEFAULT_SORT: SortField = 'date';
 const DEFAULT_DIR: SortDir = 'desc';
 // Must match PAGE_SIZE in backend/api/v1/transactions.py
 const PAGE_SIZE = 20;
+// -1 is the "unlabeled" sentinel already established by NO_LABEL
+// (transaction-label-cell.tsx) and UNLABELED_OPTION (label-filter-bar.tsx).
+const UNLABELED_SENTINEL = -1;
 
 export function TransactionsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
+  const { activeHousehold } = useActiveHousehold();
 
-  const households: Household[] = useMemo(() => user?.households ?? [], [user]);
-
-  // Use the first household as the active one until global household
-  // switching is implemented (tracked separately).
-  const activeHousehold = households[0] ?? null;
   const householdId = activeHousehold?.id;
 
   // ── URL-driven state ────────────────────────────────────────────────────────
@@ -52,6 +52,51 @@ export function TransactionsPage() {
   const cursor = searchParams.get('cursor') ?? undefined;
   const previousCursor = searchParams.get('previous_cursor') ?? undefined;
   const page = Number(searchParams.get('page') ?? '1');
+
+  const labelIdParam = searchParams.get('label_id');
+  const labelId: number | undefined = (() => {
+    if (labelIdParam == null) return undefined;
+    const parsed = Number(labelIdParam);
+    // Number.isNaN alone accepts non-integers like "1.5" or "Infinity" —
+    // both parse to a finite-looking, non-NaN number, get sent to the
+    // backend's int label_id param, and come back as a validation error.
+    // Number.isInteger rejects those too (as well as NaN itself), matching
+    // what the backend actually accepts.
+    return Number.isInteger(parsed) ? parsed : undefined;
+  })();
+
+  // "YYYY-MM-DD" is the only shape both the date picker and the backend's
+  // date param accept — anything else (a hand-edited or malformed
+  // bookmarked URL) is treated as absent rather than sent through and
+  // rejected as a validation error. The regex only checks the shape, so an
+  // impossible calendar date (e.g. "2026-02-31") still needs to round-trip
+  // through a Date to be confirmed real — JS silently rolls those over into
+  // the following month rather than rejecting them. Year 0000 round-trips
+  // fine but isn't a date either the date picker or the backend accepts.
+  //
+  // Built via `new Date(0)` + setUTCFullYear rather than `Date.UTC(...)`
+  // directly — Date.UTC (like the `Date(...)` constructor) applies a legacy
+  // two-digit-year offset, silently mapping years 0-99 to 1900-1999, which
+  // would wrongly fail the round-trip for a valid ISO year like "0001".
+  // setUTCFullYear has no such special-casing.
+  const DATE_PARAM_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function isValidCalendarDate(value: string): boolean {
+    const [year, month, day] = value.split('-').map(Number);
+    if (year === 0) return false;
+    const date = new Date(0);
+    date.setUTCFullYear(year, month - 1, day);
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }
+  function parseDateParam(key: string): string | undefined {
+    const raw = searchParams.get(key);
+    return raw !== null && DATE_PARAM_RE.test(raw) && isValidCalendarDate(raw) ? raw : undefined;
+  }
+  const dateFrom = parseDateParam('date_from');
+  const dateTo = parseDateParam('date_to');
 
   // ── Component state ─────────────────────────────────────────────────────────
   const [paginated, setPaginated] = useState<PaginatedTransactions | null>(null);
@@ -87,6 +132,9 @@ export function TransactionsPage() {
       Promise.all([
         listTransactions({
           household_id: householdId,
+          label_id: labelId,
+          date_from: dateFrom,
+          date_to: dateTo,
           cursor,
           previous_cursor: previousCursor,
           sort: sortKey,
@@ -118,19 +166,100 @@ export function TransactionsPage() {
     return () => {
       ignore = true;
     };
-  }, [householdId, cursor, previousCursor, sortKey, sortDir, refreshToken]);
+  }, [householdId, labelId, dateFrom, dateTo, cursor, previousCursor, sortKey, sortDir, refreshToken]);
+
+  // Self-corrects a stale/invalid label_id (a bookmarked URL, a label
+  // deleted since, or browser history from another household) once the
+  // definitive label list has loaded — otherwise the filter control shows
+  // "All labels" (labelId matches no option) while the request keeps
+  // filtering by an id that can't match anything, and the table stays
+  // empty with no way to tell why.
+  //
+  // Skipped while error is set: a failed load leaves labels empty (never
+  // populated), which would otherwise look identical to "labelId isn't
+  // among the household's labels" — wrongly treating a valid bookmarked
+  // filter as stale, dropping it from the URL, and masking the real error
+  // behind an unfiltered refetch.
+  useEffect(() => {
+    if (
+      isLoading ||
+      error !== null ||
+      labelId === undefined ||
+      labelId === UNLABELED_SENTINEL
+    )
+      return;
+    if (labels.some(l => l.id === labelId)) return;
+
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('label_id');
+      next.delete('cursor');
+      next.delete('previous_cursor');
+      next.delete('page');
+      return next;
+    });
+  }, [isLoading, error, labelId, labels, setSearchParams]);
 
   // ── URL mutation helpers ────────────────────────────────────────────────────
+  // Fixed key order so the resulting URL is stable regardless of which
+  // params happen to change — merging into a plain object first and only
+  // then reading it back out in KEY_ORDER means insertion order (which
+  // JS objects otherwise preserve) never leaks into the result.
+  const KEY_ORDER = [
+    'sort',
+    'sort_dir',
+    'page',
+    'label_id',
+    'date_from',
+    'date_to',
+    'cursor',
+    'previous_cursor',
+  ] as const;
+
   function buildParams(overrides: Record<string, string | undefined>) {
+    const merged: Record<string, string | undefined> = {
+      sort: sortKey !== DEFAULT_SORT ? sortKey : undefined,
+      sort_dir: sortDir !== DEFAULT_DIR ? sortDir : undefined,
+      page: page > 1 ? String(page) : undefined,
+      label_id: labelId !== undefined ? String(labelId) : undefined,
+      date_from: dateFrom,
+      date_to: dateTo,
+      ...overrides,
+    };
+
     const base: Record<string, string> = {};
-    if (sortKey !== DEFAULT_SORT) base.sort = sortKey;
-    if (sortDir !== DEFAULT_DIR) base.sort_dir = sortDir;
-    if (page > 1) base.page = String(page);
-    for (const [k, v] of Object.entries(overrides)) {
-      if (v !== undefined) base[k] = v;
-      else delete base[k];
+    for (const key of KEY_ORDER) {
+      const value = merged[key];
+      if (value !== undefined) base[key] = value;
     }
     return base;
+  }
+
+  function handleLabelFilterChange(id: number | undefined) {
+    setSearchParams(buildParams({
+      label_id: id !== undefined ? String(id) : undefined,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
+  }
+
+  function handleDateFromChange(value: string | undefined) {
+    setSearchParams(buildParams({
+      date_from: value,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
+  }
+
+  function handleDateToChange(value: string | undefined) {
+    setSearchParams(buildParams({
+      date_to: value,
+      cursor: undefined,
+      previous_cursor: undefined,
+      page: undefined,
+    }));
   }
 
   function handleSortChange(field: SortField, dir: SortDir) {
@@ -162,6 +291,18 @@ export function TransactionsPage() {
   }
 
   function handleUpdated(updated: Transaction) {
+    const stillMatchesFilter =
+      labelId === undefined ||
+      (labelId === UNLABELED_SENTINEL ? updated.label_id === null : updated.label_id === labelId);
+
+    if (!stillMatchesFilter) {
+      // The edit moved this transaction out of the active label filter —
+      // refetch rather than trying to locally patch count/pagination for a
+      // row that's no longer part of the filtered result set.
+      setRefreshToken(t => t + 1);
+      return;
+    }
+
     setPaginated(prev =>
       prev
         ? { ...prev, results: prev.results.map(t => (t.id === updated.id ? updated : t)) }
@@ -178,7 +319,9 @@ export function TransactionsPage() {
   }
 
   function handleImported(_result: FileImportResult) {
-    setImportOpen(false);
+    // Leave the dialog open — it shows its own success screen and only
+    // closes when the user clicks Close (onClose below). Refresh the table
+    // underneath in the meantime.
     setSearchParams(buildParams({ cursor: undefined, previous_cursor: undefined, page: undefined }));
     setRefreshToken(t => t + 1);
   }
@@ -198,9 +341,25 @@ export function TransactionsPage() {
         </Button>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">
-            {activeHousehold ? activeHousehold.name : 'Transactions'}
-          </Typography>
+          {activeHousehold ? (
+            <Typography variant="h4">
+              <SwitchHouseholdButton
+                sx={{ font: 'inherit', ml: -1 }}
+                onChange={() =>
+                  setSearchParams(
+                    buildParams({
+                      label_id: undefined,
+                      cursor: undefined,
+                      previous_cursor: undefined,
+                      page: undefined,
+                    }),
+                  )
+                }
+              />
+            </Typography>
+          ) : (
+            <Typography variant="h4">Transactions</Typography>
+          )}
           <Button
             variant="outlined"
             startIcon={<FileUploadOutlinedIcon />}
@@ -210,11 +369,26 @@ export function TransactionsPage() {
           </Button>
         </Box>
 
+        <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+          <LabelFilterBar
+            labels={labels}
+            labelId={labelId}
+            onLabelChange={handleLabelFilterChange}
+          />
+          <DateRangeFilter
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={handleDateFromChange}
+            onDateToChange={handleDateToChange}
+          />
+        </Box>
+
         <TransactionsTable
           transactions={paginated?.results ?? []}
           labels={labels}
           isLoading={isLoading}
           error={error}
+          hasActiveFilter={labelId !== undefined || dateFrom !== undefined || dateTo !== undefined}
           onRetry={() => loadRef.current()}
           onUpdated={handleUpdated}
           onDeleted={handleDeleted}
@@ -234,7 +408,6 @@ export function TransactionsPage() {
 
         <ImportCsvDialog
           open={importOpen}
-          households={households}
           onImported={handleImported}
           onClose={() => setImportOpen(false)}
         />

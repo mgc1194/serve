@@ -1,9 +1,15 @@
 import type { Preview } from '@storybook/react-vite';
 
-import { authDecorator, routerDecorator, themeDecorator } from './decorators';
+import { activeHouseholdDecorator, authDecorator, routerDecorator, themeDecorator } from './decorators';
 
+// Storybook's defaultDecorateStory composes this array with a plain
+// left-to-right .reduce(): each later decorator wraps AROUND the result of
+// all earlier ones, so the LAST entry ends up outermost, not the first.
+// activeHouseholdDecorator must therefore come before authDecorator here —
+// ActiveHouseholdProvider calls useAuth(), so it needs AuthProvider to be
+// its ancestor (outer), not the reverse.
 const preview: Preview = {
-  decorators: [themeDecorator, routerDecorator, authDecorator],
+  decorators: [themeDecorator, routerDecorator, activeHouseholdDecorator, authDecorator],
 
   parameters: {
     layout: 'fullscreen',

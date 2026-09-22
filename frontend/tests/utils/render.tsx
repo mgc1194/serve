@@ -1,8 +1,8 @@
 // tests/utils/render.tsx — Custom render with all providers.
 //
 // Wraps RTL's render with MUI ThemeProvider, QueryClientProvider,
-// AuthProvider, and BrowserRouter so components render in a realistic
-// context without boilerplate in every test.
+// AuthProvider, ActiveHouseholdProvider, and BrowserRouter so components
+// render in a realistic context without boilerplate in every test.
 
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
@@ -12,8 +12,9 @@ import type { RenderOptions, RenderResult } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { BrowserRouter } from 'react-router';
 
-import { AuthProvider } from '../../src/context/auth-context';
-import theme from '../../src/theme';
+import { ActiveHouseholdProvider } from '@context/active-household-context';
+import { AuthProvider } from '@context/auth-context';
+import theme from '@serve/theme';
 
 function makeQueryClient() {
   return new QueryClient({
@@ -30,9 +31,11 @@ function AllProviders({ children }: { children: ReactNode }) {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <AuthProvider>
-          <BrowserRouter>
-            {children}
-          </BrowserRouter>
+          <ActiveHouseholdProvider>
+            <BrowserRouter>
+              {children}
+            </BrowserRouter>
+          </ActiveHouseholdProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
