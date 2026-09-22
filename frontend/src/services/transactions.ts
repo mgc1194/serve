@@ -14,6 +14,7 @@ export { ApiError };
 export interface ListTransactionsParams {
   household_id: number;
   account_id?: number;
+  label_id?: number;
   cursor?: string;
   previous_cursor?: string;
   sort?: SortField;
@@ -26,6 +27,7 @@ export async function listTransactions(
   const query = new URLSearchParams();
   query.set('household_id', String(params.household_id));
   if (params.account_id != null) query.set('account_id', String(params.account_id));
+  if (params.label_id != null) query.set('label_id', String(params.label_id));
   if (params.cursor != null) query.set('cursor', params.cursor);
   if (params.previous_cursor != null) query.set('previous_cursor', params.previous_cursor);
   if (params.sort != null) query.set('sort', params.sort);

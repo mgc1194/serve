@@ -62,6 +62,50 @@ class TestListTransactions:
         assert response.status_code == 404
 
 
+# ── GET /transactions/ — label filter ────────────────────────────────────────
+
+
+@pytest.mark.django_db
+class TestLabelFilter:
+    def test_filters_to_transactions_with_the_given_label(
+        self, client, alice, account, household, label
+    ):
+        TransactionFactory(account=account, date='2026-01-01', concept='UNLABELLED', amount=-5.00)
+        TransactionFactory(
+            account=account, date='2026-01-02', concept='LABELLED', amount=-10.00, label=label
+        )
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&label_id={label.id}', user=alice
+        )
+        data = response.json()['results']
+        assert len(data) == 1
+        assert data[0]['concept'] == 'LABELLED'
+
+    def test_returns_empty_when_no_transactions_have_the_label(
+        self, client, alice, account, household, label
+    ):
+        TransactionFactory(account=account, date='2026-01-01', concept='UNLABELLED', amount=-5.00)
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&label_id={label.id}', user=alice
+        )
+        assert response.json()['results'] == []
+
+    def test_label_id_negative_one_filters_to_unlabelled_transactions(
+        self, client, alice, account, household, label
+    ):
+        TransactionFactory(account=account, date='2026-01-01', concept='UNLABELLED', amount=-5.00)
+        TransactionFactory(
+            account=account, date='2026-01-02', concept='LABELLED', amount=-10.00, label=label
+        )
+
+        response = client.get(f'/transactions/?household_id={household.id}&label_id=-1', user=alice)
+        data = response.json()['results']
+        assert len(data) == 1
+        assert data[0]['concept'] == 'UNLABELLED'
+
+
 # ── GET /transactions/ — pagination ──────────────────────────────────────────
 
 

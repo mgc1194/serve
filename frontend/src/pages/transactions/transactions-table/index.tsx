@@ -36,6 +36,11 @@ interface TransactionsTableProps {
   labels?: Label[];
   isLoading: boolean;
   error: string | null;
+  /** Whether a filter (e.g. label) is currently narrowing the results —
+   * changes the empty-state message and hides the "Import a CSV" prompt,
+   * since zero matches under a filter doesn't mean the household has no
+   * transactions. */
+  hasActiveFilter?: boolean;
   onRetry: () => void;
   onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
@@ -60,6 +65,7 @@ export function TransactionsTable({
   labels = [],
   isLoading,
   error,
+  hasActiveFilter = false,
   onRetry,
   onUpdated,
   onDeleted,
@@ -121,7 +127,7 @@ export function TransactionsTable({
         ) : error ? (
           <ErrorState error={error} onRetry={onRetry} />
         ) : transactions.length === 0 ? (
-          <EmptyState onImport={onImport} />
+          <EmptyState onImport={onImport} hasActiveFilter={hasActiveFilter} />
         ) : (
           <>
             <Table size="small">
@@ -249,7 +255,21 @@ function ErrorState({ error, onRetry }: { error: string; onRetry: () => void }) 
   );
 }
 
-function EmptyState({ onImport }: { onImport: () => void }) {
+function EmptyState({
+  onImport,
+  hasActiveFilter,
+}: {
+  onImport: () => void;
+  hasActiveFilter: boolean;
+}) {
+  if (hasActiveFilter) {
+    return (
+      <Box sx={{ py: 8, textAlign: 'center' }}>
+        <Typography color="text.secondary">No matching transactions.</Typography>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ py: 8, textAlign: 'center' }}>
       <Typography color="text.secondary" sx={{ mb: 2 }}>

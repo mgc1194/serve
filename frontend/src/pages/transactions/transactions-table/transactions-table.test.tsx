@@ -117,6 +117,17 @@ describe('TransactionsTable empty', () => {
     fireEvent.click(screen.getByRole('button', { name: /import a csv/i }));
     expect(onImport).toHaveBeenCalledOnce();
   });
+
+  // A filter narrowing to zero matches doesn't mean the household has no
+  // transactions — the generic "No transactions yet." + Import CSV prompt
+  // is misleading there, so hasActiveFilter swaps in a different message
+  // and drops the import prompt.
+  it('renders "No matching transactions." instead, with no Import CSV button, when a filter is active', () => {
+    setup({ transactions: [], hasActiveFilter: true });
+    expect(screen.getByText('No matching transactions.')).toBeDefined();
+    expect(screen.queryByText('No transactions yet.')).toBeNull();
+    expect(screen.queryByRole('button', { name: /import a csv/i })).toBeNull();
+  });
 });
 
 // ── Data rendering ────────────────────────────────────────────────────────────

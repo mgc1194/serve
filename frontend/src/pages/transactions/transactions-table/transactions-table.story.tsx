@@ -101,6 +101,10 @@ export const Error: Story = {
 
 export const Empty: Story = {};
 
+export const EmptyWithActiveFilter: Story = {
+  args: { hasActiveFilter: true },
+};
+
 export const WithTransactions: Story = {
   args: { transactions: TRANSACTIONS, count: 4 },
 };
