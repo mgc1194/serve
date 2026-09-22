@@ -56,7 +56,12 @@ export function TransactionsPage() {
   const labelId: number | undefined = (() => {
     if (labelIdParam == null) return undefined;
     const parsed = Number(labelIdParam);
-    return Number.isNaN(parsed) ? undefined : parsed;
+    // Number.isNaN alone accepts non-integers like "1.5" or "Infinity" —
+    // both parse to a finite-looking, non-NaN number, get sent to the
+    // backend's int label_id param, and come back as a validation error.
+    // Number.isInteger rejects those too (as well as NaN itself), matching
+    // what the backend actually accepts.
+    return Number.isInteger(parsed) ? parsed : undefined;
   })();
 
   // ── Component state ─────────────────────────────────────────────────────────

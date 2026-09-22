@@ -413,4 +413,21 @@ describe('TransactionsPage stale label_id', () => {
     expect(screen.getByTestId('url-search').textContent).toContain('label_id=5');
     expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1);
   });
+
+  // Regression: Number.isNaN alone accepts non-integers like "1.5" or
+  // "Infinity" — both parse to a finite-looking, non-NaN number, so they
+  // were sent straight to the backend's int label_id param, which rejected
+  // them with a validation error. That error then blocked the stale-param
+  // self-correction effect (it skips while error is set), leaving malformed
+  // bookmarked URLs stuck on the error screen instead of self-correcting.
+  it.each(['1.5', 'Infinity', '-Infinity'])(
+    'treats a non-integer label_id (%s) as no filter, never sending it to the backend',
+    async malformed => {
+      renderPage([`/?label_id=${malformed}`]);
+      await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+      expect(transactionsService.listTransactions).toHaveBeenCalledWith(
+        expect.objectContaining({ label_id: undefined }),
+      );
+    },
+  );
 });
