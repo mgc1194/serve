@@ -394,4 +394,23 @@ describe('TransactionsPage stale label_id', () => {
     );
     expect(screen.getByTestId('url-search').textContent).toContain('label_id=-1');
   });
+
+  // Regression: a failed load leaves `labels` empty (Promise.all rejects
+  // before setLabels() ever runs) but still flips isLoading to false — which
+  // used to look identical to "labelId isn't among the household's labels",
+  // wrongly clearing a perfectly valid bookmarked filter, losing it, and
+  // masking the real error behind a fresh unfiltered request.
+  it('does not clear label_id while the load has failed, even for an id that would otherwise be valid', async () => {
+    vi.spyOn(transactionsService, 'listTransactions').mockRejectedValue(new Error('boom'));
+
+    renderPage(['/?label_id=5']); // 5 matches LABELS — would resolve fine if loading succeeded
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+    await screen.findByText('Could not load transactions.');
+
+    // Give the self-correction effect a tick to (incorrectly) fire if this regresses.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(screen.getByTestId('url-search').textContent).toContain('label_id=5');
+    expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1);
+  });
 });

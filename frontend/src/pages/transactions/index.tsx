@@ -133,8 +133,20 @@ export function TransactionsPage() {
   // "All labels" (labelId matches no option) while the request keeps
   // filtering by an id that can't match anything, and the table stays
   // empty with no way to tell why.
+  //
+  // Skipped while error is set: a failed load leaves labels empty (never
+  // populated), which would otherwise look identical to "labelId isn't
+  // among the household's labels" — wrongly treating a valid bookmarked
+  // filter as stale, dropping it from the URL, and masking the real error
+  // behind an unfiltered refetch.
   useEffect(() => {
-    if (isLoading || labelId === undefined || labelId === UNLABELED_SENTINEL) return;
+    if (
+      isLoading ||
+      error !== null ||
+      labelId === undefined ||
+      labelId === UNLABELED_SENTINEL
+    )
+      return;
     if (labels.some(l => l.id === labelId)) return;
 
     setSearchParams(prev => {
@@ -145,7 +157,7 @@ export function TransactionsPage() {
       next.delete('page');
       return next;
     });
-  }, [isLoading, labelId, labels, setSearchParams]);
+  }, [isLoading, error, labelId, labels, setSearchParams]);
 
   // ── URL mutation helpers ────────────────────────────────────────────────────
   // Fixed key order so the resulting URL is stable regardless of which
