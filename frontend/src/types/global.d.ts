@@ -6,6 +6,7 @@
 export type { ApiError } from '@serve/types/api';
 export type { AccountDetail, AccountType, Bank } from '@serve/types/accounts';
 export type { User, LoginRequest, RegisterRequest, UpdateProfileRequest, UpdatePasswordRequest } from '@serve/types/auth';
+export type { Budget } from '@serve/types/budgets';
 export type { Household, HouseholdDetail, HouseholdMember } from '@serve/types/households';
 export type { Label } from '@serve/types/labels';
 export type { CategorySummary, LabelSummary, Summary } from '@serve/types/summary';
