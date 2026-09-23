@@ -9,6 +9,7 @@ import { PublicRoute } from '@components/public-route';
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
 import { AccountsPage } from '@pages/accounts';
+import { BudgetsPage } from '@pages/budgets';
 import { DashboardPage } from '@pages/dashboard';
 import { HouseholdsPage } from '@pages/households';
 import { LoginPage } from '@pages/login';
@@ -90,6 +91,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <SettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/budgets"
+                  element={
+                    <ProtectedRoute>
+                      <BudgetsPage />
                     </ProtectedRoute>
                   }
                 />
