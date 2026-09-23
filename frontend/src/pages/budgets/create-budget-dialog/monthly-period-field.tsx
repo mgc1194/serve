@@ -5,8 +5,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import dayjs, { type Dayjs } from 'dayjs';
 
-import { DATE_FORMAT } from '@pages/budgets/create-budget-dialog/date-helpers';
-
+const DATE_FORMAT = 'YYYY-MM-DD';
 const MONTH_FORMAT = 'YYYY-MM';
 
 interface MonthlyPeriodFieldProps {

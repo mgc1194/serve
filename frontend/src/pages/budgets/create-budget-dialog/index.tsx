@@ -23,16 +23,35 @@ import {
   DialogTitle,
   Typography,
 } from '@mui/material';
+import dayjs from 'dayjs';
 import { useState } from 'react';
 
 import { BudgetTypeField } from '@pages/budgets/create-budget-dialog/budget-type-field';
-import { deriveBudgetName } from '@pages/budgets/create-budget-dialog/derive-budget-name';
 import { MonthlyPeriodField } from '@pages/budgets/create-budget-dialog/monthly-period-field';
 import { PeriodRangeFields } from '@pages/budgets/create-budget-dialog/period-range-fields';
 import { ProjectNameField } from '@pages/budgets/create-budget-dialog/project-name-field';
 import type { UiBudgetType } from '@pages/budgets/create-budget-dialog/types';
 import type { Budget } from '@serve/types/global';
 import { createBudget, ApiError } from '@services/budgets';
+
+const DATE_FORMAT = 'YYYY-MM-DD';
+
+/**
+ * "August 2026" for Monthly, "Aug 15, 2026 – Sep 15, 2026" for Period —
+ * both derived purely from the picked dates. A name only makes sense for a
+ * Project once the household types one in, so this returns '' for it.
+ */
+function deriveBudgetName(uiType: UiBudgetType, periodStart?: string, periodEnd?: string): string {
+  if (uiType === 'monthly' && periodStart) {
+    return dayjs(periodStart, DATE_FORMAT).format('MMMM YYYY');
+  }
+  if (uiType === 'period' && periodStart && periodEnd) {
+    const from = dayjs(periodStart, DATE_FORMAT).format('MMM D, YYYY');
+    const to = dayjs(periodEnd, DATE_FORMAT).format('MMM D, YYYY');
+    return `${from} – ${to}`;
+  }
+  return '';
+}
 
 interface CreateBudgetDialogProps {
   open: boolean;
