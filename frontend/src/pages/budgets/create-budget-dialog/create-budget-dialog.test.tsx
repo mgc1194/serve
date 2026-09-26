@@ -96,6 +96,17 @@ describe('CreateBudgetDialog name derivation', () => {
     await selectType('Project');
     expect(screen.queryByText(/will be named/i)).toBeNull();
   });
+
+  it('does not show a name preview for a reversed Period range typed directly into the fields', async () => {
+    setup();
+    await selectType('Period');
+    // The pickers' min/max props only constrain the calendar UI, so typing
+    // still lets From land after To.
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-09-15' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-15' } });
+    expect(screen.queryByText(/will be named/i)).toBeNull();
+    expect(screen.getByRole('button', { name: /^create$/i }).hasAttribute('disabled')).toBe(true);
+  });
 });
 
 describe('CreateBudgetDialog interactions', () => {

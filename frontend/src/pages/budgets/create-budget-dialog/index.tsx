@@ -49,7 +49,10 @@ function deriveBudgetName(uiType: UiBudgetType, periodStart?: string, periodEnd?
   if (uiType === 'period' && periodStart && periodEnd) {
     const start = dayjs(periodStart, DATE_FORMAT, true);
     const end = dayjs(periodEnd, DATE_FORMAT, true);
-    if (!start.isValid() || !end.isValid()) return '';
+    // The pickers' min/max props only constrain the calendar UI — typing a
+    // date directly can still produce a reversed range, so re-check it here,
+    // the one place both ends of the range are read before Create is enabled.
+    if (!start.isValid() || !end.isValid() || start.isAfter(end)) return '';
     return `${start.format('MMM D, YYYY')} – ${end.format('MMM D, YYYY')}`;
   }
   return '';
