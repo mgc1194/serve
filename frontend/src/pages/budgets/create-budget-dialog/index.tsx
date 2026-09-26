@@ -43,12 +43,14 @@ const DATE_FORMAT = 'YYYY-MM-DD';
  */
 function deriveBudgetName(uiType: UiBudgetType, periodStart?: string, periodEnd?: string): string {
   if (uiType === 'monthly' && periodStart) {
-    return dayjs(periodStart, DATE_FORMAT).format('MMMM YYYY');
+    const start = dayjs(periodStart, DATE_FORMAT, true);
+    return start.isValid() ? start.format('MMMM YYYY') : '';
   }
   if (uiType === 'period' && periodStart && periodEnd) {
-    const from = dayjs(periodStart, DATE_FORMAT).format('MMM D, YYYY');
-    const to = dayjs(periodEnd, DATE_FORMAT).format('MMM D, YYYY');
-    return `${from} – ${to}`;
+    const start = dayjs(periodStart, DATE_FORMAT, true);
+    const end = dayjs(periodEnd, DATE_FORMAT, true);
+    if (!start.isValid() || !end.isValid()) return '';
+    return `${start.format('MMM D, YYYY')} – ${end.format('MMM D, YYYY')}`;
   }
   return '';
 }
