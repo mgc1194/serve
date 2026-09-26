@@ -31,4 +31,14 @@ describe('ProjectNameField', () => {
     fireEvent.keyDown(screen.getByLabelText(/^name$/i), { key: 'a' });
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it('does not call onSubmit for an IME composition Enter', () => {
+    const onSubmit = vi.fn();
+    render(<ProjectNameField value="Trip" onChange={vi.fn()} onSubmit={onSubmit} />);
+    fireEvent.keyDown(screen.getByLabelText(/^name$/i), {
+      key: 'Enter',
+      isComposing: true,
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });
