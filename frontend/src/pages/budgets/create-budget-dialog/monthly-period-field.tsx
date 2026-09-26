@@ -27,6 +27,8 @@ export function MonthlyPeriodField({
     onChange(value.startOf('month').format(DATE_FORMAT), value.endOf('month').format(DATE_FORMAT));
   }
 
+  const parsed = periodStart ? dayjs(periodStart, DATE_FORMAT, true) : null;
+
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <DatePicker
@@ -34,7 +36,7 @@ export function MonthlyPeriodField({
         views={['year', 'month']}
         openTo="month"
         format={MONTH_FORMAT}
-        value={periodStart ? dayjs(periodStart, DATE_FORMAT, true) : null}
+        value={parsed?.isValid() ? parsed : null}
         onChange={handleChange}
         disabled={disabled}
       />

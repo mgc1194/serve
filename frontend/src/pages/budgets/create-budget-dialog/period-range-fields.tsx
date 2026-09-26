@@ -9,7 +9,9 @@ import dayjs, { type Dayjs } from 'dayjs';
 const DATE_FORMAT = 'YYYY-MM-DD';
 
 function toDayjs(value: string | undefined): Dayjs | null {
-  return value ? dayjs(value, DATE_FORMAT, true) : null;
+  if (!value) return null;
+  const parsed = dayjs(value, DATE_FORMAT, true);
+  return parsed.isValid() ? parsed : null;
 }
 
 function toDateString(value: Dayjs | null): string | undefined {

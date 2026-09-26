@@ -46,4 +46,30 @@ describe('PeriodRangeFields', () => {
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-15' } });
     expect(onChangeEnd).toHaveBeenCalledWith('2026-09-15');
   });
+
+  it('renders an empty From field when periodStart fails to parse, instead of an invalid date', () => {
+    render(
+      <PeriodRangeFields
+        periodStart="not-a-date"
+        periodEnd={undefined}
+        onChangeStart={vi.fn()}
+        onChangeEnd={vi.fn()}
+      />,
+    );
+    expect((screen.getByLabelText('From') as HTMLInputElement).value).toBe('');
+  });
+
+  it('does not let an unparsable periodStart block picking To (its minDate)', () => {
+    const onChangeEnd = vi.fn();
+    render(
+      <PeriodRangeFields
+        periodStart="not-a-date"
+        periodEnd={undefined}
+        onChangeStart={vi.fn()}
+        onChangeEnd={onChangeEnd}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-15' } });
+    expect(onChangeEnd).toHaveBeenCalledWith('2026-09-15');
+  });
 });
