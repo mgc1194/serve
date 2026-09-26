@@ -92,6 +92,16 @@ export function CreateBudgetDialog({
     onClose();
   }
 
+  function handleTypeChange(newType: UiBudgetType) {
+    setUiType(newType);
+    // A custom Period range isn't a valid Monthly selection (its bounds
+    // needn't span a whole month) and vice versa, so carrying it across a
+    // type switch could derive a name that doesn't match what gets sent —
+    // e.g. "August 2026" while still submitting a leftover Sep 15 end date.
+    setPeriodStart(undefined);
+    setPeriodEnd(undefined);
+  }
+
   const derivedName = deriveBudgetName(uiType, periodStart, periodEnd);
   const name = uiType === 'project' ? projectName.trim() : derivedName;
   const canCreate = !isCreating && name.length > 0;
@@ -128,7 +138,7 @@ export function CreateBudgetDialog({
           </Alert>
         )}
 
-        <BudgetTypeField value={uiType} onChange={setUiType} disabled={isCreating} />
+        <BudgetTypeField value={uiType} onChange={handleTypeChange} disabled={isCreating} />
 
         {uiType === 'monthly' && (
           <MonthlyPeriodField

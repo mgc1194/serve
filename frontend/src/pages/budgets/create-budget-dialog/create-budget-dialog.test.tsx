@@ -35,7 +35,11 @@ function setup(overrides: Partial<React.ComponentProps<typeof CreateBudgetDialog
 }
 
 async function selectType(name: 'Monthly' | 'Period' | 'Project') {
-  fireEvent.mouseDown(screen.getByLabelText(/^type$/i));
+  // getByRole('combobox') rather than getByLabelText: while the menu is
+  // open, the listbox shares the same aria-labelledby as the trigger, so
+  // a second call (switching type twice in one test) would otherwise
+  // match both once the first menu's close transition overlaps this one.
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: /^type$/i }));
   fireEvent.click(await screen.findByRole('option', { name }));
 }
 
@@ -106,6 +110,36 @@ describe('CreateBudgetDialog name derivation', () => {
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-15' } });
     expect(screen.queryByText(/will be named/i)).toBeNull();
     expect(screen.getByRole('button', { name: /^create$/i }).hasAttribute('disabled')).toBe(true);
+  });
+});
+
+describe('CreateBudgetDialog type switching', () => {
+  it('clears a custom Period range when switching to Monthly, instead of submitting it alongside the Monthly name', async () => {
+    mockCreateBudget.mockResolvedValueOnce(makeBudget({ name: 'August 2026' }));
+    setup();
+
+    await selectType('Period');
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-08-15' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-09-15' } });
+
+    await selectType('Monthly');
+    // The leftover Period range must not carry over: no stale name preview,
+    // and Create stays disabled until a month is actually picked.
+    expect(screen.queryByText(/will be named/i)).toBeNull();
+    expect(screen.getByRole('button', { name: /^create$/i }).hasAttribute('disabled')).toBe(true);
+
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateBudget).toHaveBeenCalledWith({
+        name: 'August 2026',
+        type: 'period',
+        household_id: 1,
+        period_start: '2026-08-01',
+        period_end: '2026-08-31',
+      }),
+    );
   });
 });
 
