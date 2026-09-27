@@ -169,6 +169,74 @@ class TestBudgetUniqueConstraint:
         assert other.id is not None
 
 
+class TestBudgetPeriodTypeConstraint:
+    """The period/type shape is enforced by a database CheckConstraint, not
+    just the POST endpoint's validation — these tests write through the ORM
+    directly (bypassing api/v1/budgets.py entirely) to prove the invariant
+    holds regardless of how a row is written."""
+
+    def test_period_budget_missing_period_start_raises(self, household):
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetFactory(
+                    household=household,
+                    type=Budget.Type.PERIOD,
+                    period_start=None,
+                    period_end='2026-01-31',
+                )
+
+    def test_period_budget_missing_period_end_raises(self, household):
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetFactory(
+                    household=household,
+                    type=Budget.Type.PERIOD,
+                    period_start='2026-01-01',
+                    period_end=None,
+                )
+
+    def test_period_budget_reversed_range_raises(self, household):
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetFactory(
+                    household=household,
+                    type=Budget.Type.PERIOD,
+                    period_start='2026-01-31',
+                    period_end='2026-01-01',
+                )
+
+    def test_project_budget_with_period_start_raises(self, household):
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetFactory(
+                    household=household,
+                    type=Budget.Type.PROJECT,
+                    period_start='2026-01-01',
+                    period_end=None,
+                )
+
+    def test_project_budget_with_period_end_raises(self, household):
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetFactory(
+                    household=household,
+                    type=Budget.Type.PROJECT,
+                    period_start=None,
+                    period_end='2026-01-31',
+                )
+
+    def test_period_budget_with_equal_start_and_end_is_allowed(self, household):
+        """A same-day period is a valid (if unusual) range — the constraint
+        rejects only a reversed one, via period_start__lte."""
+        budget = BudgetFactory(
+            household=household,
+            type=Budget.Type.PERIOD,
+            period_start='2026-01-01',
+            period_end='2026-01-01',
+        )
+        assert budget.id is not None
+
+
 class TestBudgetCascadeDelete:
     def test_deleting_household_deletes_its_budgets(self, household):
         BudgetFactory(household=household, name='January 2026')

@@ -15,6 +15,7 @@ PR, once planned-vs-actual tracking lands) will belong to.
 """
 
 from django.db import models
+from django.db.models import CheckConstraint, F, Q
 
 
 class Category(models.Model):
@@ -85,6 +86,13 @@ class Budget(models.Model):
     budget don't need independent name slots the way Category's two types
     do, since a budget's type isn't part of how a household would think of
     it by name.
+
+    The period/type shape (a period budget has both dates in order; a
+    project budget has neither) is also enforced by a database
+    CheckConstraint, not just the API layer's validation — these are
+    invariants reporting can rely on regardless of how a row was written
+    (a bulk operation, a future update endpoint, the Django admin, ...),
+    not just through this app's own POST handler.
     """
 
     class Type(models.TextChoices):
@@ -122,6 +130,23 @@ class Budget(models.Model):
         db_table = 'budgets'
         unique_together = [['household', 'name']]
         ordering = ['-period_start', 'name']
+        constraints = [
+            # Literal 'period'/'project' rather than Type.PERIOD/Type.PROJECT:
+            # a nested Meta class body can't see its enclosing class's
+            # attributes while Budget is still being defined.
+            CheckConstraint(
+                condition=(
+                    Q(
+                        type='period',
+                        period_start__isnull=False,
+                        period_end__isnull=False,
+                        period_start__lte=F('period_end'),
+                    )
+                    | Q(type='project', period_start__isnull=True, period_end__isnull=True)
+                ),
+                name='budget_period_type_matches_dates',
+            ),
+        ]
 
     def __str__(self):
         return self.name

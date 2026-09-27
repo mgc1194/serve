@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 router = Router(tags=['Budgets'], auth=django_auth)
 
+NAME_MAX_LENGTH = Budget._meta.get_field('name').max_length
+
 
 def _get_household_for_member(household_id: int, user) -> Household:
     """Fetches a household and verifies the user is a member.
@@ -100,15 +102,17 @@ def create_budget(request, payload: BudgetCreateRequest):
         The created BudgetSchema.
 
     Raises:
-        HttpError: 400 if the name is blank, if a budget with that name
-            already exists in the household, or if the period dates are
-            invalid for the given type.
+        HttpError: 400 if the name is blank, exceeds the model's max
+            length, already exists in the household, or if the period
+            dates are invalid for the given type.
         HttpError: 403 if the user is not a member of the household.
         HttpError: 404 if the household does not exist.
     """
     name = payload.name.strip()
     if not name:
         raise HttpError(400, 'Budget name cannot be blank.')
+    if len(name) > NAME_MAX_LENGTH:
+        raise HttpError(400, f'Budget name cannot exceed {NAME_MAX_LENGTH} characters.')
 
     household = _get_household_for_member(payload.household_id, request.user)
     _validate_period(payload)

@@ -7,6 +7,7 @@ budgets/conftest.py provides: client.
 
 import pytest
 
+from budgets.models import Budget
 from tests.factories import BudgetFactory
 
 
@@ -136,6 +137,15 @@ class TestCreateBudget:
         response = client.post(
             '/budgets/',
             json={'name': '   ', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 400
+
+    def test_name_over_max_length_returns_400(self, client, alice, household):
+        max_length = Budget._meta.get_field('name').max_length
+        response = client.post(
+            '/budgets/',
+            json={'name': 'X' * (max_length + 1), 'type': 'project', 'household_id': household.id},
             user=alice,
         )
         assert response.status_code == 400
