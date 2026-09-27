@@ -2,9 +2,10 @@
 api/v1/budgets.py — Budget management endpoints.
 
 Endpoints:
+    GET  /api/v1/budgets/ — list a household's active budgets
     POST /api/v1/budgets/ — create a budget in a household
 
-Listing, renaming, and deactivating budgets land in follow-up PRs.
+Renaming and deactivating budgets land in follow-up PRs.
 """
 
 import logging
@@ -84,6 +85,30 @@ def _serialize(budget: Budget) -> dict:
         'is_active': budget.is_active,
         'household_id': budget.household_id,
     }
+
+
+@router.get('/budgets/', response=list[BudgetSchema])
+def list_budgets(request, household_id: int):
+    """Lists a household's active budgets.
+
+    Deactivated budgets are never returned here — once deactivating a
+    budget is possible, they'll stay queryable for historical reporting,
+    just not in this default list.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        household_id: The household whose budgets to list.
+
+    Returns:
+        A list of BudgetSchema, ordered per Budget.Meta.ordering.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the household does not exist.
+    """
+    household = _get_household_for_member(household_id, request.user)
+    budgets = Budget.objects.filter(household=household, is_active=True)
+    return [_serialize(b) for b in budgets]
 
 
 @router.post('/budgets/', response=BudgetSchema)
