@@ -8,7 +8,16 @@ import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { useAuth } from '@context/auth-context';
 import { BudgetsPage } from '@pages/budgets';
 import { makeBudget } from '@serve/mocks';
+import type { Budget } from '@serve/types/global';
 import * as budgetsService from '@services/budgets';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
 
 vi.mock('@context/auth-context', () => ({ useAuth: vi.fn() }));
 vi.mock('@layout/app-header', () => ({ AppHeader: () => <header /> }));
@@ -153,6 +162,30 @@ describe('BudgetsPage create budget', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('August 2026')).toBeDefined();
+  });
+
+  it('keeps a budget created while the initial list fetch is still pending', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+
+    renderPage();
+    // The Create budget button stays enabled while this initial fetch is
+    // still in flight — create while it's pending.
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('August 2026')).toBeDefined();
+
+    // The stale request finally resolves with a list from before the
+    // create — it must not wipe out the budget just created.
+    listDeferred.resolve([]);
+    await waitFor(() => expect(screen.queryByText(/no budgets yet/i)).toBeNull());
     expect(screen.getByText('August 2026')).toBeDefined();
   });
 });

@@ -2,8 +2,12 @@
 //
 // "Create budget" opens CreateBudgetDialog for the active household; a
 // successful create prepends the new budget to the list rather than
-// re-fetching. Renaming and deactivating a budget land in follow-up PRs,
-// once their endpoints exist.
+// re-fetching. The button stays enabled while the list is still loading,
+// so a create can land while that fetch is in flight — requestIdRef lets
+// the create invalidate that fetch's eventual response instead of letting
+// it overwrite the optimistic update with a list that predates it.
+// Renaming and deactivating a budget land in follow-up PRs, once their
+// endpoints exist.
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -34,10 +38,18 @@ export function BudgetsPage() {
   // without making it a useEffect dependency.
   const loadRef = useRef<() => void>(() => {});
 
+  // Bumped whenever a fetch's response should no longer be trusted to
+  // overwrite budgets — currently just a create landing mid-fetch. Guards
+  // only the data-applying branches, not the loading flag itself, so an
+  // invalidated request still clears isLoading once it settles.
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
     let ignore = false;
 
     function load() {
+      const requestId = ++requestIdRef.current;
+
       if (householdId === undefined) {
         setBudgets([]);
         setError(null);
@@ -49,11 +61,11 @@ export function BudgetsPage() {
       setError(null);
       listBudgets(householdId)
         .then(result => {
-          if (ignore) return;
+          if (ignore || requestId !== requestIdRef.current) return;
           setBudgets(result);
         })
         .catch(err => {
-          if (ignore) return;
+          if (ignore || requestId !== requestIdRef.current) return;
           setError(err instanceof ApiError ? err.message : 'Could not load budgets.');
         })
         .finally(() => {
@@ -70,7 +82,15 @@ export function BudgetsPage() {
   }, [householdId]);
 
   function handleCreated(budget: Budget) {
+    // Invalidates any in-flight list fetch: it was requested before this
+    // budget existed, so its eventual response would otherwise overwrite
+    // this optimistic update with a list that predates the create. Also
+    // clears isLoading directly rather than waiting for that fetch to
+    // settle, so the new card is visible immediately instead of sitting
+    // behind a stale loading skeleton until then.
+    requestIdRef.current += 1;
     setBudgets(prev => [budget, ...prev]);
+    setIsLoading(false);
     setCreateOpen(false);
   }
 
