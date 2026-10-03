@@ -4,7 +4,7 @@ tests/factories/budgets.py — factory_boy factories for the budgets app.
 
 import factory
 
-from budgets.models import Budget, Category
+from budgets.models import Budget, BudgetLine, Category
 
 
 class CategoryFactory(factory.django.DjangoModelFactory):
@@ -25,3 +25,13 @@ class BudgetFactory(factory.django.DjangoModelFactory):
     period_start = '2026-01-01'
     period_end = '2026-01-31'
     household = factory.SubFactory('tests.factories.HouseholdFactory')
+
+
+class BudgetLineFactory(factory.django.DjangoModelFactory):
+    class Meta:
+        model = BudgetLine
+
+    budget = factory.SubFactory(BudgetFactory)
+    category = factory.SubFactory(
+        CategoryFactory, household=factory.SelfAttribute('..budget.household')
+    )
