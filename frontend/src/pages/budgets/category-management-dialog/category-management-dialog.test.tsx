@@ -124,41 +124,45 @@ describe('CategoryManagementDialog mode transitions', () => {
 });
 
 describe('CategoryManagementDialog stale list responses', () => {
-  it('keeps a newly created category visible when the initial list fetch resolves afterward with a response that predates it', async () => {
+  it('recovers via a refetch when the initial list fetch resolves afterward with a response that predates a create', async () => {
     let resolveInitialLoad: (categories: typeof CATEGORIES) => void = () => {};
     mockListCategories.mockReturnValueOnce(
       new Promise(resolve => {
         resolveInitialLoad = resolve;
       }),
     );
-    mockCreateCategory.mockResolvedValueOnce({
+    const created = {
       id: 99,
       name: 'Utilities',
-      type: 'spending',
+      type: 'spending' as const,
       is_active: true,
       household_id: 1,
-    });
+    };
+    mockCreateCategory.mockResolvedValueOnce(created);
 
     setup();
 
     // "New category" is available even while the initial fetch is still
     // loading — create one before that fetch resolves. The dialog is still
     // showing its loading spinner at this point (isLoading only clears once
-    // the fetch itself settles), so "Utilities" isn't visible yet either way.
+    // a fetch settles), so "Utilities" isn't visible yet either way.
     fireEvent.click(screen.getByRole('button', { name: /new category/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
     await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
 
-    // The initial fetch (started before the create) now resolves with a
-    // response that doesn't include the just-created category — it must be
-    // discarded as stale rather than overwriting the create.
+    // Once this resolves with a response that predates the create, it must
+    // not be applied directly (it would revert the create) — instead it
+    // triggers a refetch, which by now reflects both.
+    mockListCategories.mockResolvedValueOnce([...CATEGORIES, created]);
     resolveInitialLoad(CATEGORIES);
 
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('Utilities')).toBeDefined());
+    expect(screen.getByText('Groceries')).toBeDefined();
   });
 
-  it('keeps a newly created category visible when a show-inactive toggle\'s list fetch resolves afterward with a response that predates it', async () => {
+  it('recovers via a refetch when a show-inactive toggle\'s fetch resolves afterward with a response that predates a create', async () => {
     mockListCategories.mockResolvedValueOnce(CATEGORIES);
     let resolveToggleLoad: (categories: typeof CATEGORIES) => void = () => {};
     mockListCategories.mockReturnValueOnce(
@@ -166,13 +170,21 @@ describe('CategoryManagementDialog stale list responses', () => {
         resolveToggleLoad = resolve;
       }),
     );
-    mockCreateCategory.mockResolvedValueOnce({
+    const created = {
       id: 99,
       name: 'Utilities',
-      type: 'spending',
+      type: 'spending' as const,
       is_active: true,
       household_id: 1,
-    });
+    };
+    const inactive = {
+      id: 3,
+      name: 'Old',
+      type: 'spending' as const,
+      is_active: false,
+      household_id: 1,
+    };
+    mockCreateCategory.mockResolvedValueOnce(created);
 
     setup();
     await waitFor(() => screen.getByText('Groceries'));
@@ -185,13 +197,18 @@ describe('CategoryManagementDialog stale list responses', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
     await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
 
-    // The toggle's fetch (started before the create) now resolves with a
-    // response that doesn't include the just-created category — it must be
-    // discarded as stale rather than overwriting the create. Unlike the
-    // initial-load case above, the pre-toggle list already loaded
-    // successfully, so Groceries should still be visible alongside it.
-    resolveToggleLoad(CATEGORIES);
-    await waitFor(() => expect(screen.getByText('Utilities')).toBeDefined());
+    // The toggle's fetch (started before the create) resolves with a
+    // response that predates it. Simply discarding this response would
+    // permanently drop the inactive category it alone carries — "Old" is
+    // never returned by any other in-flight request — so it must instead
+    // trigger a refetch that recovers both the inactive category and the
+    // create together, rather than being dropped wholesale.
+    mockListCategories.mockResolvedValueOnce([...CATEGORIES, created, inactive]);
+    resolveToggleLoad([...CATEGORIES, inactive]);
+
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.getByText('Old')).toBeDefined());
+    expect(screen.getByText('Utilities')).toBeDefined();
     expect(screen.getByText('Groceries')).toBeDefined();
   });
 });

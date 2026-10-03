@@ -11,9 +11,14 @@
 // then predates the mutation and must not be allowed to overwrite it — every
 // write to `categories` goes through writeCategories, which bumps
 // categoriesVersionRef, so a fetch only applies its result if no write
-// happened since it started. fetchIdRef is the separate, simpler generation
-// guard for isLoading/listError, so only the most recently started fetch
-// (not an unrelated mutation) controls those — see the effect below for both.
+// happened since it started. A stale response is never just dropped, though
+// — it can carry data the mutation has no way to know about (e.g. the
+// inactive categories a Show-inactive fetch alone would return), so instead
+// of being discarded wholesale, the same request is simply re-issued; by
+// then the mutation is already committed server-side, so the next response
+// reflects both. fetchIdRef is the separate, simpler generation guard for
+// isLoading/listError, so only the most recently started fetch (not an
+// unrelated mutation) controls those — see the effect below for both.
 
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
@@ -94,9 +99,16 @@ export function CategoryManagementDialog({
       listCategories(householdId, includeInactive)
         .then(result => {
           if (ignore || fetchId !== fetchIdRef.current) return;
-          // A mutation wrote `categories` after this fetch started — its
-          // result predates that write, so applying it now would revert it.
-          if (categoriesVersionRef.current !== versionAtStart) return;
+          if (categoriesVersionRef.current !== versionAtStart) {
+            // A mutation wrote `categories` after this fetch started — this
+            // result predates that write, so applying it now would revert
+            // it. But it may be the only response that reflects this
+            // request's own filter (e.g. include_inactive), so re-issue it
+            // rather than dropping it — the mutation is already committed
+            // server-side by now, so the next response reflects both.
+            loadCategories(includeInactive);
+            return;
+          }
           writeCategories(result);
         })
         .catch(() => {

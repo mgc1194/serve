@@ -1,4 +1,4 @@
-// pages/budgets/category-management-dialog/list-categories.test.tsx
+// pages/budgets/category-management-dialog/list-categories/list-categories.test.tsx
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,4 +1,4 @@
-// pages/budgets/category-management-dialog/list-categories.story.tsx
+// pages/budgets/category-management-dialog/list-categories/list-categories.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 
