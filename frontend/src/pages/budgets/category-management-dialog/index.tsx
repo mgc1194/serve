@@ -14,11 +14,22 @@
 // happened since it started. A stale response is never just dropped, though
 // — it can carry data the mutation has no way to know about (e.g. the
 // inactive categories a Show-inactive fetch alone would return), so instead
-// of being discarded wholesale, the same request is simply re-issued; by
-// then the mutation is already committed server-side, so the next response
-// reflects both. fetchIdRef is the separate, simpler generation guard for
-// isLoading/listError, so only the most recently started fetch (not an
-// unrelated mutation) controls those — see the effect below for both.
+// of being discarded wholesale, the same request is simply re-issued (on
+// success or failure alike — a failed fetch gets the exact same treatment,
+// since a rejection here is just as unrelated to the mutation as a resolved
+// one); by then the mutation is already committed server-side, so the next
+// response reflects both. fetchIdRef is the separate, simpler generation
+// guard for isLoading/listError, so only the most recently started fetch
+// (not an unrelated mutation) controls those — see the effect below for both.
+//
+// Dialog close/backdrop/Escape stay available while a mutation is saving, so
+// the household being viewed can change (via the Switch household control
+// elsewhere on the page) before an awaited create/edit/deactivate/reactivate
+// resolves. householdIdRef mirrors the current `householdId` prop; each
+// mutation captures its own request's householdId and checks it against
+// that ref before touching `categories` or calling onCategoriesChanged —
+// otherwise a household-A response arriving after the view has moved on to
+// household B would leak A's category into B's list and its parent callback.
 
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
@@ -68,6 +79,14 @@ export function CategoryManagementDialog({
   const categoriesVersionRef = useRef(0);
   const fetchIdRef = useRef(0);
 
+  // Always the latest householdId prop — see the file-level comment on why
+  // mutation handlers compare against this instead of trusting their own
+  // closure's householdId once their await resolves.
+  const householdIdRef = useRef(householdId);
+  useEffect(() => {
+    householdIdRef.current = householdId;
+  }, [householdId]);
+
   function writeCategories(next: Category[]) {
     categoriesVersionRef.current += 1;
     categoriesRef.current = next;
@@ -77,6 +96,17 @@ export function CategoryManagementDialog({
   // loadCategoriesRef gives handleToggleShowInactive a stable reference to
   // the effect's loadCategories without making it a useEffect dependency.
   const loadCategoriesRef = useRef<(includeInactive: boolean) => void>(() => {});
+
+  // The create endpoint reactivates a soft-deleted (household, name, type)
+  // match instead of inserting a new row, returning that row's existing id.
+  // With Show inactive on, categoriesRef can already hold that (inactive)
+  // row — appending the "created" response as a new entry would then
+  // duplicate it under the same id/key. Replace it in place when present.
+  function upsertCategory(list: Category[], category: Category): Category[] {
+    return list.some(c => c.id === category.id)
+      ? list.map(c => (c.id === category.id ? category : c))
+      : [...list, category];
+  }
 
   // ── Form state (create / edit) ────────────────────────────────────────────
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -113,6 +143,15 @@ export function CategoryManagementDialog({
         })
         .catch(() => {
           if (ignore || fetchId !== fetchIdRef.current) return;
+          if (categoriesVersionRef.current !== versionAtStart) {
+            // Same reasoning as the .then() branch above: a mutation
+            // already landed while this request was in flight, so this
+            // failure isn't about anything the user did — surfacing it
+            // would hide an otherwise-correct list behind an error with no
+            // retry control. Re-issue the request instead of giving up.
+            loadCategories(includeInactive);
+            return;
+          }
           setListError('Could not load categories. Please try again.');
         })
         .finally(() => {
@@ -177,6 +216,7 @@ export function CategoryManagementDialog({
       return;
     }
 
+    const requestHouseholdId = householdId;
     setIsSaving(true);
     setFormError(null);
 
@@ -188,9 +228,13 @@ export function CategoryManagementDialog({
           type,
           household_id: householdId,
         });
-        nextCategories = [...categoriesRef.current, created];
+        if (requestHouseholdId !== householdIdRef.current) return;
+        // A reactivated (soft-deleted) row comes back with its existing id
+        // — upsert rather than append, or it duplicates under that id/key.
+        nextCategories = upsertCategory(categoriesRef.current, created);
       } else if (mode === 'edit' && editingCategory) {
         const updated = await updateCategory(editingCategory.id, { name: trimmedName });
+        if (requestHouseholdId !== householdIdRef.current) return;
         nextCategories = categoriesRef.current.map(c => (c.id === updated.id ? updated : c));
       } else {
         return;
@@ -200,6 +244,7 @@ export function CategoryManagementDialog({
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
     } catch (err) {
+      if (requestHouseholdId !== householdIdRef.current) return;
       setFormError(err instanceof ApiError ? err.message : 'Could not save category.');
     } finally {
       setIsSaving(false);
@@ -207,11 +252,13 @@ export function CategoryManagementDialog({
   }
 
   async function handleDeactivate(categoryId: number) {
+    const requestHouseholdId = householdId;
     setIsDeleting(true);
     setFormError(null);
 
     try {
       await deleteCategory(categoryId);
+      if (requestHouseholdId !== householdIdRef.current) return;
       const nextCategories = showInactive
         ? categoriesRef.current.map(c => (c.id === categoryId ? { ...c, is_active: false } : c))
         : categoriesRef.current.filter(c => c.id !== categoryId);
@@ -219,6 +266,7 @@ export function CategoryManagementDialog({
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
     } catch (err) {
+      if (requestHouseholdId !== householdIdRef.current) return;
       setFormError(err instanceof ApiError ? err.message : 'Could not deactivate category.');
     } finally {
       setIsDeleting(false);
@@ -226,13 +274,16 @@ export function CategoryManagementDialog({
   }
 
   async function handleReactivate(categoryId: number) {
+    const requestHouseholdId = householdId;
     setListError(null);
     try {
       const updated = await updateCategory(categoryId, { is_active: true });
+      if (requestHouseholdId !== householdIdRef.current) return;
       const nextCategories = categoriesRef.current.map(c => (c.id === categoryId ? updated : c));
       writeCategories(nextCategories);
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
     } catch {
+      if (requestHouseholdId !== householdIdRef.current) return;
       setListError('Could not reactivate category. Please try again.');
     }
   }
