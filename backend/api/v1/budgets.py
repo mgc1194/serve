@@ -393,6 +393,8 @@ def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest
     category = get_object_or_404(Category, pk=payload.category_id)
     if category.household_id != budget.household_id:
         raise HttpError(400, 'Category does not belong to the same household as this budget.')
+    if payload.planned_amount is not None and payload.planned_amount < 0:
+        raise HttpError(400, 'planned_amount must not be negative.')
 
     try:
         line = BudgetLine.objects.create(
@@ -432,7 +434,7 @@ def update_budget_line(request, line_id: int, payload: BudgetLineUpdateRequest):
         The updated BudgetLineSchema.
 
     Raises:
-        HttpError: 400 if no fields are provided.
+        HttpError: 400 if no fields are provided, or if planned_amount is negative.
         HttpError: 403 if the user is not a member of the household.
         HttpError: 404 if the line does not exist.
     """
@@ -441,6 +443,8 @@ def update_budget_line(request, line_id: int, payload: BudgetLineUpdateRequest):
     update_fields = []
 
     if payload.planned_amount is not None:
+        if payload.planned_amount < 0:
+            raise HttpError(400, 'planned_amount must not be negative.')
         line.planned_amount = payload.planned_amount
         update_fields.append('planned_amount')
 

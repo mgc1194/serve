@@ -173,6 +173,12 @@ class BudgetLine(models.Model):
     Uniqueness on (budget, category): one line per category per budget —
     adjusting a target means editing the existing line, not adding a
     second, enforced by the API layer's duplicate-line rejection.
+
+    planned_amount is treated throughout this API as a positive
+    magnitude (matching how actual_amount is always returned as abs()) —
+    enforced here with a CheckConstraint, not just the API layer's
+    validation, for the same reason Budget's period/type shape is: an
+    invariant reporting can rely on regardless of how a row was written.
     """
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='lines')
@@ -186,6 +192,12 @@ class BudgetLine(models.Model):
         db_table = 'budget_lines'
         unique_together = [['budget', 'category']]
         ordering = ['category__type', 'category__name']
+        constraints = [
+            CheckConstraint(
+                condition=Q(planned_amount__gte=0),
+                name='budget_line_planned_amount_non_negative',
+            ),
+        ]
 
     def __str__(self):
         return f'{self.category.name} in {self.budget.name}'

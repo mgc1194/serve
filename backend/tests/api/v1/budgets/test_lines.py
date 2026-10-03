@@ -103,6 +103,17 @@ class TestCreateBudgetLine:
         )
         assert response.status_code == 400
 
+    def test_negative_planned_amount_returns_400(self, client, alice, household):
+        budget = BudgetFactory(household=household)
+        category = CategoryFactory(name='Groceries', household=household)
+        response = client.post(
+            f'/budgets/{budget.id}/lines',
+            json={'category_id': category.id, 'planned_amount': '-100.00'},
+            user=alice,
+        )
+        assert response.status_code == 400
+        assert response.json()['detail'] == 'planned_amount must not be negative.'
+
     def test_nonexistent_category_returns_404(self, client, alice, household):
         budget = BudgetFactory(household=household)
         response = client.post(
@@ -178,6 +189,15 @@ class TestUpdateBudgetLine:
         category = CategoryFactory(name='Groceries', household=household)
         line = BudgetLineFactory(budget=budget, category=category)
         response = client.patch(f'/budget-lines/{line.id}/', json={}, user=alice)
+        assert response.status_code == 400
+
+    def test_negative_planned_amount_returns_400(self, client, alice, household):
+        budget = BudgetFactory(household=household)
+        category = CategoryFactory(name='Groceries', household=household)
+        line = BudgetLineFactory(budget=budget, category=category)
+        response = client.patch(
+            f'/budget-lines/{line.id}/', json={'planned_amount': '-10.00'}, user=alice
+        )
         assert response.status_code == 400
 
     def test_returns_403_for_non_member(self, client, seth, household):
