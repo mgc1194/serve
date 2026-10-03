@@ -10,6 +10,7 @@ import { BudgetsPage } from '@pages/budgets';
 import { makeBudget } from '@serve/mocks';
 import type { Budget } from '@serve/types/global';
 import * as budgetsService from '@services/budgets';
+import * as categoriesService from '@services/categories';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -60,6 +61,7 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([]);
+  vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
 });
 
 describe('BudgetsPage rendering', () => {
@@ -91,6 +93,17 @@ describe('BudgetsPage rendering', () => {
     renderPage();
     expect(screen.getByText('No household selected.')).toBeDefined();
     expect(screen.queryByRole('button', { name: /^create budget$/i })).toBeNull();
+  });
+});
+
+describe('BudgetsPage category management', () => {
+  it('opens the household-wide CategoryManagementDialog when Manage categories is clicked', async () => {
+    mockUser([HOUSEHOLD]);
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /manage categories/i }));
+    expect(screen.getByRole('dialog')).toBeDefined();
+    expect(screen.getByText('Categories — Test Household')).toBeDefined();
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledWith(1, false));
   });
 });
 
