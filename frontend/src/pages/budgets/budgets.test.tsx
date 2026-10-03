@@ -296,4 +296,66 @@ describe('BudgetsPage create budget', () => {
     await screen.findByText('Fresh Budget');
     expect(screen.queryByText('Stale Budget')).toBeNull();
   });
+
+  it('keeps a rename made while the initial list fetch is still pending, once that fetch resolves', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+    vi.spyOn(budgetsService, 'updateBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'September 2026' }),
+    );
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await screen.findByText('August 2026');
+
+    // Rename the budget created while the list fetch is still pending.
+    fireEvent.click(screen.getByRole('button', { name: /rename/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /budget name/i }), {
+      target: { value: 'September 2026' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await screen.findByText('September 2026');
+
+    // The stale request finally resolves with a list from before both the
+    // create and the rename — it must not revert the rename.
+    listDeferred.resolve([]);
+    await waitFor(() => expect(screen.queryByText(/no budgets yet/i)).toBeNull());
+    expect(screen.getByText('September 2026')).toBeDefined();
+    expect(screen.queryByText('August 2026')).toBeNull();
+  });
+
+  it('keeps a budget deactivated while the initial list fetch is still pending from reappearing', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+    vi.spyOn(budgetsService, 'deleteBudget').mockResolvedValue(undefined);
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await screen.findByText('August 2026');
+
+    // Deactivate the budget created while the list fetch is still pending.
+    fireEvent.click(screen.getByRole('button', { name: /deactivate budget/i }));
+    fireEvent.click(screen.getByRole('button', { name: /yes, deactivate/i }));
+    await waitFor(() => expect(screen.queryByText('August 2026')).toBeNull());
+
+    // The stale request finally resolves with a list from before both the
+    // create and the deactivation — it must not bring the card back.
+    listDeferred.resolve([]);
+    await screen.findByText(/no budgets yet/i);
+    expect(screen.queryByText('August 2026')).toBeNull();
+  });
 });

@@ -56,6 +56,14 @@ describe('BudgetCard rename', () => {
     expect(screen.getByDisplayValue('January 2026')).toBeDefined();
   });
 
+  it('has an accessible name and receives focus when edit mode opens', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /rename/i }));
+    const input = screen.getByRole('textbox', { name: /budget name/i });
+    expect(input).toBeDefined();
+    expect(document.activeElement).toBe(input);
+  });
+
   it('calls updateBudget and onUpdated on save', async () => {
     mockUpdateBudget.mockResolvedValueOnce({ ...BUDGET, name: 'Renamed Budget' });
     const { onUpdated } = setup();

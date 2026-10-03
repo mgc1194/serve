@@ -21,7 +21,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import type { Budget } from '@serve/types/global';
 import { deleteBudget, updateBudget, ApiError } from '@services/budgets';
@@ -49,6 +49,13 @@ export function BudgetCard({ budget, onUpdated, onDeactivated }: BudgetCardProps
   const [editName, setEditName] = useState(budget.name);
   const [isSaving, setIsSaving] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // The Rename button that opened edit mode unmounts, so keyboard/screen
+  // reader users need the new input to pick up focus itself.
+  useEffect(() => {
+    if (isEditing) nameInputRef.current?.focus();
+  }, [isEditing]);
 
   // Deactivate (soft delete)
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
@@ -121,6 +128,8 @@ export function BudgetCard({ budget, onUpdated, onDeactivated }: BudgetCardProps
                 }}
                 size="small"
                 disabled={isSaving}
+                inputRef={nameInputRef}
+                inputProps={{ 'aria-label': 'Budget name' }}
                 sx={{
                   fontSize: '1.25rem',
                   fontFamily: '"DM Serif Display", Georgia, serif',

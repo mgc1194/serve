@@ -116,10 +116,19 @@ export function BudgetsPage() {
 
   function handleUpdated(budget: Budget) {
     setBudgets(prev => prev.map(b => (b.id === budget.id ? budget : b)));
+    // Keep pendingCreatesRef's copy in sync too — otherwise a stale list
+    // fetch's merge (see above) would revert this rename by re-adding the
+    // old, pre-rename object it's still holding onto.
+    pendingCreatesRef.current = pendingCreatesRef.current.map(b =>
+      b.id === budget.id ? budget : b,
+    );
   }
 
   function handleDeactivated(id: number) {
     setBudgets(prev => prev.filter(b => b.id !== id));
+    // Same reasoning as handleUpdated: a stale fetch's merge must not
+    // re-add a budget that's since been deactivated.
+    pendingCreatesRef.current = pendingCreatesRef.current.filter(b => b.id !== id);
   }
 
   return (
