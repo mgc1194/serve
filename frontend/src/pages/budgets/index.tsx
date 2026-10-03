@@ -100,6 +100,7 @@ export function BudgetsPage() {
     pendingCreatesRef.current = [...pendingCreatesRef.current, budget];
     setBudgets(prev => [budget, ...prev]);
     setIsLoading(false);
+    setError(null);
     setCreateOpen(false);
   }
 

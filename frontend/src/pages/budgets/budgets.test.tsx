@@ -211,4 +211,23 @@ describe('BudgetsPage create budget', () => {
     await waitFor(() => expect(screen.getByText('January 2026')).toBeDefined());
     expect(screen.getAllByText('August 2026')).toHaveLength(1);
   });
+
+  it('clears a stale list error so the newly created card is visible', async () => {
+    mockUser([HOUSEHOLD]);
+    vi.spyOn(budgetsService, 'listBudgets').mockRejectedValueOnce(new Error('boom'));
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+
+    renderPage();
+    await screen.findByText('Could not load budgets.');
+
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.queryByText('Could not load budgets.')).toBeNull();
+    expect(screen.getByText('August 2026')).toBeDefined();
+  });
 });
