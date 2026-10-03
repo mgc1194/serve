@@ -1,9 +1,9 @@
 // pages/budgets/budget-card/index.tsx — Card for a single budget in the
 // Budgets list. Mirrors households/household-detailed-card's shape: a
-// header with inline rename, and a footer deactivate action — simplified
-// since a budget has no members or linked accounts the way a household
-// does. Managing which categories a budget tracks lands in a follow-up
-// PR, once there's a detail page to put that on.
+// header with inline rename, and a footer with a "View budget" link (to
+// the per-category planned-vs-actual detail page) alongside the deactivate
+// action — simplified since a budget has no members or linked accounts the
+// way a household does.
 
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import type { Budget } from '@serve/types/global';
 import { deleteBudget, updateBudget, ApiError } from '@services/budgets';
@@ -44,6 +45,8 @@ interface BudgetCardProps {
 }
 
 export function BudgetCard({ budget, onUpdated, onDeactivated }: BudgetCardProps) {
+  const navigate = useNavigate();
+
   // Rename
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(budget.name);
@@ -227,6 +230,9 @@ export function BudgetCard({ budget, onUpdated, onDeactivated }: BudgetCardProps
           </>
         ) : (
           <>
+            <Button size="small" onClick={() => navigate(`/budgets/${budget.id}`)}>
+              View budget
+            </Button>
             <Box sx={{ flex: 1 }} />
             <Button
               size="small"

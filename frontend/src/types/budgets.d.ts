@@ -1,4 +1,4 @@
-// types/budgets.d.ts — Budget types.
+// types/budgets.d.ts — Budget and BudgetLine types.
 
 export interface Budget {
   id: number;
@@ -8,4 +8,15 @@ export interface Budget {
   period_end: string | null;
   is_active: boolean;
   household_id: number;
+}
+
+export interface BudgetLine {
+  id: number;
+  budget_id: number;
+  category_id: number;
+  category_name: string;
+  category_type: 'earning' | 'spending';
+  planned_amount: string;
+  actual_amount: string;
+  notes: string;
 }
