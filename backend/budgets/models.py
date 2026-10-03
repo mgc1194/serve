@@ -1,5 +1,5 @@
 """
-budgets/models.py — Category and Budget models.
+budgets/models.py — Category, Budget, and BudgetLine models.
 
 Category is a household-level taxonomy, shared across every budget a
 household creates (see budget roadmap doc, section 2.1). It is intentionally
@@ -10,9 +10,14 @@ transactions.Label.category holds a nullable FK to this model (via the lazy
 string reference 'budgets.Category'). A label belongs to at most one
 category; categories group related labels under a shared budget area.
 
-Budget is the household-level container a BudgetLine (added in a follow-up
-PR, once planned-vs-actual tracking lands) will belong to.
+Budget is the household-level container a BudgetLine belongs to.
+BudgetLine links a Budget to one of the household's Categories, with a
+planned amount — the "actual" side of planned-vs-actual tracking is
+computed at read time from labeled transactions (api/v1/budgets.py), never
+stored on this model.
 """
+
+from decimal import Decimal
 
 from django.db import models
 from django.db.models import CheckConstraint, F, Q
@@ -150,3 +155,37 @@ class Budget(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class BudgetLine(models.Model):
+    """One row inside a Budget: a category being tracked, with a planned
+    amount. The "actual" amount shown alongside it is never stored here —
+    it's computed at read time from labeled transactions (see
+    api/v1/budgets.py::_actuals_for_categories), so it always reflects the
+    household's current transaction data rather than a stale snapshot.
+
+    category is a plain CASCADE FK for now, not PROTECT — hardening that
+    (so a category referenced by a historical budget line can never be
+    hard-deleted) is deferred to its own later change, not bundled with
+    this model's introduction, since a category referenced by a budget
+    line isn't a concern until finalized-budget snapshots exist.
+
+    Uniqueness on (budget, category): one line per category per budget —
+    adjusting a target means editing the existing line, not adding a
+    second, enforced by the API layer's duplicate-line rejection.
+    """
+
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='lines')
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='budget_lines')
+    planned_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'budget_lines'
+        unique_together = [['budget', 'category']]
+        ordering = ['category__type', 'category__name']
+
+    def __str__(self):
+        return f'{self.category.name} in {self.budget.name}'

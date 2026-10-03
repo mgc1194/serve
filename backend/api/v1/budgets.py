@@ -1,23 +1,37 @@
 """
-api/v1/budgets.py — Budget management endpoints.
+api/v1/budgets.py — Budget and BudgetLine management endpoints.
 
 Endpoints:
-    GET    /api/v1/budgets/          — list a household's active budgets
-    POST   /api/v1/budgets/          — create a budget in a household
-    PATCH  /api/v1/budgets/{id}/     — rename a budget
-    DELETE /api/v1/budgets/{id}/     — deactivate a budget (soft delete)
+    GET    /api/v1/budgets/               — list a household's active budgets
+    POST   /api/v1/budgets/               — create a budget in a household
+    PATCH  /api/v1/budgets/{id}/          — rename a budget
+    DELETE /api/v1/budgets/{id}/          — deactivate a budget (soft delete)
+    GET    /api/v1/budgets/{id}/lines     — list a budget's lines, with computed actuals
+    POST   /api/v1/budgets/{id}/lines     — add a category to a budget
+    PATCH  /api/v1/budget-lines/{id}/     — update a line's planned amount or notes
+    DELETE /api/v1/budget-lines/{id}/     — remove a category from a budget
 """
 
 import logging
+from decimal import Decimal
 
 from django.db import IntegrityError
+from django.db.models import Sum
 from django.shortcuts import get_object_or_404
 from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
-from budgets.models import Budget
-from schemas.budgets import BudgetCreateRequest, BudgetRenameRequest, BudgetSchema
+from budgets.models import Budget, BudgetLine, Category
+from schemas.budgets import (
+    BudgetCreateRequest,
+    BudgetLineCreateRequest,
+    BudgetLineSchema,
+    BudgetLineUpdateRequest,
+    BudgetRenameRequest,
+    BudgetSchema,
+)
+from transactions.models import Transaction
 from users.models import Household
 
 logger = logging.getLogger(__name__)
@@ -67,6 +81,28 @@ def _get_budget_for_member(budget_id: int, user) -> Budget:
     return budget
 
 
+def _get_line_for_member(line_id: int, user) -> BudgetLine:
+    """Fetches a budget line and verifies the user is a member of its household.
+
+    Args:
+        line_id: Primary key of the budget line to fetch.
+        user: The requesting user.
+
+    Returns:
+        The BudgetLine instance.
+
+    Raises:
+        HttpError: 404 if the line does not exist.
+        HttpError: 403 if the user is not a member of the line's household.
+    """
+    line = get_object_or_404(
+        BudgetLine.objects.select_related('budget__household', 'category'), pk=line_id
+    )
+    if not line.budget.household.users.filter(pk=user.pk).exists():
+        raise HttpError(403, 'You are not a member of this household.')
+    return line
+
+
 def _validate_period(payload: BudgetCreateRequest) -> None:
     """Validates period_start/period_end against the budget's type.
 
@@ -105,6 +141,63 @@ def _serialize(budget: Budget) -> dict:
         'is_active': budget.is_active,
         'household_id': budget.household_id,
     }
+
+
+def _serialize_line(line: BudgetLine, actual_amount: Decimal) -> dict:
+    """Serializes a BudgetLine into a dict matching BudgetLineSchema.
+
+    Args:
+        line: The BudgetLine instance to serialize.
+        actual_amount: The category's computed actual amount, from
+            _actuals_for_categories — never read off the model itself.
+
+    Returns:
+        A dict with the line's fields plus the given actual_amount.
+    """
+    return {
+        'id': line.id,
+        'budget_id': line.budget_id,
+        'category_id': line.category_id,
+        'category_name': line.category.name,
+        'category_type': line.category.type,
+        'planned_amount': line.planned_amount,
+        'actual_amount': actual_amount,
+        'notes': line.notes,
+    }
+
+
+def _actuals_for_categories(budget: Budget, category_ids: list[int]) -> dict[int, Decimal]:
+    """Computes each category's "actual" amount for a budget from labeled
+    transactions — the sum of Transaction.amount for transactions whose
+    label.category is one of category_ids, in the budget's household,
+    within the budget's period (or across all time for a project budget,
+    which has no period to bound by).
+
+    Returned as positive magnitudes regardless of category type — matches
+    how planned_amount is already stored as a positive figure, so an income
+    category and an expense category both show a plain dollar amount.
+
+    Args:
+        budget: The budget whose period (if any) scopes the transactions.
+        category_ids: The category ids to compute actuals for.
+
+    Returns:
+        A dict of category_id -> actual amount. A category with no matching
+        transactions is simply absent — callers should default to zero.
+    """
+    if not category_ids:
+        return {}
+
+    qs = Transaction.objects.filter(
+        account__household_id=budget.household_id,
+        exclude_from_summary=False,
+        label__category_id__in=category_ids,
+    )
+    if budget.period_start is not None and budget.period_end is not None:
+        qs = qs.filter(date__gte=budget.period_start, date__lte=budget.period_end)
+
+    rows = qs.values('label__category_id').annotate(total=Sum('amount'))
+    return {row['label__category_id']: abs(row['total']) for row in rows}
 
 
 @router.get('/budgets/', response=list[BudgetSchema])
@@ -253,3 +346,138 @@ def deactivate_budget(request, budget_id: int):
         f'User {request.user.email} deactivated budget "{budget.name}" (id={budget.id}) '
         f'in household (id={budget.household_id}).'
     )
+
+
+@router.get('/budgets/{budget_id}/lines', response=list[BudgetLineSchema])
+def list_budget_lines(request, budget_id: int):
+    """Returns the lines (categories tracked) for a budget, each with its
+    computed actual_amount.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        budget_id: Primary key of the budget.
+
+    Returns:
+        A list of BudgetLineSchema, ordered by category type then name.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the budget does not exist.
+    """
+    budget = _get_budget_for_member(budget_id, request.user)
+    lines = list(budget.lines.select_related('category'))
+    actuals = _actuals_for_categories(budget, [line.category_id for line in lines])
+    return [_serialize_line(line, actuals.get(line.category_id, Decimal('0.00'))) for line in lines]
+
+
+@router.post('/budgets/{budget_id}/lines', response=BudgetLineSchema)
+def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest):
+    """Adds a category to a budget.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        budget_id: Primary key of the budget.
+        payload: BudgetLineCreateRequest with category_id and optionally
+            planned_amount/notes.
+
+    Returns:
+        The created BudgetLineSchema.
+
+    Raises:
+        HttpError: 400 if the category belongs to a different household than the budget.
+        HttpError: 400 if this category already has a line on this budget.
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the budget or category does not exist.
+    """
+    budget = _get_budget_for_member(budget_id, request.user)
+    category = get_object_or_404(Category, pk=payload.category_id)
+    if category.household_id != budget.household_id:
+        raise HttpError(400, 'Category does not belong to the same household as this budget.')
+
+    try:
+        line = BudgetLine.objects.create(
+            budget=budget,
+            category=category,
+            planned_amount=payload.planned_amount
+            if payload.planned_amount is not None
+            else Decimal('0.00'),
+            notes=payload.notes or '',
+        )
+    except IntegrityError:
+        raise HttpError(400, f'"{category.name}" is already part of this budget.') from None
+
+    logger.info(
+        f'User {request.user.email} added category "{category.name}" (id={category.id}) '
+        f'to budget "{budget.name}" (id={budget.id}).'
+    )
+
+    actual = _actuals_for_categories(budget, [category.id]).get(category.id, Decimal('0.00'))
+    return _serialize_line(line, actual)
+
+
+@router.patch('/budget-lines/{line_id}/', response=BudgetLineSchema)
+def update_budget_line(request, line_id: int, payload: BudgetLineUpdateRequest):
+    """Updates a budget line's planned amount or notes.
+
+    At least one field must be provided. category cannot be changed — the
+    schema has no such field; remove and re-add the line to change it.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        line_id: Primary key of the budget line to update.
+        payload: BudgetLineUpdateRequest with at least one of
+            planned_amount, notes.
+
+    Returns:
+        The updated BudgetLineSchema.
+
+    Raises:
+        HttpError: 400 if no fields are provided.
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the line does not exist.
+    """
+    line = _get_line_for_member(line_id, request.user)
+
+    update_fields = []
+
+    if payload.planned_amount is not None:
+        line.planned_amount = payload.planned_amount
+        update_fields.append('planned_amount')
+
+    if payload.notes is not None:
+        line.notes = payload.notes
+        update_fields.append('notes')
+
+    if not update_fields:
+        raise HttpError(400, 'At least one field must be provided.')
+
+    line.save(update_fields=[*update_fields, 'updated_at'])
+
+    logger.info(f'User {request.user.email} updated budget line (id={line.id}).')
+
+    actual = _actuals_for_categories(line.budget, [line.category_id]).get(
+        line.category_id, Decimal('0.00')
+    )
+    return _serialize_line(line, actual)
+
+
+@router.delete('/budget-lines/{line_id}/', response={204: None})
+def delete_budget_line(request, line_id: int):
+    """Removes a category from a budget. Hard delete — a line has no
+    downstream references the way a Category does.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        line_id: Primary key of the budget line to delete.
+
+    Returns:
+        204 No Content on success.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the line does not exist.
+    """
+    line = _get_line_for_member(line_id, request.user)
+    line.delete()
+
+    logger.info(f'User {request.user.email} removed budget line (id={line_id}).')
