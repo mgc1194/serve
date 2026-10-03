@@ -11,9 +11,7 @@
 // budgets down with it. If that fetch fails instead, the error (and
 // Retry) still surfaces alongside whatever budgets are already known,
 // rather than either hiding them or silently dropping the failure and
-// the ability to recover the rest of the household's budgets. Renaming
-// and deactivating a budget land in follow-up PRs, once their endpoints
-// exist.
+// the ability to recover the rest of the household's budgets.
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -116,6 +114,14 @@ export function BudgetsPage() {
     setCreateOpen(false);
   }
 
+  function handleUpdated(budget: Budget) {
+    setBudgets(prev => prev.map(b => (b.id === budget.id ? budget : b)));
+  }
+
+  function handleDeactivated(id: number) {
+    setBudgets(prev => prev.filter(b => b.id !== id));
+  }
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppHeader />
@@ -181,7 +187,14 @@ export function BudgetsPage() {
                   </Box>
                 )}
                 {budgets.length > 0 ? (
-                  budgets.map(budget => <BudgetCard key={budget.id} budget={budget} />)
+                  budgets.map(budget => (
+                    <BudgetCard
+                      key={budget.id}
+                      budget={budget}
+                      onUpdated={handleUpdated}
+                      onDeactivated={handleDeactivated}
+                    />
+                  ))
                 ) : !error ? (
                   <Typography color="text.secondary">
                     No budgets yet — click &quot;Create budget&quot; above.

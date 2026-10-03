@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createBudget, listBudgets } from '@services/budgets';
+import { createBudget, deleteBudget, listBudgets, updateBudget } from '@services/budgets';
 
 function mockFetch(status: number, body?: unknown) {
   return vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -69,5 +69,40 @@ describe('createBudget', () => {
     ).rejects.toMatchObject({
       message: 'A budget named "August 2026" already exists in this household.',
     });
+  });
+});
+
+describe('updateBudget', () => {
+  it('sends PATCH with the new name and returns the updated budget', async () => {
+    const spy = mockFetch(200, { ...budget, name: 'Renamed' });
+    const result = await updateBudget(1, { name: 'Renamed' });
+    expect(result.name).toBe('Renamed');
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('/budgets/1/'),
+      expect.objectContaining({ method: 'PATCH' }),
+    );
+  });
+
+  it('throws ApiError with the server message on 400', async () => {
+    mockFetch(400, { detail: 'A budget named "Renamed" already exists in this household.' });
+    await expect(updateBudget(1, { name: 'Renamed' })).rejects.toMatchObject({
+      message: 'A budget named "Renamed" already exists in this household.',
+    });
+  });
+});
+
+describe('deleteBudget', () => {
+  it('sends DELETE and returns undefined on 204', async () => {
+    const spy = mockFetch(204);
+    expect(await deleteBudget(1)).toBeUndefined();
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('/budgets/1/'),
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('throws ApiError on 403', async () => {
+    mockFetch(403, { detail: 'You are not a member of this household.' });
+    await expect(deleteBudget(1)).rejects.toMatchObject({ status: 403 });
   });
 });
