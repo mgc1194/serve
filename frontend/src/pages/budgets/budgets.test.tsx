@@ -233,7 +233,7 @@ describe('BudgetsPage create budget', () => {
     expect(screen.getByText('August 2026')).toBeDefined();
   });
 
-  it('keeps a successfully created budget visible when the in-flight list request rejects afterward', async () => {
+  it('keeps a successfully created budget visible, with Retry still offered, if the in-flight list request rejects afterward', async () => {
     mockUser([HOUSEHOLD]);
     const listDeferred = deferred<Budget[]>();
     vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
@@ -248,13 +248,14 @@ describe('BudgetsPage create budget', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByText('August 2026')).toBeDefined();
 
-    // The request that was already in flight at create time now rejects —
-    // the newly created card must stay visible rather than getting hidden
-    // behind an error for a failure unrelated to the create.
+    // The request that was already in flight at create time now rejects.
+    // The newly created card must stay visible rather than getting hidden
+    // behind the error, but the failure (and a way to recover the
+    // household's other, not-yet-fetched budgets) must still surface.
     listDeferred.reject(new Error('boom'));
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(screen.queryByText('Could not load budgets.')).toBeNull();
+    await screen.findByText('Could not load budgets.');
     expect(screen.getByText('August 2026')).toBeDefined();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeDefined();
   });
 
   it('does not let an earlier retry resolving late clear the loading state for a newer retry', async () => {

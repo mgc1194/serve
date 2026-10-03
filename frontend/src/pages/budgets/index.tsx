@@ -8,8 +8,12 @@
 // list that predates the create, and so is missing it), it gets merged in
 // rather than either overwriting the optimistic update or, if the fetch
 // were discarded outright instead, taking any of the household's other
-// budgets down with it. Renaming and deactivating a budget land in
-// follow-up PRs, once their endpoints exist.
+// budgets down with it. If that fetch fails instead, the error (and
+// Retry) still surfaces alongside whatever budgets are already known,
+// rather than either hiding them or silently dropping the failure and
+// the ability to recover the rest of the household's budgets. Renaming
+// and deactivating a budget land in follow-up PRs, once their endpoints
+// exist.
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -82,12 +86,11 @@ export function BudgetsPage() {
         .catch(err => {
           if (ignore || requestId !== requestIdRef.current) return;
           // A create may have already landed while this request was in
-          // flight — keep showing it (and the loading/empty state it
-          // replaced) rather than hiding that known-good state behind a
-          // failure unrelated to the user's own action. The household's
-          // other budgets, which this failed request would have supplied,
-          // are only recoverable via Retry in that case.
-          if (pendingCreatesRef.current.length > 0) return;
+          // flight, so this failure doesn't necessarily mean there's
+          // nothing to show — budgets may already hold that optimistic
+          // entry. The error still surfaces (with Retry) so the household's
+          // other, not-yet-fetched budgets stay recoverable; the render
+          // below shows both together instead of the error hiding budgets.
           setError(err instanceof ApiError ? err.message : 'Could not load budgets.');
         })
         .finally(() => {
@@ -165,21 +168,26 @@ export function BudgetsPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {isLoading ? (
               [0, 1].map(i => <Skeleton key={i} variant="rounded" height={100} />)
-            ) : error ? (
-              <Box>
-                <Typography color="error" sx={{ mb: 1 }}>
-                  {error}
-                </Typography>
-                <Button variant="outlined" size="small" onClick={() => loadRef.current()}>
-                  Retry
-                </Button>
-              </Box>
-            ) : budgets.length === 0 ? (
-              <Typography color="text.secondary">
-                No budgets yet — click &quot;Create budget&quot; above.
-              </Typography>
             ) : (
-              budgets.map(budget => <BudgetCard key={budget.id} budget={budget} />)
+              <>
+                {error && (
+                  <Box>
+                    <Typography color="error" sx={{ mb: 1 }}>
+                      {error}
+                    </Typography>
+                    <Button variant="outlined" size="small" onClick={() => loadRef.current()}>
+                      Retry
+                    </Button>
+                  </Box>
+                )}
+                {budgets.length > 0 ? (
+                  budgets.map(budget => <BudgetCard key={budget.id} budget={budget} />)
+                ) : !error ? (
+                  <Typography color="text.secondary">
+                    No budgets yet — click &quot;Create budget&quot; above.
+                  </Typography>
+                ) : null}
+              </>
             )}
           </Box>
         )}
