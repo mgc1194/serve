@@ -35,3 +35,13 @@ class BudgetCreateRequest(Schema):
     household_id: int
     period_start: date | None = None
     period_end: date | None = None
+
+
+class BudgetRenameRequest(Schema):
+    """Request body for renaming a budget.
+
+    Only the name is editable here — type and period dates are set at
+    creation and not revisited by this endpoint.
+    """
+
+    name: str
