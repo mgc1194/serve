@@ -85,6 +85,30 @@ describe('BudgetCard rename', () => {
     expect(mockUpdateBudget).not.toHaveBeenCalled();
   });
 
+  it('saves on Enter key', async () => {
+    mockUpdateBudget.mockResolvedValueOnce({ ...BUDGET, name: 'Renamed Budget' });
+    const { onUpdated } = setup();
+
+    fireEvent.click(screen.getByRole('button', { name: /rename/i }));
+    fireEvent.change(screen.getByDisplayValue('January 2026'), {
+      target: { value: 'Renamed Budget' },
+    });
+    fireEvent.keyDown(screen.getByDisplayValue('Renamed Budget'), { key: 'Enter' });
+
+    await waitFor(() => expect(mockUpdateBudget).toHaveBeenCalledWith(1, { name: 'Renamed Budget' }));
+    await waitFor(() => expect(onUpdated).toHaveBeenCalled());
+  });
+
+  it('cancels editing on Escape key', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /rename/i }));
+    fireEvent.keyDown(screen.getByDisplayValue('January 2026'), { key: 'Escape' });
+
+    expect(mockUpdateBudget).not.toHaveBeenCalled();
+    expect(screen.queryByDisplayValue('January 2026')).toBeNull();
+    expect(screen.getByText('January 2026')).toBeDefined();
+  });
+
   it('cancels editing without calling updateBudget when Cancel is clicked', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /rename/i }));

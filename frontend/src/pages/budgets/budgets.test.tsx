@@ -358,4 +358,65 @@ describe('BudgetsPage create budget', () => {
     await screen.findByText(/no budgets yet/i);
     expect(screen.queryByText('August 2026')).toBeNull();
   });
+
+  it('overrides a rename even when the pending list response already includes the budget under its old name', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+    vi.spyOn(budgetsService, 'updateBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'September 2026' }),
+    );
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await screen.findByText('August 2026');
+
+    fireEvent.click(screen.getByRole('button', { name: /rename/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /budget name/i }), {
+      target: { value: 'September 2026' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await screen.findByText('September 2026');
+
+    // Unlike the earlier test, this response isn't missing the budget —
+    // it read it (under its pre-rename name) before the PATCH committed.
+    // The id matches, but the data is stale; it must not win.
+    listDeferred.resolve([makeBudget({ id: 1, name: 'August 2026' })]);
+    await waitFor(() => expect(screen.getAllByText('September 2026')).toHaveLength(1));
+    expect(screen.queryByText('August 2026')).toBeNull();
+  });
+
+  it('keeps a deactivated budget hidden even when the pending list response still includes it', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+    vi.spyOn(budgetsService, 'deleteBudget').mockResolvedValue(undefined);
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await screen.findByText('August 2026');
+
+    fireEvent.click(screen.getByRole('button', { name: /deactivate budget/i }));
+    fireEvent.click(screen.getByRole('button', { name: /yes, deactivate/i }));
+    await waitFor(() => expect(screen.queryByText('August 2026')).toBeNull());
+
+    // Unlike the earlier test, this response isn't missing the budget — it
+    // read it (still active) before the DELETE committed. The id matches,
+    // but the data is stale; it must not bring the card back.
+    listDeferred.resolve([makeBudget({ id: 1, name: 'August 2026' })]);
+    await screen.findByText(/no budgets yet/i);
+    expect(screen.queryByText('August 2026')).toBeNull();
+  });
 });
