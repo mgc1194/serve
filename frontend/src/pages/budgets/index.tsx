@@ -3,11 +3,13 @@
 // "Create budget" opens CreateBudgetDialog for the active household; a
 // successful create prepends the new budget to the list rather than
 // re-fetching. The button stays enabled while the list is still loading,
-// so a create can land while that fetch is in flight — requestIdRef lets
-// the create invalidate that fetch's eventual response instead of letting
-// it overwrite the optimistic update with a list that predates it.
-// Renaming and deactivating a budget land in follow-up PRs, once their
-// endpoints exist.
+// so a create can land while that fetch is in flight — pendingCreatesRef
+// tracks it so that when the in-flight fetch's response does arrive (a
+// list that predates the create, and so is missing it), it gets merged in
+// rather than either overwriting the optimistic update or, if the fetch
+// were discarded outright instead, taking any of the household's other
+// budgets down with it. Renaming and deactivating a budget land in
+// follow-up PRs, once their endpoints exist.
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -38,14 +40,21 @@ export function BudgetsPage() {
   // without making it a useEffect dependency.
   const loadRef = useRef<() => void>(() => {});
 
-  // Bumped whenever a fetch's response should no longer be trusted to
-  // overwrite budgets — currently just a create landing mid-fetch. Guards
-  // only the data-applying branches, not the loading flag itself, so an
-  // invalidated request still clears isLoading once it settles.
+  // Guards which fetch's response is allowed to apply, so an out-of-order
+  // resolution (e.g. Retry clicked while the initial fetch is still
+  // pending) can't overwrite a newer one's result.
   const requestIdRef = useRef(0);
+
+  // Budgets created locally that no list response has confirmed yet.
+  // Merged into whichever response applies next, so a fetch that was
+  // already in flight at create time — and so returns a list predating it
+  // — adds the create back in instead of dropping it, without discarding
+  // the rest of that response's (still perfectly good) budgets.
+  const pendingCreatesRef = useRef<Budget[]>([]);
 
   useEffect(() => {
     let ignore = false;
+    pendingCreatesRef.current = [];
 
     function load() {
       const requestId = ++requestIdRef.current;
@@ -62,7 +71,11 @@ export function BudgetsPage() {
       listBudgets(householdId)
         .then(result => {
           if (ignore || requestId !== requestIdRef.current) return;
-          setBudgets(result);
+          const unconfirmed = pendingCreatesRef.current.filter(
+            pending => !result.some(b => b.id === pending.id),
+          );
+          setBudgets([...unconfirmed, ...result]);
+          pendingCreatesRef.current = [];
         })
         .catch(err => {
           if (ignore || requestId !== requestIdRef.current) return;
@@ -82,13 +95,9 @@ export function BudgetsPage() {
   }, [householdId]);
 
   function handleCreated(budget: Budget) {
-    // Invalidates any in-flight list fetch: it was requested before this
-    // budget existed, so its eventual response would otherwise overwrite
-    // this optimistic update with a list that predates the create. Also
-    // clears isLoading directly rather than waiting for that fetch to
-    // settle, so the new card is visible immediately instead of sitting
-    // behind a stale loading skeleton until then.
-    requestIdRef.current += 1;
+    // Tracked in case a list fetch already in flight resolves afterward
+    // with a response that predates this create — see pendingCreatesRef.
+    pendingCreatesRef.current = [...pendingCreatesRef.current, budget];
     setBudgets(prev => [budget, ...prev]);
     setIsLoading(false);
     setCreateOpen(false);

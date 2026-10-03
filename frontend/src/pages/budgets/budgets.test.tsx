@@ -188,4 +188,27 @@ describe('BudgetsPage create budget', () => {
     await waitFor(() => expect(screen.queryByText(/no budgets yet/i)).toBeNull());
     expect(screen.getByText('August 2026')).toBeDefined();
   });
+
+  it('merges a stale in-flight list response instead of discarding its other budgets', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 2, name: 'August 2026' }),
+    );
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('August 2026')).toBeDefined();
+
+    // The stale request finally resolves with the household's other,
+    // pre-existing budget — it must not be lost, and the one just created
+    // must not be duplicated.
+    listDeferred.resolve([makeBudget({ id: 1, name: 'January 2026' })]);
+    await waitFor(() => expect(screen.getByText('January 2026')).toBeDefined());
+    expect(screen.getAllByText('August 2026')).toHaveLength(1);
+  });
 });
