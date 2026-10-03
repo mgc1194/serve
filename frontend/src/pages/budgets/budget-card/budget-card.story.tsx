@@ -7,6 +7,10 @@ const meta: Meta<typeof BudgetCard> = {
   title: 'Budgets/BudgetCard',
   component: BudgetCard,
   parameters: { layout: 'padded' },
+  args: {
+    onUpdated: () => {},
+    onDeactivated: () => {},
+  },
 };
 
 export default meta;

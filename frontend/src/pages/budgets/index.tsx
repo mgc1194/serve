@@ -1,19 +1,23 @@
 // pages/budgets/index.tsx — Budgets page.
 //
-// "Create budget" opens CreateBudgetDialog for the active household; a
-// successful create prepends the new budget to the list rather than
-// re-fetching. The button stays enabled while the list is still loading,
-// so a create can land while that fetch is in flight — pendingCreatesRef
-// tracks it so that when the in-flight fetch's response does arrive (a
-// list that predates the create, and so is missing it), it gets merged in
-// rather than either overwriting the optimistic update or, if the fetch
-// were discarded outright instead, taking any of the household's other
-// budgets down with it. If that fetch fails instead, the error (and
-// Retry) still surfaces alongside whatever budgets are already known,
-// rather than either hiding them or silently dropping the failure and
-// the ability to recover the rest of the household's budgets. Renaming
-// and deactivating a budget land in follow-up PRs, once their endpoints
-// exist.
+// "Create budget" opens CreateBudgetDialog for the active household, and
+// rename/deactivate act directly on a BudgetCard — all three stay enabled
+// while the list is still loading, so any of them can land while a list
+// fetch is in flight. A response from that fetch can disagree with a local
+// change in two different ways, each tracked separately and reconciled
+// when the response arrives:
+//   - presence (pendingCreatesRef): the response predates a create, so
+//     it's simply missing — add it back in rather than letting it vanish.
+//   - value (pendingUpdatesRef / pendingDeactivatedIdsRef): the response
+//     still includes the budget, but read before a rename or deactivation
+//     committed server-side — override its data (or drop it entirely for
+//     a deactivation) rather than trusting what's actually stale data just
+//     because the id matches.
+// Either way, the rest of that response's (still perfectly good) budgets
+// are kept, never discarded outright. If the fetch fails instead, the
+// error (and Retry) still surfaces alongside whatever budgets are already
+// known, rather than either hiding them or silently dropping the failure
+// and the ability to recover the rest of the household's budgets.
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -51,16 +55,26 @@ export function BudgetsPage() {
   // under it.
   const requestIdRef = useRef(0);
 
-  // Budgets created locally that no list response has confirmed yet.
-  // Merged into whichever response applies next, so a fetch that was
-  // already in flight at create time — and so returns a list predating it
-  // — adds the create back in instead of dropping it, without discarding
-  // the rest of that response's (still perfectly good) budgets.
+  // Budgets created locally that no list response has confirmed present
+  // yet. See the file-level comment above for how this and the two refs
+  // below are each reconciled once a response arrives.
   const pendingCreatesRef = useRef<Budget[]>([]);
+
+  // Budgets renamed locally that no list response has confirmed matches
+  // yet — overridden onto a response's same-id entry instead of trusting
+  // it, until a response's own data actually agrees.
+  const pendingUpdatesRef = useRef<Budget[]>([]);
+
+  // Ids deactivated locally that no list response has confirmed absent
+  // yet — filtered out of a response instead of trusting its presence,
+  // until a response actually omits it.
+  const pendingDeactivatedIdsRef = useRef<number[]>([]);
 
   useEffect(() => {
     let ignore = false;
     pendingCreatesRef.current = [];
+    pendingUpdatesRef.current = [];
+    pendingDeactivatedIdsRef.current = [];
 
     function load() {
       const requestId = ++requestIdRef.current;
@@ -77,11 +91,34 @@ export function BudgetsPage() {
       listBudgets(householdId)
         .then(result => {
           if (ignore || requestId !== requestIdRef.current) return;
-          const unconfirmed = pendingCreatesRef.current.filter(
-            pending => !result.some(b => b.id === pending.id),
+
+          // Drop any budget deactivated locally that this response still
+          // includes (it predates the DELETE committing server-side).
+          const withoutDeactivated = result.filter(
+            b => !pendingDeactivatedIdsRef.current.includes(b.id),
           );
-          setBudgets([...unconfirmed, ...result]);
+          pendingDeactivatedIdsRef.current = pendingDeactivatedIdsRef.current.filter(
+            id => result.some(b => b.id === id),
+          );
+
+          // Override any budget whose rename this response doesn't yet
+          // reflect (it predates the PATCH committing server-side).
+          const reconciled = withoutDeactivated.map(b => {
+            const pendingUpdate = pendingUpdatesRef.current.find(p => p.id === b.id);
+            return pendingUpdate ?? b;
+          });
+          pendingUpdatesRef.current = pendingUpdatesRef.current.filter(pending => {
+            const match = result.find(b => b.id === pending.id);
+            return !(match && match.name === pending.name);
+          });
+
+          // Add back any locally created budget this response is missing.
+          const unconfirmedCreates = pendingCreatesRef.current.filter(
+            pending => !reconciled.some(b => b.id === pending.id),
+          );
           pendingCreatesRef.current = [];
+
+          setBudgets([...unconfirmedCreates, ...reconciled]);
         })
         .catch(err => {
           if (ignore || requestId !== requestIdRef.current) return;
@@ -114,6 +151,32 @@ export function BudgetsPage() {
     setIsLoading(false);
     setError(null);
     setCreateOpen(false);
+  }
+
+  function handleUpdated(budget: Budget) {
+    setBudgets(prev => prev.map(b => (b.id === budget.id ? budget : b)));
+    // Keep pendingCreatesRef's copy in sync too, in case this budget is
+    // also still an unconfirmed create.
+    pendingCreatesRef.current = pendingCreatesRef.current.map(b =>
+      b.id === budget.id ? budget : b,
+    );
+    // Tracked regardless, so an in-flight fetch that already included this
+    // budget (just with its pre-rename name) gets overridden rather than
+    // trusted — see the reconciliation in load() above.
+    pendingUpdatesRef.current = [
+      ...pendingUpdatesRef.current.filter(b => b.id !== budget.id),
+      budget,
+    ];
+  }
+
+  function handleDeactivated(id: number) {
+    setBudgets(prev => prev.filter(b => b.id !== id));
+    pendingCreatesRef.current = pendingCreatesRef.current.filter(b => b.id !== id);
+    pendingUpdatesRef.current = pendingUpdatesRef.current.filter(b => b.id !== id);
+    // Tracked so an in-flight fetch that already included this budget
+    // (read before the deactivation committed) gets it filtered out
+    // rather than trusted — see the reconciliation in load() above.
+    pendingDeactivatedIdsRef.current = [...pendingDeactivatedIdsRef.current, id];
   }
 
   return (
@@ -181,7 +244,14 @@ export function BudgetsPage() {
                   </Box>
                 )}
                 {budgets.length > 0 ? (
-                  budgets.map(budget => <BudgetCard key={budget.id} budget={budget} />)
+                  budgets.map(budget => (
+                    <BudgetCard
+                      key={budget.id}
+                      budget={budget}
+                      onUpdated={handleUpdated}
+                      onDeactivated={handleDeactivated}
+                    />
+                  ))
                 ) : !error ? (
                   <Typography color="text.secondary">
                     No budgets yet — click &quot;Create budget&quot; above.
