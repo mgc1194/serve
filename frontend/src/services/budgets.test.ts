@@ -5,7 +5,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createBudget } from '@services/budgets';
+import { createBudget, listBudgets } from '@services/budgets';
 
 function mockFetch(status: number, body?: unknown) {
   return vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
@@ -27,6 +27,23 @@ const budget = {
 };
 
 afterEach(() => vi.restoreAllMocks());
+
+describe('listBudgets', () => {
+  it('scopes the request to the household and returns the list', async () => {
+    const spy = mockFetch(200, [budget]);
+    const result = await listBudgets(1);
+    expect(result).toEqual([budget]);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining('/budgets/?household_id=1'),
+      expect.anything(),
+    );
+  });
+
+  it('throws ApiError on 403', async () => {
+    mockFetch(403, { detail: 'You are not a member of this household.' });
+    await expect(listBudgets(1)).rejects.toMatchObject({ status: 403 });
+  });
+});
 
 describe('createBudget', () => {
   it('sends POST with the payload and returns the created budget', async () => {

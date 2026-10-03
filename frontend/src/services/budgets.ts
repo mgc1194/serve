@@ -5,6 +5,10 @@ import { apiFetch, ApiError } from '@services/api-client';
 
 export { ApiError };
 
+export async function listBudgets(householdId: number): Promise<Budget[]> {
+  return apiFetch<Budget[]>(`/budgets/?household_id=${householdId}`);
+}
+
 export async function createBudget(payload: {
   name: string;
   type: 'period' | 'project';
