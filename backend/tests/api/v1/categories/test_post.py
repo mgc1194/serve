@@ -51,6 +51,29 @@ class TestCreateCategory:
         )
         assert response.status_code == 400
 
+    def test_concurrent_duplicate_insert_returns_400_not_500(
+        self, client, alice, household, monkeypatch
+    ):
+        """Simulates two requests racing on the same (household, name, type):
+        both pass the preflight "existing" lookup (patched here to always
+        miss, as if this request's lookup ran just before the other's
+        insert committed), so the loser's own insert is the one that hits
+        the database's unique constraint instead."""
+        CategoryFactory(household=household, name='Food', type='spending')
+
+        class EmptyQuerySet:
+            def first(self):
+                return None
+
+        monkeypatch.setattr(Category.objects, 'filter', lambda **kwargs: EmptyQuerySet())
+
+        response = client.post(
+            '/categories/',
+            json={'name': 'Food', 'type': 'spending', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 400
+
     def test_reactivates_soft_deleted_category(self, client, alice, household):
         inactive = CategoryFactory(
             name='Travel', type='spending', household=household, is_active=False

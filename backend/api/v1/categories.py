@@ -148,7 +148,12 @@ def create_category(request, payload: CategoryCreateRequest):
         )
         return _serialize(existing)
 
-    category = Category.objects.create(name=name, type=payload.type, household=household)
+    try:
+        category = Category.objects.create(name=name, type=payload.type, household=household)
+    except IntegrityError:
+        raise HttpError(
+            400, f'A category named "{name}" already exists in this household.'
+        ) from None
 
     logger.info(
         f'User {request.user.email} created category "{category.name}" '
