@@ -32,4 +32,6 @@ class BudgetLineFactory(factory.django.DjangoModelFactory):
         model = BudgetLine
 
     budget = factory.SubFactory(BudgetFactory)
-    category = factory.SubFactory(CategoryFactory)
+    category = factory.SubFactory(
+        CategoryFactory, household=factory.SelfAttribute('..budget.household')
+    )
