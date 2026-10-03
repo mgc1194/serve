@@ -40,9 +40,11 @@ export function BudgetsPage() {
   // without making it a useEffect dependency.
   const loadRef = useRef<() => void>(() => {});
 
-  // Guards which fetch's response is allowed to apply, so an out-of-order
-  // resolution (e.g. Retry clicked while the initial fetch is still
-  // pending) can't overwrite a newer one's result.
+  // Guards which fetch is allowed to touch state at all (data and loading
+  // flag alike), so an earlier request resolving after a newer one has
+  // started — e.g. Retry clicked again before the first attempt settles —
+  // can't overwrite the newer one's result or clear isLoading out from
+  // under it.
   const requestIdRef = useRef(0);
 
   // Budgets created locally that no list response has confirmed yet.
@@ -79,10 +81,17 @@ export function BudgetsPage() {
         })
         .catch(err => {
           if (ignore || requestId !== requestIdRef.current) return;
+          // A create may have already landed while this request was in
+          // flight — keep showing it (and the loading/empty state it
+          // replaced) rather than hiding that known-good state behind a
+          // failure unrelated to the user's own action. The household's
+          // other budgets, which this failed request would have supplied,
+          // are only recoverable via Retry in that case.
+          if (pendingCreatesRef.current.length > 0) return;
           setError(err instanceof ApiError ? err.message : 'Could not load budgets.');
         })
         .finally(() => {
-          if (!ignore) setIsLoading(false);
+          if (!ignore && requestId === requestIdRef.current) setIsLoading(false);
         });
     }
 

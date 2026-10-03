@@ -1,6 +1,6 @@
 // pages/budgets/budgets.test.tsx — Unit tests for BudgetsPage.
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,10 +13,12 @@ import * as budgetsService from '@services/budgets';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(res => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 vi.mock('@context/auth-context', () => ({ useAuth: vi.fn() }));
@@ -229,5 +231,68 @@ describe('BudgetsPage create budget', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.queryByText('Could not load budgets.')).toBeNull();
     expect(screen.getByText('August 2026')).toBeDefined();
+  });
+
+  it('keeps a successfully created budget visible when the in-flight list request rejects afterward', async () => {
+    mockUser([HOUSEHOLD]);
+    const listDeferred = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets').mockReturnValueOnce(listDeferred.promise);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 1, name: 'August 2026' }),
+    );
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('August 2026')).toBeDefined();
+
+    // The request that was already in flight at create time now rejects —
+    // the newly created card must stay visible rather than getting hidden
+    // behind an error for a failure unrelated to the create.
+    listDeferred.reject(new Error('boom'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Could not load budgets.')).toBeNull();
+    expect(screen.getByText('August 2026')).toBeDefined();
+  });
+
+  it('does not let an earlier retry resolving late clear the loading state for a newer retry', async () => {
+    mockUser([HOUSEHOLD]);
+    const firstRetry = deferred<Budget[]>();
+    const secondRetry = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockReturnValueOnce(firstRetry.promise)
+      .mockReturnValueOnce(secondRetry.promise);
+
+    renderPage();
+    await screen.findByText('Could not load budgets.');
+
+    const retryButton = screen.getByRole('button', { name: /retry/i });
+    // Both retries fire before either settles, so requestIdRef is bumped
+    // twice back to back — exactly the "retry clicked again before the
+    // first attempt settles" scenario.
+    act(() => {
+      fireEvent.click(retryButton);
+      fireEvent.click(retryButton);
+    });
+
+    // The earlier (now-superseded) retry resolves first. Its data is
+    // already correctly skipped by the requestId guard in .then — the bug
+    // this test targets is specifically that .finally used to clear
+    // isLoading unconditionally, which (with budgets still empty and no
+    // error) would prematurely reveal the empty state instead of leaving
+    // the skeleton up for the still-pending newer retry.
+    firstRetry.resolve([makeBudget({ id: 1, name: 'Stale Budget' })]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Stale Budget')).toBeNull();
+    expect(screen.queryByText(/no budgets yet/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+
+    // The newer retry resolves — its data applies.
+    secondRetry.resolve([makeBudget({ id: 2, name: 'Fresh Budget' })]);
+    await screen.findByText('Fresh Budget');
+    expect(screen.queryByText('Stale Budget')).toBeNull();
   });
 });
