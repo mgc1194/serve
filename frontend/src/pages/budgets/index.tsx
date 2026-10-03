@@ -1,5 +1,10 @@
 // pages/budgets/index.tsx — Budgets page.
 //
+// "Manage categories" opens the household-wide category catalog, managed
+// independently of any one budget (categories stay a flat household-level
+// taxonomy; the page has no use for the list itself, so onCategoriesChanged
+// is a no-op here — a follow-up budget detail page will).
+//
 // "Create budget" opens CreateBudgetDialog for the active household, and
 // rename/deactivate act directly on a BudgetCard — all three stay enabled
 // while the list is still loading, so any of them can land while a list
@@ -29,6 +34,7 @@ import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
 import { BudgetCard } from '@pages/budgets/budget-card';
+import { CategoryManagementDialog } from '@pages/budgets/category-management-dialog';
 import { CreateBudgetDialog } from '@pages/budgets/create-budget-dialog';
 import type { Budget } from '@serve/types/global';
 import { listBudgets, ApiError } from '@services/budgets';
@@ -41,6 +47,7 @@ export function BudgetsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
 
   const householdId = activeHousehold?.id;
 
@@ -216,13 +223,18 @@ export function BudgetsPage() {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <SwitchHouseholdButton />
             {activeHousehold && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setCreateOpen(true)}
-              >
-                Create budget
-              </Button>
+              <>
+                <Button variant="outlined" onClick={() => setCategoryDialogOpen(true)}>
+                  Manage categories
+                </Button>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => setCreateOpen(true)}
+                >
+                  Create budget
+                </Button>
+              </>
             )}
           </Box>
         </Box>
@@ -269,6 +281,16 @@ export function BudgetsPage() {
           householdId={activeHousehold.id}
           onClose={() => setCreateOpen(false)}
           onCreate={handleCreated}
+        />
+      )}
+
+      {activeHousehold && (
+        <CategoryManagementDialog
+          open={categoryDialogOpen}
+          householdId={activeHousehold.id}
+          householdName={activeHousehold.name}
+          onClose={() => setCategoryDialogOpen(false)}
+          onCategoriesChanged={() => {}}
         />
       )}
     </Box>
