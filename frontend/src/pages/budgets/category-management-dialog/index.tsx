@@ -5,34 +5,30 @@
 // ManageCategory (create / edit mode). Mirrors
 // households/label-management-dialog's shape.
 //
-// "New category" stays available even while the initial (or a show-inactive
-// toggle's) list fetch is still loading, so a create/edit/deactivate/
-// reactivate can complete before that fetch resolves. Its eventual response
-// then predates the mutation and must not be allowed to overwrite it — every
-// write to `categories` goes through writeCategories, which bumps
-// categoriesVersionRef, so a fetch only applies its result if no write
-// happened since it started. A stale response is never just dropped, though
-// — it can carry data the mutation has no way to know about (e.g. the
-// inactive categories a Show-inactive fetch alone would return), so instead
-// of being discarded wholesale, the same request is simply re-issued (on
-// success or failure alike — a failed fetch gets the exact same treatment,
-// since a rejection here is just as unrelated to the mutation as a resolved
-// one); by then the mutation is already committed server-side, so the next
-// response reflects both. fetchIdRef is the separate, simpler generation
-// guard for isLoading/listError, so only the most recently started fetch
-// (not an unrelated mutation) controls those — see the effect below for both.
+// "New category" stays available even while the initial list fetch is
+// still loading, so a create/edit/deactivate can complete before that
+// fetch resolves. Its eventual response then predates the mutation and
+// must not be allowed to overwrite it — every write to `categories` goes
+// through writeCategories, which bumps categoriesVersionRef, so the fetch
+// only applies its result if no write happened since it started;
+// otherwise it's simply discarded, since the mutation's own optimistic
+// update already reflects the current state. fetchIdRef is the separate,
+// simpler generation guard for isLoading/listError, so only the most
+// recently started fetch controls those.
 //
-// That reconciliation only has to cope with list *fetches* racing a
-// mutation, not with a second mutation, a household switch, or a dialog
-// close/reopen racing the first one — isMutating disables every other
-// action (ListCategories' disabled prop, ManageCategory's own isSaving/
-// isDeleting, and the Dialog's onClose) for the duration of a create/edit/
-// deactivate/reactivate, so at most one mutation is ever in flight and
-// nothing else can run until it settles. Each handler can then apply its
-// result directly against whatever's currently loaded with no staleness
-// guard of its own — there's no later dialog session or different
-// household for a late response to leak into, because there's no way to
-// start one before this one's mutation finishes.
+// isMutating guards the Dialog's own onClose (backdrop click / Escape —
+// ManageCategory's own isSaving/isDeleting already disable its Back
+// button) for the duration of a create/edit/deactivate, so the dialog
+// can't be closed and reopened while one is in flight. Each handler can
+// then apply its result directly against whatever's currently loaded
+// with no staleness guard of its own — list mode (and ListCategories'
+// Close/New category/Edit controls) is never even rendered while a
+// mutation is running, since handleSave/handleDeactivate are only
+// reachable from ManageCategory's create/edit mode.
+//
+// Deactivated categories aren't otherwise exposed anywhere in this dialog
+// yet (no "show inactive" view, no reactivate) — that's a deliberate,
+// separate scope for a later change, not an oversight.
 
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
@@ -71,7 +67,6 @@ export function CategoryManagementDialog({
 
   // ── List state ────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
-  const [showInactive, setShowInactive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
 
@@ -88,85 +83,53 @@ export function CategoryManagementDialog({
     setCategories(next);
   }
 
-  // loadCategoriesRef gives handleToggleShowInactive a stable reference to
-  // the effect's loadCategories without making it a useEffect dependency.
-  const loadCategoriesRef = useRef<(includeInactive: boolean) => void>(() => {});
-
-  // The create endpoint reactivates a soft-deleted (household, name, type)
-  // match instead of inserting a new row, returning that row's existing id.
-  // With Show inactive on, categoriesRef can already hold that (inactive)
-  // row — appending the "created" response as a new entry would then
-  // duplicate it under the same id/key. Replace it in place when present.
-  function upsertCategory(list: Category[], category: Category): Category[] {
-    return list.some(c => c.id === category.id)
-      ? list.map(c => (c.id === category.id ? category : c))
-      : [...list, category];
-  }
-
   // ── Form state (create / edit) ────────────────────────────────────────────
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<CategoryType>('spending');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isReactivating, setIsReactivating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // True for the duration of any create/edit/deactivate/reactivate — see
-  // the file-level comment on why every other action is disabled while so.
-  const isMutating = isSaving || isDeleting || isReactivating;
+  // True for the duration of any create/edit/deactivate — see the
+  // file-level comment on why every other action is disabled while so.
+  const isMutating = isSaving || isDeleting;
 
-  // ── Load on open; reset mode and filters each time ───────────────────────
+  // ── Load on open ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
     let ignore = false;
+    const fetchId = ++fetchIdRef.current;
+    const versionAtStart = categoriesVersionRef.current;
 
-    function loadCategories(includeInactive: boolean) {
-      const fetchId = ++fetchIdRef.current;
-      const versionAtStart = categoriesVersionRef.current;
-      setIsLoading(true);
-      setListError(null);
-      listCategories(householdId, includeInactive)
-        .then(result => {
-          if (ignore || fetchId !== fetchIdRef.current) return;
-          if (categoriesVersionRef.current !== versionAtStart) {
-            // A mutation wrote `categories` after this fetch started — this
-            // result predates that write, so applying it now would revert
-            // it. But it may be the only response that reflects this
-            // request's own filter (e.g. include_inactive), so re-issue it
-            // rather than dropping it — the mutation is already committed
-            // server-side by now, so the next response reflects both.
-            loadCategories(includeInactive);
-            return;
-          }
-          writeCategories(result);
-        })
-        .catch(() => {
-          if (ignore || fetchId !== fetchIdRef.current) return;
-          if (categoriesVersionRef.current !== versionAtStart) {
-            // Same reasoning as the .then() branch above: a mutation
-            // already landed while this request was in flight, so this
-            // failure isn't about anything the user did — surfacing it
-            // would hide an otherwise-correct list behind an error with no
-            // retry control. Re-issue the request instead of giving up.
-            loadCategories(includeInactive);
-            return;
-          }
-          setListError('Could not load categories. Please try again.');
-        })
-        .finally(() => {
-          if (ignore || fetchId !== fetchIdRef.current) return;
-          setIsLoading(false);
-        });
-    }
-
-    loadCategoriesRef.current = loadCategories;
-    // Resets mode and kicks off a network fetch; loading/error state must
-    // flip synchronously before it resolves.
+    // Resets mode; loading/error state must flip synchronously before the
+    // fetch below resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode('list');
-    setShowInactive(false);
-    loadCategories(false);
+    setIsLoading(true);
+    setListError(null);
+    listCategories(householdId)
+      .then(result => {
+        if (ignore || fetchId !== fetchIdRef.current) return;
+        // A mutation already wrote `categories` after this fetch started —
+        // this result predates that write and would revert it if applied,
+        // so it's discarded; the mutation's own optimistic update already
+        // reflects the current state.
+        if (categoriesVersionRef.current !== versionAtStart) return;
+        writeCategories(result);
+      })
+      .catch(() => {
+        if (ignore || fetchId !== fetchIdRef.current) return;
+        // Same reasoning as above: a mutation already landed, so this
+        // failure isn't about anything the user did and the list is
+        // already correct — surfacing it would be misleading.
+        if (categoriesVersionRef.current !== versionAtStart) return;
+        setListError('Could not load categories. Please try again.');
+      })
+      .finally(() => {
+        if (ignore || fetchId !== fetchIdRef.current) return;
+        setIsLoading(false);
+      });
 
     return () => {
       ignore = true;
@@ -175,8 +138,9 @@ export function CategoryManagementDialog({
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {
-    // Guards both the Dialog's own onClose (backdrop click / Escape, which
-    // ListCategories' disabled prop can't reach) and its Close button.
+    // Guards the Dialog's own onClose (backdrop click / Escape) — its own
+    // Close button is also wired to this, but list mode (where that
+    // button lives) is never rendered while isMutating is true.
     if (isMutating) return;
     setMode('list');
     setEditingCategory(null);
@@ -207,11 +171,6 @@ export function CategoryManagementDialog({
     setFormError(null);
   }
 
-  function handleToggleShowInactive(next: boolean) {
-    setShowInactive(next);
-    loadCategoriesRef.current(next);
-  }
-
   async function handleSave() {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -230,9 +189,7 @@ export function CategoryManagementDialog({
           type,
           household_id: householdId,
         });
-        // A reactivated (soft-deleted) row comes back with its existing id
-        // — upsert rather than append, or it duplicates under that id/key.
-        nextCategories = upsertCategory(categoriesRef.current, created);
+        nextCategories = [...categoriesRef.current, created];
       } else if (mode === 'edit' && editingCategory) {
         const updated = await updateCategory(editingCategory.id, { name: trimmedName });
         nextCategories = categoriesRef.current.map(c => (c.id === updated.id ? updated : c));
@@ -256,9 +213,7 @@ export function CategoryManagementDialog({
 
     try {
       await deleteCategory(categoryId);
-      const nextCategories = showInactive
-        ? categoriesRef.current.map(c => (c.id === categoryId ? { ...c, is_active: false } : c))
-        : categoriesRef.current.filter(c => c.id !== categoryId);
+      const nextCategories = categoriesRef.current.filter(c => c.id !== categoryId);
       writeCategories(nextCategories);
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
@@ -266,24 +221,6 @@ export function CategoryManagementDialog({
       setFormError(err instanceof ApiError ? err.message : 'Could not deactivate category.');
     } finally {
       setIsDeleting(false);
-    }
-  }
-
-  async function handleReactivate(categoryId: number) {
-    setIsReactivating(true);
-    setListError(null);
-    try {
-      const updated = await updateCategory(categoryId, { is_active: true });
-      // Mirrors the create path's upsert above for the same reason, even
-      // though nothing can race it into a missing entry here now that
-      // Show inactive is disabled for the duration of this request.
-      const nextCategories = upsertCategory(categoriesRef.current, updated);
-      writeCategories(nextCategories);
-      onCategoriesChanged(nextCategories.filter(c => c.is_active));
-    } catch {
-      setListError('Could not reactivate category. Please try again.');
-    } finally {
-      setIsReactivating(false);
     }
   }
 
@@ -301,13 +238,9 @@ export function CategoryManagementDialog({
             categories={categories}
             isLoading={isLoading}
             error={listError}
-            showInactive={showInactive}
-            onToggleShowInactive={handleToggleShowInactive}
             onEdit={openEdit}
-            onReactivate={handleReactivate}
             onNewCategory={openCreate}
             onClose={handleClose}
-            disabled={isMutating}
           />
         )}
 

@@ -13,9 +13,7 @@ const CATEGORIES: Category[] = [
 ];
 
 function setup(overrides: Partial<React.ComponentProps<typeof ListCategories>> = {}) {
-  const onToggleShowInactive = vi.fn();
   const onEdit = vi.fn();
-  const onReactivate = vi.fn();
   const onNewCategory = vi.fn();
   const onClose = vi.fn();
 
@@ -24,18 +22,14 @@ function setup(overrides: Partial<React.ComponentProps<typeof ListCategories>> =
       categories={CATEGORIES}
       isLoading={false}
       error={null}
-      showInactive={false}
-      onToggleShowInactive={onToggleShowInactive}
       onEdit={onEdit}
-      onReactivate={onReactivate}
       onNewCategory={onNewCategory}
       onClose={onClose}
-      disabled={false}
       {...overrides}
     />,
   );
 
-  return { onToggleShowInactive, onEdit, onReactivate, onNewCategory, onClose };
+  return { onEdit, onNewCategory, onClose };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -54,7 +48,7 @@ describe('ListCategories rendering', () => {
     expect(screen.getByText('Earning')).toBeDefined();
   });
 
-  it('renders an edit button for each active category', () => {
+  it('renders an edit button for each category', () => {
     setup();
     expect(screen.getByRole('button', { name: /edit groceries/i })).toBeDefined();
     expect(screen.getByRole('button', { name: /edit utilities/i })).toBeDefined();
@@ -85,19 +79,6 @@ describe('ListCategories rendering', () => {
     setup({ categories: [], error: 'Could not load categories. Please try again.' });
     expect(screen.getByText('Could not load categories. Please try again.')).toBeDefined();
   });
-
-  it('renders inactive categories as Reactivate rows, not Edit', () => {
-    setup({
-      categories: [
-        ...CATEGORIES,
-        { id: 4, name: 'Old category', type: 'spending', is_active: false, household_id: 1 },
-      ],
-      showInactive: true,
-    });
-    expect(screen.getByText('Old category')).toBeDefined();
-    expect(screen.getByRole('button', { name: /reactivate/i })).toBeDefined();
-    expect(screen.queryByRole('button', { name: /edit old category/i })).toBeNull();
-  });
 });
 
 describe('ListCategories interactions', () => {
@@ -117,53 +98,5 @@ describe('ListCategories interactions', () => {
     const { onClose } = setup();
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
     expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it('calls onReactivate with the category id when Reactivate is clicked', () => {
-    const { onReactivate } = setup({
-      categories: [
-        { id: 4, name: 'Old category', type: 'spending', is_active: false, household_id: 1 },
-      ],
-      showInactive: true,
-    });
-    fireEvent.click(screen.getByRole('button', { name: /reactivate/i }));
-    expect(onReactivate).toHaveBeenCalledWith(4);
-  });
-
-  it('calls onToggleShowInactive when the switch is toggled', () => {
-    const { onToggleShowInactive } = setup();
-    fireEvent.click(screen.getByRole('checkbox', { name: /show inactive/i }));
-    expect(onToggleShowInactive).toHaveBeenCalledWith(true);
-  });
-});
-
-describe('ListCategories disabled', () => {
-  it('disables every action while a mutation is in flight', () => {
-    setup({
-      categories: [
-        { id: 4, name: 'Old category', type: 'spending', is_active: false, household_id: 1 },
-      ],
-      showInactive: true,
-      disabled: true,
-    });
-    expect((screen.getByRole('button', { name: /close/i }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
-    expect(
-      (screen.getByRole('button', { name: /new category/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    expect(
-      (screen.getByRole('checkbox', { name: /show inactive/i }) as HTMLInputElement).disabled,
-    ).toBe(true);
-    expect(
-      (screen.getByRole('button', { name: /reactivate/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-  });
-
-  it('disables each category\'s edit button while a mutation is in flight', () => {
-    setup({ disabled: true });
-    expect(
-      (screen.getByRole('button', { name: /edit groceries/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
   });
 });

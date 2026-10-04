@@ -18,13 +18,9 @@ const meta: Meta<typeof ListCategories> = {
     categories: CATEGORIES,
     isLoading: false,
     error: null,
-    showInactive: false,
-    onToggleShowInactive: () => {},
     onEdit: () => {},
-    onReactivate: () => {},
     onNewCategory: () => {},
     onClose: () => {},
-    disabled: false,
   },
 };
 
@@ -48,20 +44,6 @@ export const LoadError: Story = {
   },
 };
 
-export const WithInactive: Story = {
-  args: {
-    categories: [
-      ...CATEGORIES,
-      { id: 4, name: 'Old category', type: 'spending' as const, is_active: false, household_id: 1 },
-    ],
-    showInactive: true,
-  },
-};
-
 export const SpendingOnly: Story = {
   args: { categories: CATEGORIES.filter(c => c.type === 'spending') },
-};
-
-export const MutationInFlight: Story = {
-  args: { disabled: true },
 };

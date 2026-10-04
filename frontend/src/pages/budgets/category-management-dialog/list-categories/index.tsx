@@ -1,22 +1,12 @@
 // pages/budgets/category-management-dialog/list-categories/index.tsx
 //
-// List mode — categories grouped into Spending/Earning sections (matching
-// the Category model's own ordering), each active row with an edit button.
-// A "Show inactive" toggle reveals deactivated categories with a Reactivate
-// action instead of Edit.
+// List mode — active categories grouped into Spending/Earning sections
+// (matching the Category model's own ordering), each row with an edit
+// button. Deactivated categories aren't shown here — that's a deliberate,
+// separate scope for a later change.
 
 import EditIcon from '@mui/icons-material/Edit';
-import {
-  Alert,
-  Box,
-  Button,
-  CircularProgress,
-  FormControlLabel,
-  IconButton,
-  Switch,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Alert, Box, Button, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 
 import type { Category } from '@serve/types/global';
 
@@ -24,31 +14,19 @@ interface ListCategoriesProps {
   categories: Category[];
   isLoading: boolean;
   error: string | null;
-  showInactive: boolean;
-  onToggleShowInactive: (next: boolean) => void;
   onEdit: (category: Category) => void;
-  onReactivate: (categoryId: number) => void;
   onNewCategory: () => void;
   onClose: () => void;
-  // True while a create/edit/deactivate/reactivate is in flight. Every
-  // action here (including Close) is disabled while true — a mutation's
-  // result is applied directly against whatever's currently loaded, with
-  // no staleness guard, so nothing else may run concurrently with it.
-  disabled: boolean;
 }
 
 function CategoryGroup({
   title,
   categories,
   onEdit,
-  onReactivate,
-  disabled,
 }: {
   title: string;
   categories: Category[];
   onEdit: (category: Category) => void;
-  onReactivate: (categoryId: number) => void;
-  disabled: boolean;
 }) {
   if (categories.length === 0) return null;
 
@@ -62,33 +40,17 @@ function CategoryGroup({
           key={category.id}
           sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.5 }}
         >
-          <Typography
-            variant="body2"
-            sx={{ color: category.is_active ? 'text.primary' : 'text.disabled' }}
-          >
-            {category.name}
-          </Typography>
-          {category.is_active ? (
-            <Tooltip title={`Edit "${category.name}"`}>
-              {/* A disabled child doesn't fire the events Tooltip listens
-                  for — wrap it in a span, per MUI's own guidance. */}
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label={`Edit ${category.name}`}
-                  onClick={() => onEdit(category)}
-                  disabled={disabled}
-                  sx={{ color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                >
-                  <EditIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
-          ) : (
-            <Button size="small" onClick={() => onReactivate(category.id)} disabled={disabled}>
-              Reactivate
-            </Button>
-          )}
+          <Typography variant="body2">{category.name}</Typography>
+          <Tooltip title={`Edit "${category.name}"`}>
+            <IconButton
+              size="small"
+              aria-label={`Edit ${category.name}`}
+              onClick={() => onEdit(category)}
+              sx={{ color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+            >
+              <EditIcon sx={{ fontSize: 16 }} />
+            </IconButton>
+          </Tooltip>
         </Box>
       ))}
     </Box>
@@ -99,13 +61,9 @@ export function ListCategories({
   categories,
   isLoading,
   error,
-  showInactive,
-  onToggleShowInactive,
   onEdit,
-  onReactivate,
   onNewCategory,
   onClose,
-  disabled,
 }: ListCategoriesProps) {
   const spending = categories.filter(c => c.type === 'spending');
   const earning = categories.filter(c => c.type === 'earning');
@@ -126,41 +84,14 @@ export function ListCategories({
         </Typography>
       ) : (
         <>
-          <CategoryGroup
-            title="Spending"
-            categories={spending}
-            onEdit={onEdit}
-            onReactivate={onReactivate}
-            disabled={disabled}
-          />
-          <CategoryGroup
-            title="Earning"
-            categories={earning}
-            onEdit={onEdit}
-            onReactivate={onReactivate}
-            disabled={disabled}
-          />
+          <CategoryGroup title="Spending" categories={spending} onEdit={onEdit} />
+          <CategoryGroup title="Earning" categories={earning} onEdit={onEdit} />
         </>
       )}
 
-      <FormControlLabel
-        control={
-          <Switch
-            size="small"
-            checked={showInactive}
-            onChange={e => onToggleShowInactive(e.target.checked)}
-            disabled={disabled}
-          />
-        }
-        label={<Typography variant="body2">Show inactive</Typography>}
-        sx={{ mb: 1 }}
-      />
-
       <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
-        <Button onClick={onClose} disabled={disabled}>
-          Close
-        </Button>
-        <Button variant="contained" onClick={onNewCategory} disabled={disabled}>
+        <Button onClick={onClose}>Close</Button>
+        <Button variant="contained" onClick={onNewCategory}>
           New category
         </Button>
       </Box>

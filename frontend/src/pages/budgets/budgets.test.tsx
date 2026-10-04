@@ -103,7 +103,7 @@ describe('BudgetsPage category management', () => {
     fireEvent.click(screen.getByRole('button', { name: /manage categories/i }));
     expect(screen.getByRole('dialog')).toBeDefined();
     expect(screen.getByText('Categories — Test Household')).toBeDefined();
-    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledWith(1, false));
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledWith(1));
   });
 });
 
