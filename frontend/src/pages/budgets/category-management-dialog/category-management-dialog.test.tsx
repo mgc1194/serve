@@ -264,8 +264,8 @@ describe('CategoryManagementDialog stale list responses', () => {
   });
 });
 
-describe('CategoryManagementDialog household scope guard', () => {
-  it('discards a create response instead of writing it once the household being viewed has changed', async () => {
+describe('CategoryManagementDialog disables every other action during a mutation', () => {
+  it('does not close on backdrop click while a create is saving', async () => {
     let resolveCreate: (category: {
       id: number;
       name: string;
@@ -279,7 +279,7 @@ describe('CategoryManagementDialog household scope guard', () => {
       }),
     );
 
-    const { onCategoriesChanged, rerenderWith } = setup();
+    const { onClose } = setup();
     await waitFor(() => screen.getByText('Groceries'));
 
     fireEvent.click(screen.getByRole('button', { name: /new category/i }));
@@ -287,55 +287,57 @@ describe('CategoryManagementDialog household scope guard', () => {
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
     await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
 
-    // The household being viewed changes (e.g. via the Switch household
-    // control elsewhere on the page) before the create resolves.
-    mockListCategories.mockResolvedValueOnce([
-      { id: 10, name: 'Rent', type: 'spending' as const, is_active: true, household_id: 2 },
-    ]);
-    rerenderWith({ householdId: 2, householdName: 'Jones Household' });
-    await waitFor(() => screen.getByText('Rent'));
+    // Without this, the dialog could close (and later reopen, for the same
+    // or a different household) while the create is still in flight — its
+    // late response would then land in whatever session is open by then.
+    const backdrop = document.querySelector('.MuiBackdrop-root') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
 
-    // The create (for the first household) resolves only now — it must
-    // not be written into the second household's list or reported upward.
     await act(async () => {
       resolveCreate({ id: 99, name: 'Utilities', type: 'spending', is_active: true, household_id: 1 });
     });
-
-    expect(screen.queryByText('Utilities')).toBeNull();
-    expect(screen.getByText('Rent')).toBeDefined();
-    expect(onCategoriesChanged).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('discards a deactivate response instead of writing it once the household being viewed has changed', async () => {
-    let resolveDelete: () => void = () => {};
-    mockDeleteCategory.mockReturnValueOnce(
+  it('disables Close, New category, and Show inactive in the list while a reactivate is in flight', async () => {
+    mockListCategories.mockResolvedValueOnce(CATEGORIES);
+    const inactiveUtilities = {
+      id: 5,
+      name: 'Utilities',
+      type: 'spending' as const,
+      is_active: false,
+      household_id: 1,
+    };
+    mockListCategories.mockResolvedValueOnce([...CATEGORIES, inactiveUtilities]);
+    let resolveReactivate: (category: typeof inactiveUtilities) => void = () => {};
+    mockUpdateCategory.mockReturnValueOnce(
       new Promise(resolve => {
-        resolveDelete = resolve;
+        resolveReactivate = resolve;
       }),
     );
 
-    const { onCategoriesChanged, rerenderWith } = setup();
+    setup();
     await waitFor(() => screen.getByText('Groceries'));
-    fireEvent.click(screen.getByRole('button', { name: /edit groceries/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^deactivate$/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }));
-    await waitFor(() => expect(mockDeleteCategory).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('checkbox', { name: /show inactive/i }));
+    await waitFor(() => screen.getByText('Utilities'));
 
-    mockListCategories.mockResolvedValueOnce([
-      { id: 10, name: 'Rent', type: 'spending' as const, is_active: true, household_id: 2 },
-    ]);
-    rerenderWith({ householdId: 2, householdName: 'Jones Household' });
-    await waitFor(() => screen.getByText('Rent'));
+    fireEvent.click(screen.getByRole('button', { name: /reactivate/i }));
+    await waitFor(() =>
+      expect((screen.getByRole('button', { name: /^close$/i }) as HTMLButtonElement).disabled).toBe(
+        true,
+      ),
+    );
+    expect(
+      (screen.getByRole('button', { name: /new category/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('checkbox', { name: /show inactive/i }) as HTMLInputElement).disabled,
+    ).toBe(true);
 
     await act(async () => {
-      resolveDelete();
+      resolveReactivate({ ...inactiveUtilities, is_active: true });
     });
-
-    // Groceries belongs to the first household and must not be affected —
-    // in particular, it must not vanish from a list it's no longer even
-    // part of (this household's own Groceries, if it has one, is unrelated).
-    expect(onCategoriesChanged).not.toHaveBeenCalled();
-    expect(screen.getByText('Rent')).toBeDefined();
   });
 });
 

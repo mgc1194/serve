@@ -30,6 +30,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof ListCategories>> =
       onReactivate={onReactivate}
       onNewCategory={onNewCategory}
       onClose={onClose}
+      disabled={false}
       {...overrides}
     />,
   );
@@ -133,5 +134,36 @@ describe('ListCategories interactions', () => {
     const { onToggleShowInactive } = setup();
     fireEvent.click(screen.getByRole('checkbox', { name: /show inactive/i }));
     expect(onToggleShowInactive).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('ListCategories disabled', () => {
+  it('disables every action while a mutation is in flight', () => {
+    setup({
+      categories: [
+        { id: 4, name: 'Old category', type: 'spending', is_active: false, household_id: 1 },
+      ],
+      showInactive: true,
+      disabled: true,
+    });
+    expect((screen.getByRole('button', { name: /close/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    expect(
+      (screen.getByRole('button', { name: /new category/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('checkbox', { name: /show inactive/i }) as HTMLInputElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: /reactivate/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('disables each category\'s edit button while a mutation is in flight', () => {
+    setup({ disabled: true });
+    expect(
+      (screen.getByRole('button', { name: /edit groceries/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });

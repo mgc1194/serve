@@ -22,14 +22,17 @@
 // guard for isLoading/listError, so only the most recently started fetch
 // (not an unrelated mutation) controls those — see the effect below for both.
 //
-// Dialog close/backdrop/Escape stay available while a mutation is saving, so
-// the household being viewed can change (via the Switch household control
-// elsewhere on the page) before an awaited create/edit/deactivate/reactivate
-// resolves. householdIdRef mirrors the current `householdId` prop; each
-// mutation captures its own request's householdId and checks it against
-// that ref before touching `categories` or calling onCategoriesChanged —
-// otherwise a household-A response arriving after the view has moved on to
-// household B would leak A's category into B's list and its parent callback.
+// That reconciliation only has to cope with list *fetches* racing a
+// mutation, not with a second mutation, a household switch, or a dialog
+// close/reopen racing the first one — isMutating disables every other
+// action (ListCategories' disabled prop, ManageCategory's own isSaving/
+// isDeleting, and the Dialog's onClose) for the duration of a create/edit/
+// deactivate/reactivate, so at most one mutation is ever in flight and
+// nothing else can run until it settles. Each handler can then apply its
+// result directly against whatever's currently loaded with no staleness
+// guard of its own — there's no later dialog session or different
+// household for a late response to leak into, because there's no way to
+// start one before this one's mutation finishes.
 
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
@@ -79,14 +82,6 @@ export function CategoryManagementDialog({
   const categoriesVersionRef = useRef(0);
   const fetchIdRef = useRef(0);
 
-  // Always the latest householdId prop — see the file-level comment on why
-  // mutation handlers compare against this instead of trusting their own
-  // closure's householdId once their await resolves.
-  const householdIdRef = useRef(householdId);
-  useEffect(() => {
-    householdIdRef.current = householdId;
-  }, [householdId]);
-
   function writeCategories(next: Category[]) {
     categoriesVersionRef.current += 1;
     categoriesRef.current = next;
@@ -114,7 +109,12 @@ export function CategoryManagementDialog({
   const [type, setType] = useState<CategoryType>('spending');
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReactivating, setIsReactivating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // True for the duration of any create/edit/deactivate/reactivate — see
+  // the file-level comment on why every other action is disabled while so.
+  const isMutating = isSaving || isDeleting || isReactivating;
 
   // ── Load on open; reset mode and filters each time ───────────────────────
   useEffect(() => {
@@ -175,6 +175,9 @@ export function CategoryManagementDialog({
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {
+    // Guards both the Dialog's own onClose (backdrop click / Escape, which
+    // ListCategories' disabled prop can't reach) and its Close button.
+    if (isMutating) return;
     setMode('list');
     setEditingCategory(null);
     setName('');
@@ -216,7 +219,6 @@ export function CategoryManagementDialog({
       return;
     }
 
-    const requestHouseholdId = householdId;
     setIsSaving(true);
     setFormError(null);
 
@@ -228,13 +230,11 @@ export function CategoryManagementDialog({
           type,
           household_id: householdId,
         });
-        if (requestHouseholdId !== householdIdRef.current) return;
         // A reactivated (soft-deleted) row comes back with its existing id
         // — upsert rather than append, or it duplicates under that id/key.
         nextCategories = upsertCategory(categoriesRef.current, created);
       } else if (mode === 'edit' && editingCategory) {
         const updated = await updateCategory(editingCategory.id, { name: trimmedName });
-        if (requestHouseholdId !== householdIdRef.current) return;
         nextCategories = categoriesRef.current.map(c => (c.id === updated.id ? updated : c));
       } else {
         return;
@@ -244,7 +244,6 @@ export function CategoryManagementDialog({
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
     } catch (err) {
-      if (requestHouseholdId !== householdIdRef.current) return;
       setFormError(err instanceof ApiError ? err.message : 'Could not save category.');
     } finally {
       setIsSaving(false);
@@ -252,13 +251,11 @@ export function CategoryManagementDialog({
   }
 
   async function handleDeactivate(categoryId: number) {
-    const requestHouseholdId = householdId;
     setIsDeleting(true);
     setFormError(null);
 
     try {
       await deleteCategory(categoryId);
-      if (requestHouseholdId !== householdIdRef.current) return;
       const nextCategories = showInactive
         ? categoriesRef.current.map(c => (c.id === categoryId ? { ...c, is_active: false } : c))
         : categoriesRef.current.filter(c => c.id !== categoryId);
@@ -266,7 +263,6 @@ export function CategoryManagementDialog({
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
     } catch (err) {
-      if (requestHouseholdId !== householdIdRef.current) return;
       setFormError(err instanceof ApiError ? err.message : 'Could not deactivate category.');
     } finally {
       setIsDeleting(false);
@@ -274,17 +270,20 @@ export function CategoryManagementDialog({
   }
 
   async function handleReactivate(categoryId: number) {
-    const requestHouseholdId = householdId;
+    setIsReactivating(true);
     setListError(null);
     try {
       const updated = await updateCategory(categoryId, { is_active: true });
-      if (requestHouseholdId !== householdIdRef.current) return;
-      const nextCategories = categoriesRef.current.map(c => (c.id === categoryId ? updated : c));
+      // Mirrors the create path's upsert above for the same reason, even
+      // though nothing can race it into a missing entry here now that
+      // Show inactive is disabled for the duration of this request.
+      const nextCategories = upsertCategory(categoriesRef.current, updated);
       writeCategories(nextCategories);
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
     } catch {
-      if (requestHouseholdId !== householdIdRef.current) return;
       setListError('Could not reactivate category. Please try again.');
+    } finally {
+      setIsReactivating(false);
     }
   }
 
@@ -308,6 +307,7 @@ export function CategoryManagementDialog({
             onReactivate={handleReactivate}
             onNewCategory={openCreate}
             onClose={handleClose}
+            disabled={isMutating}
           />
         )}
 

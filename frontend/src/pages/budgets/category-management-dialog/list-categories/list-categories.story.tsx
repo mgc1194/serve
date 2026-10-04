@@ -24,6 +24,7 @@ const meta: Meta<typeof ListCategories> = {
     onReactivate: () => {},
     onNewCategory: () => {},
     onClose: () => {},
+    disabled: false,
   },
 };
 
@@ -59,4 +60,8 @@ export const WithInactive: Story = {
 
 export const SpendingOnly: Story = {
   args: { categories: CATEGORIES.filter(c => c.type === 'spending') },
+};
+
+export const MutationInFlight: Story = {
+  args: { disabled: true },
 };

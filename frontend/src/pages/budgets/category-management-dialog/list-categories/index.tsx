@@ -30,6 +30,11 @@ interface ListCategoriesProps {
   onReactivate: (categoryId: number) => void;
   onNewCategory: () => void;
   onClose: () => void;
+  // True while a create/edit/deactivate/reactivate is in flight. Every
+  // action here (including Close) is disabled while true — a mutation's
+  // result is applied directly against whatever's currently loaded, with
+  // no staleness guard, so nothing else may run concurrently with it.
+  disabled: boolean;
 }
 
 function CategoryGroup({
@@ -37,11 +42,13 @@ function CategoryGroup({
   categories,
   onEdit,
   onReactivate,
+  disabled,
 }: {
   title: string;
   categories: Category[];
   onEdit: (category: Category) => void;
   onReactivate: (categoryId: number) => void;
+  disabled: boolean;
 }) {
   if (categories.length === 0) return null;
 
@@ -63,17 +70,22 @@ function CategoryGroup({
           </Typography>
           {category.is_active ? (
             <Tooltip title={`Edit "${category.name}"`}>
-              <IconButton
-                size="small"
-                aria-label={`Edit ${category.name}`}
-                onClick={() => onEdit(category)}
-                sx={{ color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-              >
-                <EditIcon sx={{ fontSize: 16 }} />
-              </IconButton>
+              {/* A disabled child doesn't fire the events Tooltip listens
+                  for — wrap it in a span, per MUI's own guidance. */}
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label={`Edit ${category.name}`}
+                  onClick={() => onEdit(category)}
+                  disabled={disabled}
+                  sx={{ color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
+                >
+                  <EditIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </span>
             </Tooltip>
           ) : (
-            <Button size="small" onClick={() => onReactivate(category.id)}>
+            <Button size="small" onClick={() => onReactivate(category.id)} disabled={disabled}>
               Reactivate
             </Button>
           )}
@@ -93,6 +105,7 @@ export function ListCategories({
   onReactivate,
   onNewCategory,
   onClose,
+  disabled,
 }: ListCategoriesProps) {
   const spending = categories.filter(c => c.type === 'spending');
   const earning = categories.filter(c => c.type === 'earning');
@@ -118,12 +131,14 @@ export function ListCategories({
             categories={spending}
             onEdit={onEdit}
             onReactivate={onReactivate}
+            disabled={disabled}
           />
           <CategoryGroup
             title="Earning"
             categories={earning}
             onEdit={onEdit}
             onReactivate={onReactivate}
+            disabled={disabled}
           />
         </>
       )}
@@ -134,6 +149,7 @@ export function ListCategories({
             size="small"
             checked={showInactive}
             onChange={e => onToggleShowInactive(e.target.checked)}
+            disabled={disabled}
           />
         }
         label={<Typography variant="body2">Show inactive</Typography>}
@@ -141,8 +157,10 @@ export function ListCategories({
       />
 
       <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
-        <Button onClick={onClose}>Close</Button>
-        <Button variant="contained" onClick={onNewCategory}>
+        <Button onClick={onClose} disabled={disabled}>
+          Close
+        </Button>
+        <Button variant="contained" onClick={onNewCategory} disabled={disabled}>
           New category
         </Button>
       </Box>
