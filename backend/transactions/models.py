@@ -129,6 +129,17 @@ class Transaction(models.Model):
         related_name='transactions',
     )
     imported_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text=(
+            'Bumped on every save, not just import — reassigning label/category, '
+            'toggling exclude_from_summary, or editing amount all count. Lets '
+            'callers that cache a computation over a set of transactions (e.g. '
+            'budget actuals) detect staleness by comparing against the latest '
+            'updated_at in that set, without needing to redo the computation to '
+            'find out whether anything changed.'
+        ),
+    )
 
     class Meta:
         db_table = 'transactions'
