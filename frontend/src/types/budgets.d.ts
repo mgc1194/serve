@@ -16,7 +16,10 @@ export interface BudgetLine {
   category_id: number;
   category_name: string;
   category_type: 'earning' | 'spending';
-  planned_amount: string;
+  // Whole dollars — cents aren't meaningful for a planning target.
+  planned_amount: number;
+  // A Decimal on the wire (as a string): computed from real transaction
+  // amounts, which do carry cents.
   actual_amount: string;
   notes: string;
 }

@@ -22,7 +22,7 @@ export function makeBudgetLine(overrides: Partial<BudgetLine> = {}): BudgetLine 
     category_id: 1,
     category_name: 'Groceries',
     category_type: 'spending',
-    planned_amount: '0.00',
+    planned_amount: 0,
     actual_amount: '0.00',
     notes: '',
     ...overrides,

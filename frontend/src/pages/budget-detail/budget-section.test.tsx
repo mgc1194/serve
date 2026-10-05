@@ -12,7 +12,7 @@ const EXPENSE_LINES = [
     category_id: 1,
     category_name: 'Retirement',
     category_type: 'spending',
-    planned_amount: '1170.00',
+    planned_amount: 1170,
     actual_amount: '0.00',
   }),
 ];
@@ -23,7 +23,7 @@ const INCOME_LINES = [
     category_id: 2,
     category_name: 'Paycheck',
     category_type: 'earning',
-    planned_amount: '12680.00',
+    planned_amount: 12680,
     actual_amount: '10000.00',
   }),
 ];
@@ -95,7 +95,7 @@ describe('BudgetSection interactions', () => {
     const input = screen.getByLabelText(/planned amount/i);
     fireEvent.change(input, { target: { value: '1500' } });
     fireEvent.blur(input);
-    expect(onPlannedAmountChange).toHaveBeenCalledWith(1, '1500.00');
+    expect(onPlannedAmountChange).toHaveBeenCalledWith(1, 1500);
   });
 
   it('calls onRemove with the line id when the remove button is clicked', () => {

@@ -33,7 +33,7 @@ const LINES = [
     category_id: 1,
     category_name: 'Paycheck',
     category_type: 'earning',
-    planned_amount: '12680.00',
+    planned_amount: 12680,
     actual_amount: '10000.00',
   }),
   makeBudgetLine({
@@ -41,7 +41,7 @@ const LINES = [
     category_id: 2,
     category_name: 'Retirement',
     category_type: 'spending',
-    planned_amount: '1170.00',
+    planned_amount: 1170,
     actual_amount: '500.00',
   }),
 ];
@@ -116,7 +116,7 @@ describe('BudgetDetailPage planned amount editing', () => {
   it('calls updateBudgetLine when a planned amount is edited', async () => {
     vi.spyOn(budgetsService, 'updateBudgetLine').mockResolvedValue({
       ...LINES[1],
-      planned_amount: '1500.00',
+      planned_amount: 1500,
     });
 
     renderPage();
@@ -124,14 +124,14 @@ describe('BudgetDetailPage planned amount editing', () => {
 
     const inputs = screen.getAllByLabelText(/planned amount/i);
     const retirementInput = inputs.find(
-      i => (i as HTMLInputElement).value === '1170.00',
+      i => (i as HTMLInputElement).value === '1170',
     ) as HTMLInputElement;
     fireEvent.change(retirementInput, { target: { value: '1500' } });
     fireEvent.blur(retirementInput);
 
     await waitFor(() =>
       expect(budgetsService.updateBudgetLine).toHaveBeenCalledWith(2, {
-        planned_amount: '1500.00',
+        planned_amount: 1500,
       }),
     );
   });
@@ -175,7 +175,10 @@ describe('BudgetDetailPage add category', () => {
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
     await waitFor(() =>
-      expect(budgetsService.createBudgetLine).toHaveBeenCalledWith(9, { category_id: 3 }),
+      expect(budgetsService.createBudgetLine).toHaveBeenCalledWith(9, {
+        category_id: 3,
+        planned_amount: 0,
+      }),
     );
     await screen.findAllByText('Utilities');
   });

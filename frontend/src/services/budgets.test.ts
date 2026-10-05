@@ -122,7 +122,7 @@ const line = {
   category_id: 2,
   category_name: 'Groceries',
   category_type: 'spending',
-  planned_amount: '250.00',
+  planned_amount: 250,
   actual_amount: '0.00',
   notes: '',
 };
@@ -147,7 +147,7 @@ describe('listBudgetLines', () => {
 describe('createBudgetLine', () => {
   it('sends POST with the payload and returns the created line', async () => {
     const spy = mockFetch(200, line);
-    const result = await createBudgetLine(1, { category_id: 2 });
+    const result = await createBudgetLine(1, { category_id: 2, planned_amount: 0 });
     expect(result).toEqual(line);
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining('/budgets/1/lines'),
@@ -157,17 +157,19 @@ describe('createBudgetLine', () => {
 
   it('throws ApiError with the server message on 400', async () => {
     mockFetch(400, { detail: '"Groceries" is already part of this budget.' });
-    await expect(createBudgetLine(1, { category_id: 2 })).rejects.toMatchObject({
-      message: '"Groceries" is already part of this budget.',
-    });
+    await expect(createBudgetLine(1, { category_id: 2, planned_amount: 0 })).rejects.toMatchObject(
+      {
+        message: '"Groceries" is already part of this budget.',
+      },
+    );
   });
 });
 
 describe('updateBudgetLine', () => {
   it('sends PATCH with the payload and returns the updated line', async () => {
-    const spy = mockFetch(200, { ...line, planned_amount: '500.00' });
-    const result = await updateBudgetLine(1, { planned_amount: '500.00' });
-    expect(result.planned_amount).toBe('500.00');
+    const spy = mockFetch(200, { ...line, planned_amount: 500 });
+    const result = await updateBudgetLine(1, { planned_amount: 500 });
+    expect(result.planned_amount).toBe(500);
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining('/budget-lines/1/'),
       expect.objectContaining({ method: 'PATCH' }),
@@ -176,7 +178,7 @@ describe('updateBudgetLine', () => {
 
   it('throws ApiError on 404', async () => {
     mockFetch(404, { detail: 'Not Found' });
-    await expect(updateBudgetLine(1, { planned_amount: '500.00' })).rejects.toMatchObject({
+    await expect(updateBudgetLine(1, { planned_amount: 500 })).rejects.toMatchObject({
       status: 404,
     });
   });

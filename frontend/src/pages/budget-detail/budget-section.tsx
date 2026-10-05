@@ -51,7 +51,7 @@ interface BudgetSectionProps {
   title: string;
   lines: BudgetLine[];
   isIncome: boolean;
-  onPlannedAmountChange: (lineId: number, value: string) => void;
+  onPlannedAmountChange: (lineId: number, value: number) => void;
   onRemove: (lineId: number) => void;
 }
 
@@ -62,7 +62,7 @@ export function BudgetSection({
   onPlannedAmountChange,
   onRemove,
 }: BudgetSectionProps) {
-  const plannedTotal = lines.reduce((sum, l) => sum + Number(l.planned_amount), 0);
+  const plannedTotal = lines.reduce((sum, l) => sum + l.planned_amount, 0);
   const actualTotal = lines.reduce((sum, l) => sum + Number(l.actual_amount), 0);
   const totalsDiff = isIncome ? actualTotal - plannedTotal : plannedTotal - actualTotal;
 
@@ -108,7 +108,7 @@ export function BudgetSection({
               <TableCell />
             </TableRow>
             {lines.map(line => {
-              const planned = Number(line.planned_amount);
+              const planned = line.planned_amount;
               const actual = Number(line.actual_amount);
               const diff = isIncome ? actual - planned : planned - actual;
               return (

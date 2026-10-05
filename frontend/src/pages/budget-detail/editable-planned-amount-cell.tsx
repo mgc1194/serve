@@ -1,18 +1,21 @@
 // pages/budget-detail/editable-planned-amount-cell.tsx
 //
 // Inline-editable planned amount, spreadsheet-style: type a new value, blur
-// or Enter to save. Local input state resyncs when the value prop changes
-// externally (e.g. after a successful save returns the canonical value),
-// mirroring the "compare prev vs. current prop" pattern already used in
-// TransactionLabelCell for the same local-edit-state-vs-prop-drift problem.
+// or Enter to save. Whole dollars only — cents aren't meaningful for a
+// planning target, so a typed fractional value is rounded to the nearest
+// dollar rather than rejected. Local input state resyncs when the value
+// prop changes externally (e.g. after a successful save returns the
+// canonical value), mirroring the "compare prev vs. current prop" pattern
+// already used in TransactionLabelCell for the same
+// local-edit-state-vs-prop-drift problem.
 
 import { InputBase } from '@mui/material';
 import { useState } from 'react';
 
 interface EditablePlannedAmountCellProps {
-  value: string;
+  value: number;
   disabled?: boolean;
-  onSave: (value: string) => void;
+  onSave: (value: number) => void;
 }
 
 export function EditablePlannedAmountCell({
@@ -20,22 +23,22 @@ export function EditablePlannedAmountCell({
   disabled = false,
   onSave,
 }: EditablePlannedAmountCellProps) {
-  const [inputValue, setInputValue] = useState(value);
+  const [inputValue, setInputValue] = useState(String(value));
   const [prevValue, setPrevValue] = useState(value);
   if (value !== prevValue) {
     setPrevValue(value);
-    setInputValue(value);
+    setInputValue(String(value));
   }
 
   function commit() {
     const trimmed = inputValue.trim();
     if (trimmed === '' || Number.isNaN(Number(trimmed))) {
-      setInputValue(value);
+      setInputValue(String(value));
       return;
     }
-    const normalized = Number(trimmed).toFixed(2);
-    if (Number(normalized) === Number(value)) {
-      setInputValue(normalized);
+    const normalized = Math.round(Number(trimmed));
+    if (normalized === value) {
+      setInputValue(String(normalized));
       return;
     }
     onSave(normalized);
@@ -51,7 +54,7 @@ export function EditablePlannedAmountCell({
       }}
       disabled={disabled}
       inputProps={{
-        inputMode: 'decimal',
+        inputMode: 'numeric',
         'aria-label': 'Planned amount',
         style: { textAlign: 'right' },
       }}

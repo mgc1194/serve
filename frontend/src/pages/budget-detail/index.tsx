@@ -106,7 +106,7 @@ export function BudgetDetailPage() {
     };
   }, [householdId, budgetId]);
 
-  async function handlePlannedAmountChange(lineId: number, value: string) {
+  async function handlePlannedAmountChange(lineId: number, value: number) {
     setActionError(null);
     try {
       const updated = await updateBudgetLine(lineId, { planned_amount: value });
@@ -133,7 +133,7 @@ export function BudgetDetailPage() {
     try {
       const created = await Promise.all(
         selectedCategoryIds.map(categoryId =>
-          createBudgetLine(budget.id, { category_id: categoryId }),
+          createBudgetLine(budget.id, { category_id: categoryId, planned_amount: 0 }),
         ),
       );
       setLines(prev => [...prev, ...created]);

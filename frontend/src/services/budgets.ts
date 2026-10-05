@@ -39,7 +39,7 @@ export async function listBudgetLines(budgetId: number): Promise<BudgetLine[]> {
 
 export async function createBudgetLine(
   budgetId: number,
-  payload: { category_id: number; planned_amount?: string; notes?: string },
+  payload: { category_id: number; planned_amount: number; notes?: string },
 ): Promise<BudgetLine> {
   return apiFetch<BudgetLine>(`/budgets/${budgetId}/lines`, {
     method: 'POST',
@@ -49,7 +49,7 @@ export async function createBudgetLine(
 
 export async function updateBudgetLine(
   id: number,
-  payload: { planned_amount?: string; notes?: string },
+  payload: { planned_amount?: number; notes?: string },
 ): Promise<BudgetLine> {
   return apiFetch<BudgetLine>(`/budget-lines/${id}/`, {
     method: 'PATCH',
