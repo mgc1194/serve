@@ -59,29 +59,40 @@ class TestListBudgetLines:
 
 @pytest.mark.django_db
 class TestCreateBudgetLine:
-    def test_creates_line_with_default_amount(self, client, alice, household):
+    def test_creates_line_with_zero_planned_amount(self, client, alice, household):
+        budget = BudgetFactory(household=household)
+        category = CategoryFactory(name='Groceries', household=household)
+        response = client.post(
+            f'/budgets/{budget.id}/lines',
+            json={'category_id': category.id, 'planned_amount': 0},
+            user=alice,
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data['category_id'] == category.id
+        assert data['planned_amount'] == 0
+        assert data['notes'] == ''
+
+    def test_missing_planned_amount_returns_400(self, client, alice, household):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(name='Groceries', household=household)
         response = client.post(
             f'/budgets/{budget.id}/lines', json={'category_id': category.id}, user=alice
         )
-        assert response.status_code == 200
-        data = response.json()
-        assert data['category_id'] == category.id
-        assert data['planned_amount'] == '0.00'
-        assert data['notes'] == ''
+        assert response.status_code == 400
+        assert response.json()['detail'] == 'planned_amount is required.'
 
     def test_creates_line_with_explicit_amount_and_notes(self, client, alice, household):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(name='Groceries', household=household)
         response = client.post(
             f'/budgets/{budget.id}/lines',
-            json={'category_id': category.id, 'planned_amount': '250.00', 'notes': 'Weekly shop'},
+            json={'category_id': category.id, 'planned_amount': 250, 'notes': 'Weekly shop'},
             user=alice,
         )
         assert response.status_code == 200
         data = response.json()
-        assert data['planned_amount'] == '250.00'
+        assert data['planned_amount'] == 250
         assert data['notes'] == 'Weekly shop'
 
     def test_duplicate_category_in_same_budget_returns_400(self, client, alice, household):
@@ -89,7 +100,9 @@ class TestCreateBudgetLine:
         category = CategoryFactory(name='Groceries', household=household)
         BudgetLineFactory(budget=budget, category=category)
         response = client.post(
-            f'/budgets/{budget.id}/lines', json={'category_id': category.id}, user=alice
+            f'/budgets/{budget.id}/lines',
+            json={'category_id': category.id, 'planned_amount': 100},
+            user=alice,
         )
         assert response.status_code == 400
 
@@ -108,7 +121,7 @@ class TestCreateBudgetLine:
         category = CategoryFactory(name='Groceries', household=household)
         response = client.post(
             f'/budgets/{budget.id}/lines',
-            json={'category_id': category.id, 'planned_amount': '-100.00'},
+            json={'category_id': category.id, 'planned_amount': -100},
             user=alice,
         )
         assert response.status_code == 400
@@ -148,10 +161,10 @@ class TestUpdateBudgetLine:
         category = CategoryFactory(name='Groceries', household=household)
         line = BudgetLineFactory(budget=budget, category=category)
         response = client.patch(
-            f'/budget-lines/{line.id}/', json={'planned_amount': '500.00'}, user=alice
+            f'/budget-lines/{line.id}/', json={'planned_amount': 500}, user=alice
         )
         assert response.status_code == 200
-        assert response.json()['planned_amount'] == '500.00'
+        assert response.json()['planned_amount'] == 500
 
     def test_updates_notes(self, client, alice, household):
         budget = BudgetFactory(household=household)
@@ -167,7 +180,7 @@ class TestUpdateBudgetLine:
         budget = BudgetFactory(household=household)
         category = CategoryFactory(name='Groceries', household=household)
         line = BudgetLineFactory(budget=budget, category=category)
-        client.patch(f'/budget-lines/{line.id}/', json={'planned_amount': '500.00'}, user=alice)
+        client.patch(f'/budget-lines/{line.id}/', json={'planned_amount': 500}, user=alice)
         line.refresh_from_db()
         assert line.planned_amount == 500
 
@@ -179,7 +192,7 @@ class TestUpdateBudgetLine:
         TransactionFactory(account=account, label=label, amount=-50, date='2026-01-10')
 
         response = client.patch(
-            f'/budget-lines/{line.id}/', json={'planned_amount': '100.00'}, user=alice
+            f'/budget-lines/{line.id}/', json={'planned_amount': 100}, user=alice
         )
         assert response.status_code == 200
         assert response.json()['actual_amount'] == '50.00'
@@ -196,7 +209,7 @@ class TestUpdateBudgetLine:
         category = CategoryFactory(name='Groceries', household=household)
         line = BudgetLineFactory(budget=budget, category=category)
         response = client.patch(
-            f'/budget-lines/{line.id}/', json={'planned_amount': '-10.00'}, user=alice
+            f'/budget-lines/{line.id}/', json={'planned_amount': -10}, user=alice
         )
         assert response.status_code == 400
 
@@ -204,13 +217,11 @@ class TestUpdateBudgetLine:
         budget = BudgetFactory(household=household)
         category = CategoryFactory(name='Groceries', household=household)
         line = BudgetLineFactory(budget=budget, category=category)
-        response = client.patch(
-            f'/budget-lines/{line.id}/', json={'planned_amount': '10.00'}, user=seth
-        )
+        response = client.patch(f'/budget-lines/{line.id}/', json={'planned_amount': 10}, user=seth)
         assert response.status_code == 403
 
     def test_returns_404_for_nonexistent_line(self, client, alice):
-        response = client.patch('/budget-lines/9999/', json={'planned_amount': '10.00'}, user=alice)
+        response = client.patch('/budget-lines/9999/', json={'planned_amount': 10}, user=alice)
         assert response.status_code == 404
 
 

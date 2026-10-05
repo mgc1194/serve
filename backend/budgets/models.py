@@ -17,8 +17,6 @@ computed at read time from labeled transactions (api/v1/budgets.py), never
 stored on this model.
 """
 
-from decimal import Decimal
-
 from django.db import models
 from django.db.models import CheckConstraint, F, Q
 
@@ -174,16 +172,21 @@ class BudgetLine(models.Model):
     adjusting a target means editing the existing line, not adding a
     second, enforced by the API layer's duplicate-line rejection.
 
-    planned_amount is treated throughout this API as a positive
-    magnitude (matching how actual_amount is always returned as abs()) —
-    enforced here with a CheckConstraint, not just the API layer's
+    planned_amount is a whole-dollar integer, not a Decimal — cents aren't
+    meaningful for a planning target the way they are for a real
+    transaction. actual_amount (computed, not stored on this model — see
+    api/v1/budgets.py::_actuals_for_categories) stays Decimal, since it's
+    summed from real Transaction.amount values that do carry cents; the
+    two are only ever compared, never mixed in the same arithmetic.
+    planned_amount is treated throughout this API as a positive magnitude
+    — enforced here with a CheckConstraint, not just the API layer's
     validation, for the same reason Budget's period/type shape is: an
     invariant reporting can rely on regardless of how a row was written.
     """
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='lines')
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='budget_lines')
-    planned_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    planned_amount = models.IntegerField(default=0)
     notes = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

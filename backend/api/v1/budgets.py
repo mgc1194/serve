@@ -377,14 +377,15 @@ def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest
     Args:
         request: The HTTP request object. Must be authenticated.
         budget_id: Primary key of the budget.
-        payload: BudgetLineCreateRequest with category_id and optionally
-            planned_amount/notes.
+        payload: BudgetLineCreateRequest with category_id, planned_amount,
+            and optionally notes.
 
     Returns:
         The created BudgetLineSchema.
 
     Raises:
         HttpError: 400 if the category belongs to a different household than the budget.
+        HttpError: 400 if planned_amount is missing or negative.
         HttpError: 400 if this category already has a line on this budget.
         HttpError: 403 if the user is not a member of the household.
         HttpError: 404 if the budget or category does not exist.
@@ -393,16 +394,16 @@ def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest
     category = get_object_or_404(Category, pk=payload.category_id)
     if category.household_id != budget.household_id:
         raise HttpError(400, 'Category does not belong to the same household as this budget.')
-    if payload.planned_amount is not None and payload.planned_amount < 0:
+    if payload.planned_amount is None:
+        raise HttpError(400, 'planned_amount is required.')
+    if payload.planned_amount < 0:
         raise HttpError(400, 'planned_amount must not be negative.')
 
     try:
         line = BudgetLine.objects.create(
             budget=budget,
             category=category,
-            planned_amount=payload.planned_amount
-            if payload.planned_amount is not None
-            else Decimal('0.00'),
+            planned_amount=payload.planned_amount,
             notes=payload.notes or '',
         )
     except IntegrityError:

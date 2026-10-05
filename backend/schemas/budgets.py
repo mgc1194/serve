@@ -55,8 +55,11 @@ class BudgetLineSchema(Schema):
 
     category_name/category_type are denormalized from the related Category
     so the frontend doesn't need a second fetch to resolve them.
-    actual_amount is computed at read time from labeled transactions (see
-    api/v1/budgets.py::_actuals_for_categories) — never stored.
+    planned_amount is a whole-dollar integer — cents aren't meaningful for
+    a planning target. actual_amount stays a Decimal: it's computed at
+    read time from labeled transactions (see
+    api/v1/budgets.py::_actuals_for_categories), which do carry cents, and
+    is never stored on this model.
     """
 
     id: int
@@ -64,7 +67,7 @@ class BudgetLineSchema(Schema):
     category_id: int
     category_name: str
     category_type: CategoryType
-    planned_amount: Decimal
+    planned_amount: int
     actual_amount: Decimal
     notes: str
 
@@ -72,12 +75,18 @@ class BudgetLineSchema(Schema):
 class BudgetLineCreateRequest(Schema):
     """Request schema for adding a category to a budget.
 
-    planned_amount/notes are optional — falls back to the model default
-    when omitted. Both are editable afterward via PATCH /budget-lines/{id}/.
+    planned_amount is required — every tracked category needs a projected
+    amount from the start; the endpoint rejects a request that omits it
+    rather than silently defaulting to zero, so a client has to make that
+    choice explicitly (the UI can default its own input to 0). Kept
+    Optional here (rather than a plain `int` field) so the endpoint can
+    raise its own HttpError(400, ...) for a missing value instead of
+    Ninja's generic validation-error response. notes stays optional. Both
+    are editable afterward via PATCH /budget-lines/{id}/.
     """
 
     category_id: int
-    planned_amount: Decimal | None = None
+    planned_amount: int | None = None
     notes: str | None = None
 
 
@@ -88,5 +97,5 @@ class BudgetLineUpdateRequest(Schema):
     schema has no such field; remove and re-add the line to change it.
     """
 
-    planned_amount: Decimal | None = None
+    planned_amount: int | None = None
     notes: str | None = None
