@@ -194,6 +194,74 @@ describe('CategoryManagementDialog stale list responses', () => {
   });
 });
 
+describe('CategoryManagementDialog switching households', () => {
+  it('does not merge a new category onto the previous household\'s stale categories', async () => {
+    mockListCategories.mockResolvedValueOnce(CATEGORIES);
+    const onClose = vi.fn();
+    const onCategoriesChanged = vi.fn();
+
+    const { rerender } = render(
+      <CategoryManagementDialog
+        open={true}
+        householdId={1}
+        householdName="Smith Household"
+        onClose={onClose}
+        onCategoriesChanged={onCategoriesChanged}
+      />,
+    );
+    await waitFor(() => screen.getByText('Groceries'));
+
+    // The dialog stays mounted across a close/reopen for a different
+    // household — its initial fetch for household 2 is still in flight.
+    let resolveHousehold2Load: (categories: typeof CATEGORIES) => void = () => {};
+    mockListCategories.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveHousehold2Load = resolve;
+      }),
+    );
+    rerender(
+      <CategoryManagementDialog
+        open={true}
+        householdId={2}
+        householdName="Jones Household"
+        onClose={onClose}
+        onCategoriesChanged={onCategoriesChanged}
+      />,
+    );
+
+    // "New category" stays enabled while household 2's fetch is loading —
+    // create one before that fetch resolves.
+    const created = {
+      id: 99,
+      name: 'Rent',
+      type: 'spending' as const,
+      is_active: true,
+      household_id: 2,
+    };
+    mockCreateCategory.mockResolvedValueOnce(created);
+    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Rent' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
+
+    // Household 2's own (real, predating-the-create) list response
+    // resolves now — it must not overwrite the create, but the list is
+    // still masked by the loading spinner until this settles.
+    await act(async () => {
+      resolveHousehold2Load([]);
+    });
+
+    // Household 1's Groceries/Salary must never leak into household 2's
+    // list or its onCategoriesChanged report.
+    expect(screen.queryByText('Groceries')).toBeNull();
+    expect(screen.queryByText('Salary')).toBeNull();
+    expect(screen.getByText('Rent')).toBeDefined();
+    expect(onCategoriesChanged.mock.calls[0][0]).not.toContainEqual(
+      expect.objectContaining({ name: 'Groceries' }),
+    );
+  });
+});
+
 describe('CategoryManagementDialog disables every other action during a mutation', () => {
   it('does not close on backdrop click while a create is saving', async () => {
     let resolveCreate: (category: {

@@ -99,13 +99,24 @@ export function CategoryManagementDialog({
   useEffect(() => {
     if (!open) return;
     let ignore = false;
+
+    // categoriesRef/categoriesVersionRef aren't scoped to a household on
+    // their own — without this reset, reopening for a different household
+    // (the dialog can stay mounted across a close/reopen) would leave the
+    // previous household's categories in categoriesRef. "New category"
+    // stays enabled while this fetch is loading, so a create landing
+    // before it resolves would then merge the new category onto the
+    // previous household's stale list, and this fetch's own (correct)
+    // response would get discarded as predating that write.
+    categoriesRef.current = [];
     const fetchId = ++fetchIdRef.current;
     const versionAtStart = categoriesVersionRef.current;
 
-    // Resets mode; loading/error state must flip synchronously before the
-    // fetch below resolves.
+    // Resets mode and the list; loading/error state must flip
+    // synchronously before the fetch below resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode('list');
+    setCategories([]);
     setIsLoading(true);
     setListError(null);
     listCategories(householdId)
