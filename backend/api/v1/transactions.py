@@ -509,7 +509,9 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
     if not update_fields:
         raise HttpError(400, 'At least one field must be provided.')
 
-    transaction.save(update_fields=update_fields)
+    # auto_now fields are silently skipped by save(update_fields=...) unless
+    # explicitly listed — see Label's update endpoint for the same pattern.
+    transaction.save(update_fields=[*update_fields, 'updated_at'])
 
     logger.info(
         f'User {request.user.email} updated transaction '
