@@ -2,7 +2,7 @@
 schemas/budgets.py — API schemas for budget and budget-line endpoints.
 """
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -56,10 +56,16 @@ class BudgetLineSchema(Schema):
     category_name/category_type are denormalized from the related Category
     so the frontend doesn't need a second fetch to resolve them.
     planned_amount is a whole-dollar integer — cents aren't meaningful for
-    a planning target. actual_amount stays a Decimal: it's computed at
-    read time from labeled transactions (see
-    api/v1/budgets.py::_actuals_for_categories), which do carry cents, and
-    is never stored on this model.
+    a planning target. actual_amount stays a Decimal, since it's summed
+    from Transaction.amount values that do carry cents.
+
+    actual_amount is a cached figure, not computed on this request — it
+    only changes via POST /budgets/{id}/recompute-actuals/.
+    actual_amount_computed_at is None if that has never been called for
+    this line. is_stale tells the client whether a transaction matching
+    this line's category has changed since the last recompute (see
+    BudgetLine's docstring for what this can't detect: a matching
+    transaction being deleted outright).
     """
 
     id: int
@@ -69,6 +75,8 @@ class BudgetLineSchema(Schema):
     category_type: CategoryType
     planned_amount: int
     actual_amount: Decimal
+    actual_amount_computed_at: datetime | None
+    is_stale: bool
     notes: str
 
 

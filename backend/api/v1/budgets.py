@@ -2,22 +2,25 @@
 api/v1/budgets.py — Budget and BudgetLine management endpoints.
 
 Endpoints:
-    GET    /api/v1/budgets/               — list a household's active budgets
-    POST   /api/v1/budgets/               — create a budget in a household
-    PATCH  /api/v1/budgets/{id}/          — rename a budget
-    DELETE /api/v1/budgets/{id}/          — deactivate a budget (soft delete)
-    GET    /api/v1/budgets/{id}/lines     — list a budget's lines, with computed actuals
-    POST   /api/v1/budgets/{id}/lines     — add a category to a budget
-    PATCH  /api/v1/budget-lines/{id}/     — update a line's planned amount or notes
-    DELETE /api/v1/budget-lines/{id}/     — remove a category from a budget
+    GET    /api/v1/budgets/                      — list a household's active budgets
+    POST   /api/v1/budgets/                      — create a budget in a household
+    PATCH  /api/v1/budgets/{id}/                 — rename a budget
+    DELETE /api/v1/budgets/{id}/                 — deactivate a budget (soft delete)
+    GET    /api/v1/budgets/{id}/lines            — list a budget's lines, with cached actuals
+    POST   /api/v1/budgets/{id}/lines            — add a category to a budget
+    POST   /api/v1/budgets/{id}/recompute-actuals/ — refresh every line's cached actual_amount
+    PATCH  /api/v1/budget-lines/{id}/            — update a line's planned amount or notes
+    DELETE /api/v1/budget-lines/{id}/            — remove a category from a budget
 """
 
 import logging
+from datetime import datetime
 from decimal import Decimal
 
 from django.db import IntegrityError
-from django.db.models import Sum
+from django.db.models import Max, Sum
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
@@ -143,16 +146,18 @@ def _serialize(budget: Budget) -> dict:
     }
 
 
-def _serialize_line(line: BudgetLine, actual_amount: Decimal) -> dict:
+def _serialize_line(line: BudgetLine, is_stale: bool) -> dict:
     """Serializes a BudgetLine into a dict matching BudgetLineSchema.
 
     Args:
-        line: The BudgetLine instance to serialize.
-        actual_amount: The category's computed actual amount, from
-            _actuals_for_categories — never read off the model itself.
+        line: The BudgetLine instance to serialize. actual_amount and
+            actual_amount_computed_at are read straight off the model —
+            they're a cache, not computed for this request.
+        is_stale: Whether a matching transaction has changed since
+            actual_amount was last computed (see _is_stale).
 
     Returns:
-        A dict with the line's fields plus the given actual_amount.
+        A dict with the line's fields.
     """
     return {
         'id': line.id,
@@ -161,21 +166,52 @@ def _serialize_line(line: BudgetLine, actual_amount: Decimal) -> dict:
         'category_name': line.category.name,
         'category_type': line.category.type,
         'planned_amount': line.planned_amount,
-        'actual_amount': actual_amount,
+        'actual_amount': line.actual_amount,
+        'actual_amount_computed_at': line.actual_amount_computed_at,
+        'is_stale': is_stale,
         'notes': line.notes,
     }
 
 
+def _transaction_scope(budget: Budget, category_ids: list[int]):
+    """Base queryset for the transactions that make up actual_amount for
+    the given categories: labeled transactions in the budget's household,
+    scoped to the budget's period for a period budget, or unbounded for a
+    project budget. Shared by _actuals_for_categories (sums amounts) and
+    _latest_transaction_updates (finds the newest updated_at) so both stay
+    scoped identically.
+
+    Args:
+        budget: The budget whose period (if any) scopes the transactions.
+        category_ids: The category ids to scope to.
+
+    Returns:
+        An unevaluated Transaction queryset, or an empty one if
+        category_ids is empty.
+    """
+    if not category_ids:
+        return Transaction.objects.none()
+
+    qs = Transaction.objects.filter(
+        account__household_id=budget.household_id,
+        exclude_from_summary=False,
+        label__category_id__in=category_ids,
+    )
+    if budget.period_start is not None and budget.period_end is not None:
+        qs = qs.filter(date__gte=budget.period_start, date__lte=budget.period_end)
+    return qs
+
+
 def _actuals_for_categories(budget: Budget, category_ids: list[int]) -> dict[int, Decimal]:
     """Computes each category's "actual" amount for a budget from labeled
-    transactions — the sum of Transaction.amount for transactions whose
-    label.category is one of category_ids, in the budget's household,
-    within the budget's period (or across all time for a project budget,
-    which has no period to bound by).
+    transactions — the sum of Transaction.amount in _transaction_scope.
 
     Returned as positive magnitudes regardless of category type — matches
     how planned_amount is already stored as a positive figure, so an income
     category and an expense category both show a plain dollar amount.
+
+    Only called from recompute_budget_actuals — nowhere else computes this
+    live; everywhere else reads the cached BudgetLine.actual_amount.
 
     Args:
         budget: The budget whose period (if any) scopes the transactions.
@@ -185,19 +221,58 @@ def _actuals_for_categories(budget: Budget, category_ids: list[int]) -> dict[int
         A dict of category_id -> actual amount. A category with no matching
         transactions is simply absent — callers should default to zero.
     """
-    if not category_ids:
-        return {}
-
-    qs = Transaction.objects.filter(
-        account__household_id=budget.household_id,
-        exclude_from_summary=False,
-        label__category_id__in=category_ids,
+    rows = (
+        _transaction_scope(budget, category_ids)
+        .values('label__category_id')
+        .annotate(total=Sum('amount'))
     )
-    if budget.period_start is not None and budget.period_end is not None:
-        qs = qs.filter(date__gte=budget.period_start, date__lte=budget.period_end)
-
-    rows = qs.values('label__category_id').annotate(total=Sum('amount'))
     return {row['label__category_id']: abs(row['total']) for row in rows}
+
+
+def _latest_transaction_updates(budget: Budget, category_ids: list[int]) -> dict[int, datetime]:
+    """Finds each category's most recent matching Transaction.updated_at,
+    for staleness checks — same scope as _actuals_for_categories, but
+    Max('updated_at') instead of Sum('amount'), so staleness can be
+    determined without recomputing (and persisting) the actual amount
+    itself.
+
+    Args:
+        budget: The budget whose period (if any) scopes the transactions.
+        category_ids: The category ids to check.
+
+    Returns:
+        A dict of category_id -> latest updated_at. A category with no
+        matching transactions is simply absent.
+    """
+    rows = (
+        _transaction_scope(budget, category_ids)
+        .values('label__category_id')
+        .annotate(latest=Max('updated_at'))
+    )
+    return {row['label__category_id']: row['latest'] for row in rows}
+
+
+def _is_stale(line: BudgetLine, latest_updates: dict[int, datetime]) -> bool:
+    """Whether line.actual_amount may no longer reflect its matching
+    transactions.
+
+    True if it has never been computed, or if a matching transaction's
+    updated_at is newer than the last computation. This cannot detect a
+    matching transaction having been deleted outright — see BudgetLine's
+    docstring.
+
+    Args:
+        line: The BudgetLine to check.
+        latest_updates: Result of _latest_transaction_updates for (at
+            least) this line's category_id.
+
+    Returns:
+        True if the cached actual_amount may be out of date.
+    """
+    if line.actual_amount_computed_at is None:
+        return True
+    latest = latest_updates.get(line.category_id)
+    return latest is not None and latest > line.actual_amount_computed_at
 
 
 @router.get('/budgets/', response=list[BudgetSchema])
@@ -351,7 +426,12 @@ def deactivate_budget(request, budget_id: int):
 @router.get('/budgets/{budget_id}/lines', response=list[BudgetLineSchema])
 def list_budget_lines(request, budget_id: int):
     """Returns the lines (categories tracked) for a budget, each with its
-    computed actual_amount.
+    cached actual_amount and an is_stale flag.
+
+    actual_amount is never computed here — it's whatever
+    recompute_budget_actuals last persisted (or 0, uncomputed, for a line
+    that's never been refreshed). is_stale tells the client whether it's
+    worth calling that endpoint.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -366,8 +446,8 @@ def list_budget_lines(request, budget_id: int):
     """
     budget = _get_budget_for_member(budget_id, request.user)
     lines = list(budget.lines.select_related('category'))
-    actuals = _actuals_for_categories(budget, [line.category_id for line in lines])
-    return [_serialize_line(line, actuals.get(line.category_id, Decimal('0.00'))) for line in lines]
+    latest_updates = _latest_transaction_updates(budget, [line.category_id for line in lines])
+    return [_serialize_line(line, _is_stale(line, latest_updates)) for line in lines]
 
 
 @router.post('/budgets/{budget_id}/lines', response=BudgetLineSchema)
@@ -414,8 +494,50 @@ def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest
         f'to budget "{budget.name}" (id={budget.id}).'
     )
 
-    actual = _actuals_for_categories(budget, [category.id]).get(category.id, Decimal('0.00'))
-    return _serialize_line(line, actual)
+    # A brand-new line has never been computed — always stale, no query needed.
+    return _serialize_line(line, is_stale=True)
+
+
+@router.post('/budgets/{budget_id}/recompute-actuals/', response=list[BudgetLineSchema])
+def recompute_budget_actuals(request, budget_id: int):
+    """Refreshes actual_amount for every line in a budget from labeled
+    transactions, and persists the result.
+
+    This is the only endpoint that ever changes actual_amount — it is a
+    cache, refreshed solely on request, not as a side effect of listing,
+    creating, or updating a line. No request body: it always recomputes
+    every line in the budget, not a subset.
+
+    Args:
+        request: The HTTP request object. Must be authenticated.
+        budget_id: Primary key of the budget whose lines to recompute.
+
+    Returns:
+        The budget's lines as BudgetLineSchema, all freshly computed
+        (is_stale=False), ordered by category type then name.
+
+    Raises:
+        HttpError: 403 if the user is not a member of the household.
+        HttpError: 404 if the budget does not exist.
+    """
+    budget = _get_budget_for_member(budget_id, request.user)
+    lines = list(budget.lines.select_related('category'))
+    actuals = _actuals_for_categories(budget, [line.category_id for line in lines])
+
+    now = timezone.now()
+    for line in lines:
+        line.actual_amount = actuals.get(line.category_id, Decimal('0.00'))
+        line.actual_amount_computed_at = now
+        line.updated_at = now
+    BudgetLine.objects.bulk_update(
+        lines, ['actual_amount', 'actual_amount_computed_at', 'updated_at']
+    )
+
+    logger.info(
+        f'User {request.user.email} recomputed actuals for budget "{budget.name}" (id={budget.id}).'
+    )
+
+    return [_serialize_line(line, is_stale=False) for line in lines]
 
 
 @router.patch('/budget-lines/{line_id}/', response=BudgetLineSchema)
@@ -460,10 +582,9 @@ def update_budget_line(request, line_id: int, payload: BudgetLineUpdateRequest):
 
     logger.info(f'User {request.user.email} updated budget line (id={line.id}).')
 
-    actual = _actuals_for_categories(line.budget, [line.category_id]).get(
-        line.category_id, Decimal('0.00')
-    )
-    return _serialize_line(line, actual)
+    # planned_amount/notes never touch actual_amount — only recompute_budget_actuals does.
+    latest_updates = _latest_transaction_updates(line.budget, [line.category_id])
+    return _serialize_line(line, _is_stale(line, latest_updates))
 
 
 @router.delete('/budget-lines/{line_id}/', response={204: None})

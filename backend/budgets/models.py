@@ -12,10 +12,13 @@ category; categories group related labels under a shared budget area.
 
 Budget is the household-level container a BudgetLine belongs to.
 BudgetLine links a Budget to one of the household's Categories, with a
-planned amount — the "actual" side of planned-vs-actual tracking is
-computed at read time from labeled transactions (api/v1/budgets.py), never
-stored on this model.
+planned amount and a cached actual amount — the "actual" side of
+planned-vs-actual tracking is summed from labeled transactions, but only
+on an explicit refresh (api/v1/budgets.py::recompute_budget_actuals), not
+computed fresh on every read.
 """
+
+from decimal import Decimal
 
 from django.db import models
 from django.db.models import CheckConstraint, F, Q
@@ -157,10 +160,25 @@ class Budget(models.Model):
 
 class BudgetLine(models.Model):
     """One row inside a Budget: a category being tracked, with a planned
-    amount. The "actual" amount shown alongside it is never stored here —
-    it's computed at read time from labeled transactions (see
-    api/v1/budgets.py::_actuals_for_categories), so it always reflects the
-    household's current transaction data rather than a stale snapshot.
+    amount and a cached actual amount.
+
+    actual_amount is stored, not computed at read time — it is refreshed
+    only by POST /budgets/{id}/recompute-actuals/ (api/v1/budgets.py),
+    which re-sums labeled transactions for this line's category (see
+    _actuals_for_categories) and persists the result along with
+    actual_amount_computed_at. No other endpoint (listing, creating, or
+    updating a line) touches either field — a line's actual_amount can
+    only go stale or be explicitly refreshed, never silently recompute as
+    a side effect of something else.
+
+    actual_amount_computed_at is None until the first recompute. The API
+    layer derives an is_stale flag for each line by comparing it against
+    the latest Transaction.updated_at among that line's matching
+    transactions — which, like Transaction.updated_at itself, cannot
+    detect a matching transaction being deleted outright (no row is left
+    to carry the signal). A line whose only matching transaction was
+    deleted after the last recompute will keep reporting its old
+    actual_amount as fresh until something else changes in its category.
 
     category is a plain CASCADE FK for now, not PROTECT — hardening that
     (so a category referenced by a historical budget line can never be
@@ -174,19 +192,20 @@ class BudgetLine(models.Model):
 
     planned_amount is a whole-dollar integer, not a Decimal — cents aren't
     meaningful for a planning target the way they are for a real
-    transaction. actual_amount (computed, not stored on this model — see
-    api/v1/budgets.py::_actuals_for_categories) stays Decimal, since it's
-    summed from real Transaction.amount values that do carry cents; the
-    two are only ever compared, never mixed in the same arithmetic.
-    planned_amount is treated throughout this API as a positive magnitude
-    — enforced here with a CheckConstraint, not just the API layer's
-    validation, for the same reason Budget's period/type shape is: an
-    invariant reporting can rely on regardless of how a row was written.
+    transaction. actual_amount stays Decimal, since it's summed from real
+    Transaction.amount values that do carry cents; the two are only ever
+    compared, never mixed in the same arithmetic. planned_amount is
+    treated throughout this API as a positive magnitude — enforced here
+    with a CheckConstraint, not just the API layer's validation, for the
+    same reason Budget's period/type shape is: an invariant reporting can
+    rely on regardless of how a row was written.
     """
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name='lines')
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='budget_lines')
     planned_amount = models.IntegerField(default=0)
+    actual_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
+    actual_amount_computed_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
