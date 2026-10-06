@@ -26,7 +26,6 @@ class Migration(migrations.Migration):
                     'actual_amount',
                     models.DecimalField(decimal_places=2, default=Decimal('0'), max_digits=12),
                 ),
-                ('actual_amount_computed_at', models.DateTimeField(blank=True, null=True)),
                 ('notes', models.TextField(blank=True, default='')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),

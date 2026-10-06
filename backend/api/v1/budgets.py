@@ -2,15 +2,15 @@
 api/v1/budgets.py — Budget and BudgetLine management endpoints.
 
 Endpoints:
-    GET    /api/v1/budgets/                      — list a household's active budgets
-    POST   /api/v1/budgets/                      — create a budget in a household
-    PATCH  /api/v1/budgets/{id}/                 — rename a budget
-    DELETE /api/v1/budgets/{id}/                 — deactivate a budget (soft delete)
-    GET    /api/v1/budgets/{id}/lines            — list a budget's lines, with cached actuals
-    POST   /api/v1/budgets/{id}/lines            — add a category to a budget
+    GET    /api/v1/budgets/                        — list a household's active budgets
+    POST   /api/v1/budgets/                        — create a budget in a household
+    PATCH  /api/v1/budgets/{id}/                   — rename a budget
+    DELETE /api/v1/budgets/{id}/                   — deactivate a budget (soft delete)
+    GET    /api/v1/budgets/{id}/lines              — list a budget's lines, with cached actuals
+    POST   /api/v1/budgets/{id}/lines              — add a category to a budget
     POST   /api/v1/budgets/{id}/recompute-actuals/ — refresh every line's cached actual_amount
-    PATCH  /api/v1/budget-lines/{id}/            — update a line's planned amount or notes
-    DELETE /api/v1/budget-lines/{id}/            — remove a category from a budget
+    PATCH  /api/v1/budget-lines/{id}/              — update a line's planned amount or notes
+    DELETE /api/v1/budget-lines/{id}/              — remove a category from a budget
 """
 
 import logging
@@ -33,6 +33,7 @@ from schemas.budgets import (
     BudgetLineUpdateRequest,
     BudgetRenameRequest,
     BudgetSchema,
+    RecomputeActualsResponse,
 )
 from transactions.models import Transaction
 from users.models import Household
@@ -126,11 +127,12 @@ def _validate_period(payload: BudgetCreateRequest) -> None:
         raise HttpError(400, 'Project budgets cannot have period_start or period_end.')
 
 
-def _serialize(budget: Budget) -> dict:
+def _serialize(budget: Budget, is_stale: bool) -> dict:
     """Serializes a Budget into a dict matching BudgetSchema.
 
     Args:
         budget: The Budget instance to serialize.
+        is_stale: Result of _is_stale for this budget.
 
     Returns:
         A dict with the budget's fields.
@@ -143,18 +145,18 @@ def _serialize(budget: Budget) -> dict:
         'period_end': budget.period_end,
         'is_active': budget.is_active,
         'household_id': budget.household_id,
+        'synced_at': budget.synced_at,
+        'is_stale': is_stale,
     }
 
 
-def _serialize_line(line: BudgetLine, is_stale: bool) -> dict:
+def _serialize_line(line: BudgetLine) -> dict:
     """Serializes a BudgetLine into a dict matching BudgetLineSchema.
 
     Args:
-        line: The BudgetLine instance to serialize. actual_amount and
-            actual_amount_computed_at are read straight off the model —
-            they're a cache, not computed for this request.
-        is_stale: Whether a matching transaction has changed since
-            actual_amount was last computed (see _is_stale).
+        line: The BudgetLine instance to serialize. actual_amount is read
+            straight off the model — it's a cache, not computed for this
+            request.
 
     Returns:
         A dict with the line's fields.
@@ -167,8 +169,6 @@ def _serialize_line(line: BudgetLine, is_stale: bool) -> dict:
         'category_type': line.category.type,
         'planned_amount': line.planned_amount,
         'actual_amount': line.actual_amount,
-        'actual_amount_computed_at': line.actual_amount_computed_at,
-        'is_stale': is_stale,
         'notes': line.notes,
     }
 
@@ -178,7 +178,7 @@ def _transaction_scope(budget: Budget, category_ids: list[int]):
     the given categories: labeled transactions in the budget's household,
     scoped to the budget's period for a period budget, or unbounded for a
     project budget. Shared by _actuals_for_categories (sums amounts) and
-    _latest_transaction_updates (finds the newest updated_at) so both stay
+    _latest_transaction_update (finds the newest updated_at) so both stay
     scoped identically.
 
     Args:
@@ -229,50 +229,70 @@ def _actuals_for_categories(budget: Budget, category_ids: list[int]) -> dict[int
     return {row['label__category_id']: abs(row['total']) for row in rows}
 
 
-def _latest_transaction_updates(budget: Budget, category_ids: list[int]) -> dict[int, datetime]:
-    """Finds each category's most recent matching Transaction.updated_at,
-    for staleness checks — same scope as _actuals_for_categories, but
-    Max('updated_at') instead of Sum('amount'), so staleness can be
-    determined without recomputing (and persisting) the actual amount
-    itself.
+def _category_ids_for_budget(budget: Budget) -> list[int]:
+    """The category ids tracked by a budget's lines, for staleness checks."""
+    return list(budget.lines.values_list('category_id', flat=True))
+
+
+def _latest_transaction_update(budget: Budget, category_ids: list[int]) -> datetime | None:
+    """The most recent updated_at among all transactions matching any of
+    the given categories, for a staleness check — same scope as
+    _actuals_for_categories, but a single Max('updated_at') across every
+    category together rather than grouped per category, since staleness is
+    tracked budget-wide now, not per line (see Budget's docstring).
 
     Args:
         budget: The budget whose period (if any) scopes the transactions.
-        category_ids: The category ids to check.
+        category_ids: The category ids to check — typically every category
+            this budget's lines track.
 
     Returns:
-        A dict of category_id -> latest updated_at. A category with no
-        matching transactions is simply absent.
+        The latest matching updated_at, or None if there are no matching
+        transactions at all.
     """
-    rows = (
-        _transaction_scope(budget, category_ids)
-        .values('label__category_id')
-        .annotate(latest=Max('updated_at'))
-    )
-    return {row['label__category_id']: row['latest'] for row in rows}
+    return _transaction_scope(budget, category_ids).aggregate(latest=Max('updated_at'))['latest']
 
 
-def _is_stale(line: BudgetLine, latest_updates: dict[int, datetime]) -> bool:
-    """Whether line.actual_amount may no longer reflect its matching
-    transactions.
+def _is_stale(budget: Budget, category_ids: list[int], latest_update: datetime | None) -> bool:
+    """Whether a budget's cached actual_amounts may no longer reflect its
+    matching transactions.
 
-    True if it has never been computed, or if a matching transaction's
-    updated_at is newer than the last computation. This cannot detect a
-    matching transaction having been deleted outright — see BudgetLine's
-    docstring.
+    False outright if the budget has no lines (nothing to go stale about).
+    Otherwise true if actuals have never been computed, or a matching
+    transaction changed after the last computation. This is a raw signal,
+    not dismissable server-side — see Budget's docstring — and cannot
+    detect a matching transaction having been deleted outright.
 
     Args:
-        line: The BudgetLine to check.
-        latest_updates: Result of _latest_transaction_updates for (at
-            least) this line's category_id.
+        budget: The Budget to check.
+        category_ids: Result of _category_ids_for_budget for this budget.
+        latest_update: Result of _latest_transaction_update for the same
+            category_ids.
 
     Returns:
-        True if the cached actual_amount may be out of date.
+        True if the cached actual_amounts may be out of date.
     """
-    if line.actual_amount_computed_at is None:
+    if not category_ids:
+        return False
+    if budget.synced_at is None:
         return True
-    latest = latest_updates.get(line.category_id)
-    return latest is not None and latest > line.actual_amount_computed_at
+    return latest_update is not None and latest_update > budget.synced_at
+
+
+def _is_stale_for_budget(budget: Budget) -> bool:
+    """_is_stale, computing category_ids/latest_update for a single budget
+    itself rather than taking them as arguments — for endpoints that only
+    ever handle one budget at a time (everything except list_budgets).
+
+    Args:
+        budget: The Budget to check.
+
+    Returns:
+        True if the staleness warning should currently show.
+    """
+    category_ids = _category_ids_for_budget(budget)
+    latest_update = _latest_transaction_update(budget, category_ids)
+    return _is_stale(budget, category_ids, latest_update)
 
 
 @router.get('/budgets/', response=list[BudgetSchema])
@@ -296,7 +316,7 @@ def list_budgets(request, household_id: int):
     """
     household = _get_household_for_member(household_id, request.user)
     budgets = Budget.objects.filter(household=household, is_active=True)
-    return [_serialize(b) for b in budgets]
+    return [_serialize(b, _is_stale_for_budget(b)) for b in budgets]
 
 
 @router.post('/budgets/', response=BudgetSchema)
@@ -346,7 +366,8 @@ def create_budget(request, payload: BudgetCreateRequest):
         f'in household "{household.name}" (id={household.id}).'
     )
 
-    return _serialize(budget)
+    # Brand new, no lines yet — nothing to be stale about.
+    return _serialize(budget, is_stale=False)
 
 
 @router.patch('/budgets/{budget_id}/', response=BudgetSchema)
@@ -389,7 +410,7 @@ def rename_budget(request, budget_id: int, payload: BudgetRenameRequest):
         f'in household (id={budget.household_id}).'
     )
 
-    return _serialize(budget)
+    return _serialize(budget, _is_stale_for_budget(budget))
 
 
 @router.delete('/budgets/{budget_id}/', response={204: None})
@@ -426,12 +447,12 @@ def deactivate_budget(request, budget_id: int):
 @router.get('/budgets/{budget_id}/lines', response=list[BudgetLineSchema])
 def list_budget_lines(request, budget_id: int):
     """Returns the lines (categories tracked) for a budget, each with its
-    cached actual_amount and an is_stale flag.
+    cached actual_amount.
 
     actual_amount is never computed here — it's whatever
     recompute_budget_actuals last persisted (or 0, uncomputed, for a line
-    that's never been refreshed). is_stale tells the client whether it's
-    worth calling that endpoint.
+    that's never been refreshed). Whether it's worth calling that endpoint
+    is reported on the budget itself (GET /budgets/), not per line here.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -446,8 +467,7 @@ def list_budget_lines(request, budget_id: int):
     """
     budget = _get_budget_for_member(budget_id, request.user)
     lines = list(budget.lines.select_related('category'))
-    latest_updates = _latest_transaction_updates(budget, [line.category_id for line in lines])
-    return [_serialize_line(line, _is_stale(line, latest_updates)) for line in lines]
+    return [_serialize_line(line) for line in lines]
 
 
 @router.post('/budgets/{budget_id}/lines', response=BudgetLineSchema)
@@ -494,11 +514,10 @@ def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest
         f'to budget "{budget.name}" (id={budget.id}).'
     )
 
-    # A brand-new line has never been computed — always stale, no query needed.
-    return _serialize_line(line, is_stale=True)
+    return _serialize_line(line)
 
 
-@router.post('/budgets/{budget_id}/recompute-actuals/', response=list[BudgetLineSchema])
+@router.post('/budgets/{budget_id}/recompute-actuals/', response=RecomputeActualsResponse)
 def recompute_budget_actuals(request, budget_id: int):
     """Refreshes actual_amount for every line in a budget from labeled
     transactions, and persists the result.
@@ -506,15 +525,16 @@ def recompute_budget_actuals(request, budget_id: int):
     This is the only endpoint that ever changes actual_amount — it is a
     cache, refreshed solely on request, not as a side effect of listing,
     creating, or updating a line. No request body: it always recomputes
-    every line in the budget, not a subset.
+    every line in the budget, not a subset. Also bumps the budget's own
+    synced_at to now.
 
     Args:
         request: The HTTP request object. Must be authenticated.
         budget_id: Primary key of the budget whose lines to recompute.
 
     Returns:
-        The budget's lines as BudgetLineSchema, all freshly computed
-        (is_stale=False), ordered by category type then name.
+        A RecomputeActualsResponse: the budget (is_stale now False) and
+        its freshly computed lines, ordered by category type then name.
 
     Raises:
         HttpError: 403 if the user is not a member of the household.
@@ -527,17 +547,20 @@ def recompute_budget_actuals(request, budget_id: int):
     now = timezone.now()
     for line in lines:
         line.actual_amount = actuals.get(line.category_id, Decimal('0.00'))
-        line.actual_amount_computed_at = now
         line.updated_at = now
-    BudgetLine.objects.bulk_update(
-        lines, ['actual_amount', 'actual_amount_computed_at', 'updated_at']
-    )
+    BudgetLine.objects.bulk_update(lines, ['actual_amount', 'updated_at'])
+
+    budget.synced_at = now
+    budget.save(update_fields=['synced_at', 'updated_at'])
 
     logger.info(
         f'User {request.user.email} recomputed actuals for budget "{budget.name}" (id={budget.id}).'
     )
 
-    return [_serialize_line(line, is_stale=False) for line in lines]
+    return {
+        'budget': _serialize(budget, is_stale=False),
+        'lines': [_serialize_line(line) for line in lines],
+    }
 
 
 @router.patch('/budget-lines/{line_id}/', response=BudgetLineSchema)
@@ -583,8 +606,7 @@ def update_budget_line(request, line_id: int, payload: BudgetLineUpdateRequest):
     logger.info(f'User {request.user.email} updated budget line (id={line.id}).')
 
     # planned_amount/notes never touch actual_amount — only recompute_budget_actuals does.
-    latest_updates = _latest_transaction_updates(line.budget, [line.category_id])
-    return _serialize_line(line, _is_stale(line, latest_updates))
+    return _serialize_line(line)
 
 
 @router.delete('/budget-lines/{line_id}/', response={204: None})

@@ -15,7 +15,8 @@ BudgetLine links a Budget to one of the household's Categories, with a
 planned amount and a cached actual amount — the "actual" side of
 planned-vs-actual tracking is summed from labeled transactions, but only
 on an explicit refresh (api/v1/budgets.py::recompute_budget_actuals), not
-computed fresh on every read.
+computed fresh on every read. When that last happened, and whether it may
+now be stale, are tracked budget-wide on Budget itself, not per line.
 """
 
 from decimal import Decimal
@@ -88,6 +89,25 @@ class Budget(models.Model):
     False rather than the row being removed, since a deactivated budget's
     historical BudgetLines and their actuals should stay queryable.
 
+    synced_at is when this budget was last calculated — set budget-wide by
+    a single POST /budgets/{id}/recompute-actuals/ call (api/v1/budgets.py),
+    which recomputes every line's actual_amount together. Deliberately a
+    general "when was this budget last synced" timestamp rather than
+    something narrower like "actual_amounts_computed_at" — it lives here
+    rather than on each BudgetLine because that call always stamps every
+    line with the same timestamp anyway; a per-line field would just be
+    this value copied onto every row.
+
+    The API layer derives an is_stale flag by comparing this against the
+    latest Transaction.updated_at among all transactions matching any of
+    this budget's lines' categories (within the budget's period, for a
+    period budget) — which, like Transaction.updated_at itself, cannot
+    detect a matching transaction being deleted outright (no row is left
+    to carry the signal). This is a raw, un-dismissable signal: whether a
+    user has acknowledged/dismissed a staleness warning without actually
+    recomputing is tracked client-side (session storage, keyed against
+    synced_at), not here — there's no server-side state for it.
+
     Uniqueness is on (household, name) — a period budget and a project
     budget don't need independent name slots the way Category's two types
     do, since a budget's type isn't part of how a household would think of
@@ -129,6 +149,7 @@ class Budget(models.Model):
         on_delete=models.CASCADE,
         related_name='budgets',
     )
+    synced_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -164,21 +185,16 @@ class BudgetLine(models.Model):
 
     actual_amount is stored, not computed at read time — it is refreshed
     only by POST /budgets/{id}/recompute-actuals/ (api/v1/budgets.py),
-    which re-sums labeled transactions for this line's category (see
-    _actuals_for_categories) and persists the result along with
-    actual_amount_computed_at. No other endpoint (listing, creating, or
-    updating a line) touches either field — a line's actual_amount can
-    only go stale or be explicitly refreshed, never silently recompute as
-    a side effect of something else.
+    which re-sums labeled transactions for every line in the budget
+    together (see _actuals_for_categories) and persists each result. No
+    other endpoint (listing, creating, or updating a line) touches it — a
+    line's actual_amount can only go stale or be explicitly refreshed,
+    never silently recompute as a side effect of something else.
 
-    actual_amount_computed_at is None until the first recompute. The API
-    layer derives an is_stale flag for each line by comparing it against
-    the latest Transaction.updated_at among that line's matching
-    transactions — which, like Transaction.updated_at itself, cannot
-    detect a matching transaction being deleted outright (no row is left
-    to carry the signal). A line whose only matching transaction was
-    deleted after the last recompute will keep reporting its old
-    actual_amount as fresh until something else changes in its category.
+    When this was last refreshed, and whether it may be stale, are tracked
+    on Budget (synced_at), not here — see Budget's docstring.
+    That call always recomputes every line in a budget in one pass, so a
+    per-line timestamp would just be the same value copied onto every row.
 
     category is a plain CASCADE FK for now, not PROTECT — hardening that
     (so a category referenced by a historical budget line can never be
@@ -205,7 +221,6 @@ class BudgetLine(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='budget_lines')
     planned_amount = models.IntegerField(default=0)
     actual_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
-    actual_amount_computed_at = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

@@ -1,7 +1,7 @@
 """
 tests/api/v1/budgets/test_lines.py — Tests for GET/POST /budgets/{id}/lines,
 PATCH/DELETE /budget-lines/{id}/, POST /budgets/{id}/recompute-actuals/,
-and actual_amount staleness.
+and Budget.is_stale.
 
 Root conftest provides: alice, seth, household, other_household, category,
 label, account.
@@ -213,7 +213,6 @@ class TestUpdateBudgetLine:
         )
         assert response.status_code == 200
         assert response.json()['actual_amount'] == '0.00'
-        assert response.json()['is_stale'] is True
 
     def test_no_fields_provided_returns_400(self, client, alice, household):
         budget = BudgetFactory(household=household)
@@ -246,9 +245,10 @@ class TestUpdateBudgetLine:
 @pytest.mark.django_db
 class TestRecomputeBudgetActuals:
     """actual_amount is a cache: GET never computes it, only
-    POST /budgets/{id}/recompute-actuals/ does. These tests call that
-    endpoint and check both its response and what GET returns afterward,
-    to confirm the result is actually persisted, not just returned once.
+    POST /budgets/{id}/recompute-actuals/ does. The response is
+    {budget, lines}. These tests call that endpoint and check both its
+    response and what GET returns afterward, to confirm the result is
+    actually persisted, not just returned once.
     """
 
     def test_sums_transactions_within_the_period(self, client, alice, household, account):
@@ -263,7 +263,7 @@ class TestRecomputeBudgetActuals:
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
         assert response.status_code == 200
-        assert response.json()[0]['actual_amount'] == '50.00'
+        assert response.json()['lines'][0]['actual_amount'] == '50.00'
 
         get_response = client.get(f'/budgets/{budget.id}/lines', user=alice)
         assert get_response.json()[0]['actual_amount'] == '50.00'
@@ -278,7 +278,7 @@ class TestRecomputeBudgetActuals:
         TransactionFactory(account=account, label=label, amount=-30, date='2026-02-01')
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        assert response.json()[0]['actual_amount'] == '0.00'
+        assert response.json()['lines'][0]['actual_amount'] == '0.00'
 
     def test_excludes_transactions_marked_exclude_from_summary(
         self, client, alice, household, account
@@ -298,7 +298,7 @@ class TestRecomputeBudgetActuals:
         )
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        assert response.json()[0]['actual_amount'] == '0.00'
+        assert response.json()['lines'][0]['actual_amount'] == '0.00'
 
     def test_project_budget_sums_regardless_of_date(self, client, alice, household, account):
         budget = BudgetFactory(
@@ -310,7 +310,7 @@ class TestRecomputeBudgetActuals:
         TransactionFactory(account=account, label=label, amount=-30, date='2020-01-01')
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        lines = {item['category_id']: item for item in response.json()}
+        lines = {item['category_id']: item for item in response.json()['lines']}
         assert lines[category.id]['actual_amount'] == '30.00'
 
     def test_actual_amount_is_a_positive_magnitude_for_income_categories(
@@ -325,14 +325,14 @@ class TestRecomputeBudgetActuals:
         TransactionFactory(account=account, label=label, amount=1000, date='2026-01-15')
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        assert response.json()[0]['actual_amount'] == '1000.00'
+        assert response.json()['lines'][0]['actual_amount'] == '1000.00'
 
     def test_zero_when_no_matching_transactions(self, client, alice, household):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(name='Groceries', household=household)
         BudgetLineFactory(budget=budget, category=category)
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        assert response.json()[0]['actual_amount'] == '0.00'
+        assert response.json()['lines'][0]['actual_amount'] == '0.00'
 
     def test_recomputes_every_line_in_the_budget(self, client, alice, household, account):
         budget = BudgetFactory(household=household)
@@ -346,19 +346,19 @@ class TestRecomputeBudgetActuals:
         TransactionFactory(account=account, label=paycheck_label, amount=2000, date='2026-01-01')
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        amounts = {item['category_id']: item['actual_amount'] for item in response.json()}
+        amounts = {item['category_id']: item['actual_amount'] for item in response.json()['lines']}
         assert amounts[groceries.id] == '40.00'
         assert amounts[paycheck.id] == '2000.00'
 
-    def test_sets_computed_at_and_clears_is_stale(self, client, alice, household):
+    def test_sets_budget_computed_at_and_clears_is_stale(self, client, alice, household):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(household=household)
         BudgetLineFactory(budget=budget, category=category)
 
         response = client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
-        line = response.json()[0]
-        assert line['actual_amount_computed_at'] is not None
-        assert line['is_stale'] is False
+        data = response.json()['budget']
+        assert data['synced_at'] is not None
+        assert data['is_stale'] is False
 
     def test_returns_403_for_non_member(self, client, seth, household):
         budget = BudgetFactory(household=household)
@@ -371,14 +371,29 @@ class TestRecomputeBudgetActuals:
 
 
 @pytest.mark.django_db
-class TestActualAmountStaleness:
-    def test_a_never_computed_line_is_stale(self, client, alice, household):
+class TestBudgetStaleness:
+    """is_stale is reported on the Budget (GET /budgets/), not per line —
+    recompute_budget_actuals always refreshes every line in a budget
+    together, so staleness is tracked budget-wide (see Budget's
+    docstring).
+    """
+
+    def _get_budget(self, client, user, household, budget_id):
+        response = client.get(f'/budgets/?household_id={household.id}', user=user)
+        return next(b for b in response.json() if b['id'] == budget_id)
+
+    def test_a_never_computed_budget_is_stale(self, client, alice, household):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(household=household)
         BudgetLineFactory(budget=budget, category=category)
 
-        response = client.get(f'/budgets/{budget.id}/lines', user=alice)
-        assert response.json()[0]['is_stale'] is True
+        data = self._get_budget(client, alice, household, budget.id)
+        assert data['is_stale'] is True
+
+    def test_a_budget_with_no_lines_is_not_stale(self, client, alice, household):
+        budget = BudgetFactory(household=household)
+        data = self._get_budget(client, alice, household, budget.id)
+        assert data['is_stale'] is False
 
     def test_not_stale_immediately_after_recompute(self, client, alice, household):
         budget = BudgetFactory(household=household)
@@ -386,23 +401,22 @@ class TestActualAmountStaleness:
         BudgetLineFactory(budget=budget, category=category)
         client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
 
-        response = client.get(f'/budgets/{budget.id}/lines', user=alice)
-        assert response.json()[0]['is_stale'] is False
+        data = self._get_budget(client, alice, household, budget.id)
+        assert data['is_stale'] is False
 
     def test_stale_again_after_a_new_matching_transaction(self, client, alice, household, account):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(type='spending', household=household)
-        BudgetLineFactory(budget=budget, category=category)
+        line = BudgetLineFactory(budget=budget, category=category)
         client.post(f'/budgets/{budget.id}/recompute-actuals/', user=alice)
 
         label = LabelFactory(category=category, household=household)
         TransactionFactory(account=account, label=label, amount=-10, date='2026-01-05')
 
-        response = client.get(f'/budgets/{budget.id}/lines', user=alice)
-        line = response.json()[0]
-        assert line['is_stale'] is True
+        assert self._get_budget(client, alice, household, budget.id)['is_stale'] is True
         # Still the old cached figure — GET never recomputes.
-        assert line['actual_amount'] == '0.00'
+        line.refresh_from_db()
+        assert line.actual_amount == 0
 
     def test_unrelated_category_transaction_does_not_cause_staleness(
         self, client, alice, household, account
@@ -416,8 +430,7 @@ class TestActualAmountStaleness:
         other_label = LabelFactory(category=other_category, household=household)
         TransactionFactory(account=account, label=other_label, amount=-10, date='2026-01-05')
 
-        response = client.get(f'/budgets/{budget.id}/lines', user=alice)
-        assert response.json()[0]['is_stale'] is False
+        assert self._get_budget(client, alice, household, budget.id)['is_stale'] is False
 
 
 @pytest.mark.django_db

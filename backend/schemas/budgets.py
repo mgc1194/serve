@@ -14,7 +14,18 @@ BudgetType = Literal['period', 'project']
 
 
 class BudgetSchema(Schema):
-    """Output schema for a Budget."""
+    """Output schema for a Budget.
+
+    synced_at is when this budget was last calculated (POST
+    /budgets/{id}/recompute-actuals/), None if never. is_stale is a raw
+    signal: whether a transaction matching any of this budget's categories
+    has changed since then (see Budget's docstring for what it can't catch
+    — a matching transaction deleted outright). It is not dismissable
+    server-side; a client wanting to let a user acknowledge/dismiss the
+    warning without recomputing should track that itself (e.g. session
+    storage keyed against synced_at, so a later recompute naturally
+    invalidates the old dismissal).
+    """
 
     id: int
     name: str
@@ -23,6 +34,8 @@ class BudgetSchema(Schema):
     period_end: date | None
     is_active: bool
     household_id: int
+    synced_at: datetime | None
+    is_stale: bool
 
 
 class BudgetCreateRequest(Schema):
@@ -60,12 +73,11 @@ class BudgetLineSchema(Schema):
     from Transaction.amount values that do carry cents.
 
     actual_amount is a cached figure, not computed on this request — it
-    only changes via POST /budgets/{id}/recompute-actuals/.
-    actual_amount_computed_at is None if that has never been called for
-    this line. is_stale tells the client whether a transaction matching
-    this line's category has changed since the last recompute (see
-    BudgetLine's docstring for what this can't detect: a matching
-    transaction being deleted outright).
+    only changes via POST /budgets/{id}/recompute-actuals/. When that was
+    last done, and whether it may be stale, are reported on the parent
+    Budget instead (see BudgetSchema) — recompute always refreshes every
+    line in a budget together, so that's a budget-wide fact, not a
+    per-line one.
     """
 
     id: int
@@ -75,8 +87,6 @@ class BudgetLineSchema(Schema):
     category_type: CategoryType
     planned_amount: int
     actual_amount: Decimal
-    actual_amount_computed_at: datetime | None
-    is_stale: bool
     notes: str
 
 
@@ -107,3 +117,15 @@ class BudgetLineUpdateRequest(Schema):
 
     planned_amount: int | None = None
     notes: str | None = None
+
+
+class RecomputeActualsResponse(Schema):
+    """Response schema for POST /budgets/{id}/recompute-actuals/.
+
+    Both the budget (now with synced_at bumped and is_stale False) and its
+    freshly recomputed lines, so the client can update its view of either
+    without a separate follow-up fetch.
+    """
+
+    budget: BudgetSchema
+    lines: list[BudgetLineSchema]
