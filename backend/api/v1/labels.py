@@ -11,6 +11,7 @@ Endpoints:
 import logging
 
 from django.db import IntegrityError
+from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Router
@@ -252,12 +253,16 @@ def delete_label(request, label_id: int):
     Transactions that reference this label will have their label field set
     to NULL — they are never deleted. That SET_NULL happens via Django's
     deletion collector as a bulk UPDATE, which — like any bulk update —
-    never touches auto_now fields, so those transactions' updated_at
-    would otherwise stay exactly as it was before this delete even though
-    their label (and so which budget category they count toward) just
-    changed. The affected ids are captured before label.delete() runs
-    (the label is gone afterward, so label=label can no longer be used to
-    find them) and their updated_at is bumped explicitly once it's done.
+    never touches auto_now fields, so those transactions' updated_at would
+    otherwise stay exactly as it was before this delete even though their
+    label (and so which budget category they count toward) just changed.
+    Bumped here via the same label=label filter the SET_NULL cascade
+    itself resolves — not by materializing every matching id into an
+    id__in list first, which would scale the request with how many
+    transactions use this label and risk MySQL's query-size limits for a
+    heavily used one. Must run before label.delete(), in the same atomic
+    block: label.pk is cleared once the delete completes, so label=label
+    would no longer resolve to anything afterward.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -271,14 +276,10 @@ def delete_label(request, label_id: int):
         HttpError: 404 if the label does not exist.
     """
     label = _get_label_for_member(label_id, request.user)
-    affected_transaction_ids = list(label.transactions.values_list('id', flat=True))
 
-    label.delete()
-
-    if affected_transaction_ids:
-        Transaction.objects.filter(id__in=affected_transaction_ids).update(
-            updated_at=timezone.now()
-        )
+    with atomic():
+        Transaction.objects.filter(label=label).update(updated_at=timezone.now())
+        label.delete()
 
     logger.info(f'User {request.user.email} deleted label (id={label_id}).')
 
