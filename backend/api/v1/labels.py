@@ -183,6 +183,15 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
     something actually changed. Setting ``category_id`` to null explicitly
     clears the label's category.
 
+    Summary aggregation groups transactions by ``label__category_id`` —
+    reassigning or clearing this label's category changes which budget
+    category every transaction using it counts toward, without saving any
+    of those Transaction rows. When ``category`` is among the fields
+    changed, their ``updated_at`` is bumped explicitly (same
+    relation-scoped, pre-save pattern as ``delete_label``'s SET_NULL
+    case), inside the same atomic block as the label's own save so a
+    failed save (e.g. a duplicate name) rolls back the bump too.
+
     Args:
         request: The HTTP request object. Must be authenticated.
         label_id: Primary key of the label to update.
@@ -229,7 +238,10 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
         raise HttpError(400, 'At least one field must be provided.')
 
     try:
-        label.save(update_fields=[*update_fields, 'updated_at'])
+        with atomic():
+            if 'category' in update_fields:
+                Transaction.objects.filter(label=label).update(updated_at=timezone.now())
+            label.save(update_fields=[*update_fields, 'updated_at'])
     except IntegrityError:
         raise HttpError(
             400, f'A label named "{label.name}" already exists in this household.'
