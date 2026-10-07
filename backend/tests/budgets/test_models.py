@@ -6,8 +6,8 @@ import pytest
 from django.db import IntegrityError
 from django.db import transaction as db_transaction
 
-from budgets.models import Budget, Category
-from tests.factories import BudgetFactory, CategoryFactory
+from budgets.models import Budget, BudgetLine, Category
+from tests.factories import BudgetFactory, BudgetLineFactory, CategoryFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -255,3 +255,47 @@ class TestBudgetCascadeDelete:
         household.delete()
 
         assert Budget.objects.filter(id=other_budget.id).exists()
+
+
+class TestBudgetLinePlannedAmountConstraint:
+    """planned_amount's non-negativity is enforced by a database
+    CheckConstraint, not just api/v1/budgets.py's 400 checks on create/
+    update — these tests write through the ORM directly (bypassing the API
+    entirely) to prove the invariant holds regardless of how a row is
+    written."""
+
+    def test_negative_planned_amount_raises(self, household):
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetLineFactory(budget=BudgetFactory(household=household), planned_amount=-1)
+
+    def test_zero_planned_amount_is_allowed(self, household):
+        line = BudgetLineFactory(budget=BudgetFactory(household=household), planned_amount=0)
+        assert line.id is not None
+
+
+class TestBudgetLineUniqueConstraint:
+    """One line per (budget, category) is enforced by a database
+    unique_together, not just the API layer's duplicate-line rejection —
+    see BudgetLine's docstring."""
+
+    def test_duplicate_budget_category_raises(self, household):
+        budget = BudgetFactory(household=household)
+        category = CategoryFactory(household=household)
+        BudgetLineFactory(budget=budget, category=category)
+
+        with pytest.raises(IntegrityError):
+            with db_transaction.atomic():
+                BudgetLineFactory(budget=budget, category=category)
+
+        assert BudgetLine.objects.filter(budget=budget, category=category).count() == 1
+
+    def test_same_category_different_budget_allowed(self, household):
+        category = CategoryFactory(household=household)
+        budget_a = BudgetFactory(household=household, name='January 2026')
+        budget_b = BudgetFactory(household=household, name='February 2026')
+        BudgetLineFactory(budget=budget_a, category=category)
+
+        other = BudgetLineFactory(budget=budget_b, category=category)
+
+        assert other.id is not None
