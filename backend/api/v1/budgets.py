@@ -2,23 +2,23 @@
 api/v1/budgets.py — Budget and BudgetLine management endpoints.
 
 Endpoints:
-    GET    /api/v1/budgets/                        — list a household's active budgets
-    POST   /api/v1/budgets/                        — create a budget in a household
-    PATCH  /api/v1/budgets/{id}/                   — rename a budget
-    DELETE /api/v1/budgets/{id}/                   — deactivate a budget (soft delete)
-    GET    /api/v1/budgets/{id}/lines              — list a budget's lines, with cached actuals
-    POST   /api/v1/budgets/{id}/lines              — add a category to a budget
-    POST   /api/v1/budgets/{id}/recompute-actuals/ — refresh every line's cached actual_amount
-    PATCH  /api/v1/budget-lines/{id}/              — update a line's planned amount or notes
-    DELETE /api/v1/budget-lines/{id}/              — remove a category from a budget
+    GET    /api/v1/budgets/              — list a household's active budgets
+    POST   /api/v1/budgets/              — create a budget in a household
+    PATCH  /api/v1/budgets/{id}/         — rename a budget
+    DELETE /api/v1/budgets/{id}/         — deactivate a budget (soft delete)
+    GET    /api/v1/budgets/{id}/lines    — list a budget's lines, with cached actuals
+    POST   /api/v1/budgets/{id}/lines    — add a category to a budget
+    POST   /api/v1/budgets/{id}/sync/    — refresh every line's cached actual_amount
+    PATCH  /api/v1/budget-lines/{id}/    — update a line's planned amount or notes
+    DELETE /api/v1/budget-lines/{id}/    — remove a category from a budget
 """
 
 import logging
-from datetime import datetime
 from decimal import Decimal
 
 from django.db import IntegrityError
-from django.db.models import Max, Sum
+from django.db.models import Sum
+from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from ninja import Router
@@ -33,7 +33,7 @@ from schemas.budgets import (
     BudgetLineUpdateRequest,
     BudgetRenameRequest,
     BudgetSchema,
-    RecomputeActualsResponse,
+    SyncBudgetResponse,
 )
 from transactions.models import Transaction
 from users.models import Household
@@ -127,12 +127,11 @@ def _validate_period(payload: BudgetCreateRequest) -> None:
         raise HttpError(400, 'Project budgets cannot have period_start or period_end.')
 
 
-def _serialize(budget: Budget, is_stale: bool) -> dict:
+def _serialize(budget: Budget) -> dict:
     """Serializes a Budget into a dict matching BudgetSchema.
 
     Args:
         budget: The Budget instance to serialize.
-        is_stale: Result of _is_stale for this budget.
 
     Returns:
         A dict with the budget's fields.
@@ -146,7 +145,6 @@ def _serialize(budget: Budget, is_stale: bool) -> dict:
         'is_active': budget.is_active,
         'household_id': budget.household_id,
         'synced_at': budget.synced_at,
-        'is_stale': is_stale,
     }
 
 
@@ -177,9 +175,7 @@ def _transaction_scope(budget: Budget, category_ids: list[int]):
     """Base queryset for the transactions that make up actual_amount for
     the given categories: labeled transactions in the budget's household,
     scoped to the budget's period for a period budget, or unbounded for a
-    project budget. Shared by _actuals_for_categories (sums amounts) and
-    _latest_transaction_update (finds the newest updated_at) so both stay
-    scoped identically.
+    project budget.
 
     Args:
         budget: The budget whose period (if any) scopes the transactions.
@@ -210,7 +206,7 @@ def _actuals_for_categories(budget: Budget, category_ids: list[int]) -> dict[int
     how planned_amount is already stored as a positive figure, so an income
     category and an expense category both show a plain dollar amount.
 
-    Only called from recompute_budget_actuals — nowhere else computes this
+    Only called from sync_budget — nowhere else computes this
     live; everywhere else reads the cached BudgetLine.actual_amount.
 
     Args:
@@ -227,72 +223,6 @@ def _actuals_for_categories(budget: Budget, category_ids: list[int]) -> dict[int
         .annotate(total=Sum('amount'))
     )
     return {row['label__category_id']: abs(row['total']) for row in rows}
-
-
-def _category_ids_for_budget(budget: Budget) -> list[int]:
-    """The category ids tracked by a budget's lines, for staleness checks."""
-    return list(budget.lines.values_list('category_id', flat=True))
-
-
-def _latest_transaction_update(budget: Budget, category_ids: list[int]) -> datetime | None:
-    """The most recent updated_at among all transactions matching any of
-    the given categories, for a staleness check — same scope as
-    _actuals_for_categories, but a single Max('updated_at') across every
-    category together rather than grouped per category, since staleness is
-    tracked budget-wide now, not per line (see Budget's docstring).
-
-    Args:
-        budget: The budget whose period (if any) scopes the transactions.
-        category_ids: The category ids to check — typically every category
-            this budget's lines track.
-
-    Returns:
-        The latest matching updated_at, or None if there are no matching
-        transactions at all.
-    """
-    return _transaction_scope(budget, category_ids).aggregate(latest=Max('updated_at'))['latest']
-
-
-def _is_stale(budget: Budget, category_ids: list[int], latest_update: datetime | None) -> bool:
-    """Whether a budget's cached actual_amounts may no longer reflect its
-    matching transactions.
-
-    False outright if the budget has no lines (nothing to go stale about).
-    Otherwise true if actuals have never been computed, or a matching
-    transaction changed after the last computation. This is a raw signal,
-    not dismissable server-side — see Budget's docstring — and cannot
-    detect a matching transaction having been deleted outright.
-
-    Args:
-        budget: The Budget to check.
-        category_ids: Result of _category_ids_for_budget for this budget.
-        latest_update: Result of _latest_transaction_update for the same
-            category_ids.
-
-    Returns:
-        True if the cached actual_amounts may be out of date.
-    """
-    if not category_ids:
-        return False
-    if budget.synced_at is None:
-        return True
-    return latest_update is not None and latest_update > budget.synced_at
-
-
-def _is_stale_for_budget(budget: Budget) -> bool:
-    """_is_stale, computing category_ids/latest_update for a single budget
-    itself rather than taking them as arguments — for endpoints that only
-    ever handle one budget at a time (everything except list_budgets).
-
-    Args:
-        budget: The Budget to check.
-
-    Returns:
-        True if the staleness warning should currently show.
-    """
-    category_ids = _category_ids_for_budget(budget)
-    latest_update = _latest_transaction_update(budget, category_ids)
-    return _is_stale(budget, category_ids, latest_update)
 
 
 @router.get('/budgets/', response=list[BudgetSchema])
@@ -316,7 +246,7 @@ def list_budgets(request, household_id: int):
     """
     household = _get_household_for_member(household_id, request.user)
     budgets = Budget.objects.filter(household=household, is_active=True)
-    return [_serialize(b, _is_stale_for_budget(b)) for b in budgets]
+    return [_serialize(b) for b in budgets]
 
 
 @router.post('/budgets/', response=BudgetSchema)
@@ -366,8 +296,7 @@ def create_budget(request, payload: BudgetCreateRequest):
         f'in household "{household.name}" (id={household.id}).'
     )
 
-    # Brand new, no lines yet — nothing to be stale about.
-    return _serialize(budget, is_stale=False)
+    return _serialize(budget)
 
 
 @router.patch('/budgets/{budget_id}/', response=BudgetSchema)
@@ -410,7 +339,7 @@ def rename_budget(request, budget_id: int, payload: BudgetRenameRequest):
         f'in household (id={budget.household_id}).'
     )
 
-    return _serialize(budget, _is_stale_for_budget(budget))
+    return _serialize(budget)
 
 
 @router.delete('/budgets/{budget_id}/', response={204: None})
@@ -449,10 +378,8 @@ def list_budget_lines(request, budget_id: int):
     """Returns the lines (categories tracked) for a budget, each with its
     cached actual_amount.
 
-    actual_amount is never computed here — it's whatever
-    recompute_budget_actuals last persisted (or 0, uncomputed, for a line
-    that's never been refreshed). Whether it's worth calling that endpoint
-    is reported on the budget itself (GET /budgets/), not per line here.
+    actual_amount is never computed here — it's whatever sync_budget last
+    persisted (or 0, uncomputed, for a line that's never been refreshed).
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -517,8 +444,8 @@ def create_budget_line(request, budget_id: int, payload: BudgetLineCreateRequest
     return _serialize_line(line)
 
 
-@router.post('/budgets/{budget_id}/recompute-actuals/', response=RecomputeActualsResponse)
-def recompute_budget_actuals(request, budget_id: int):
+@router.post('/budgets/{budget_id}/sync/', response=SyncBudgetResponse)
+def sync_budget(request, budget_id: int):
     """Refreshes actual_amount for every line in a budget from labeled
     transactions, and persists the result.
 
@@ -532,33 +459,44 @@ def recompute_budget_actuals(request, budget_id: int):
         request: The HTTP request object. Must be authenticated.
         budget_id: Primary key of the budget whose lines to recompute.
 
+    Concurrent syncs of the same budget are serialized by locking the
+    budget row for the duration of the read-compute-write sequence
+    (select_for_update, inside atomic()) — without this, two overlapping
+    requests could each read their own transaction snapshot and then
+    write independently, letting an older snapshot's bulk_update clobber
+    a newer one's while still bumping synced_at, making the budget look
+    freshly synced with stale actual_amounts.
+
     Returns:
-        A RecomputeActualsResponse: the budget (is_stale now False) and
-        its freshly computed lines, ordered by category type then name.
+        A SyncBudgetResponse: the budget (synced_at bumped) and its
+        freshly computed lines, ordered by category type then name.
 
     Raises:
         HttpError: 403 if the user is not a member of the household.
         HttpError: 404 if the budget does not exist.
     """
     budget = _get_budget_for_member(budget_id, request.user)
-    lines = list(budget.lines.select_related('category'))
-    actuals = _actuals_for_categories(budget, [line.category_id for line in lines])
 
-    now = timezone.now()
-    for line in lines:
-        line.actual_amount = actuals.get(line.category_id, Decimal('0.00'))
-        line.updated_at = now
-    BudgetLine.objects.bulk_update(lines, ['actual_amount', 'updated_at'])
+    with atomic():
+        budget = Budget.objects.select_for_update().get(pk=budget.pk)
+        lines = list(budget.lines.select_related('category'))
+        actuals = _actuals_for_categories(budget, [line.category_id for line in lines])
 
-    budget.synced_at = now
-    budget.save(update_fields=['synced_at', 'updated_at'])
+        now = timezone.now()
+        for line in lines:
+            line.actual_amount = actuals.get(line.category_id, Decimal('0.00'))
+            line.updated_at = now
+        BudgetLine.objects.bulk_update(lines, ['actual_amount', 'updated_at'])
+
+        budget.synced_at = now
+        budget.save(update_fields=['synced_at', 'updated_at'])
 
     logger.info(
         f'User {request.user.email} recomputed actuals for budget "{budget.name}" (id={budget.id}).'
     )
 
     return {
-        'budget': _serialize(budget, is_stale=False),
+        'budget': _serialize(budget),
         'lines': [_serialize_line(line) for line in lines],
     }
 
@@ -605,7 +543,7 @@ def update_budget_line(request, line_id: int, payload: BudgetLineUpdateRequest):
 
     logger.info(f'User {request.user.email} updated budget line (id={line.id}).')
 
-    # planned_amount/notes never touch actual_amount — only recompute_budget_actuals does.
+    # planned_amount/notes never touch actual_amount — only sync_budget does.
     return _serialize_line(line)
 
 

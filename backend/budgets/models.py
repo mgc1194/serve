@@ -14,9 +14,10 @@ Budget is the household-level container a BudgetLine belongs to.
 BudgetLine links a Budget to one of the household's Categories, with a
 planned amount and a cached actual amount — the "actual" side of
 planned-vs-actual tracking is summed from labeled transactions, but only
-on an explicit refresh (api/v1/budgets.py::recompute_budget_actuals), not
-computed fresh on every read. When that last happened, and whether it may
-now be stale, are tracked budget-wide on Budget itself, not per line.
+on an explicit sync (api/v1/budgets.py::sync_budget), not computed fresh
+on every read. When that last happened is tracked budget-wide on Budget
+itself (synced_at), not per line — whether it may now be stale is left
+entirely to the client.
 """
 
 from decimal import Decimal
@@ -90,23 +91,20 @@ class Budget(models.Model):
     historical BudgetLines and their actuals should stay queryable.
 
     synced_at is when this budget was last calculated — set budget-wide by
-    a single POST /budgets/{id}/recompute-actuals/ call (api/v1/budgets.py),
-    which recomputes every line's actual_amount together. Deliberately a
-    general "when was this budget last synced" timestamp rather than
-    something narrower like "actual_amounts_computed_at" — it lives here
-    rather than on each BudgetLine because that call always stamps every
-    line with the same timestamp anyway; a per-line field would just be
-    this value copied onto every row.
+    a single POST /budgets/{id}/sync/ call (api/v1/budgets.py), which
+    recomputes every line's actual_amount together. Deliberately a general
+    "when was this budget last synced" timestamp rather than something
+    narrower like "actual_amounts_computed_at" — it lives here rather than
+    on each BudgetLine because that call always stamps every line with the
+    same timestamp anyway; a per-line field would just be this value
+    copied onto every row.
 
-    The API layer derives an is_stale flag by comparing this against the
-    latest Transaction.updated_at among all transactions matching any of
-    this budget's lines' categories (within the budget's period, for a
-    period budget) — which, like Transaction.updated_at itself, cannot
-    detect a matching transaction being deleted outright (no row is left
-    to carry the signal). This is a raw, un-dismissable signal: whether a
-    user has acknowledged/dismissed a staleness warning without actually
-    recomputing is tracked client-side (session storage, keyed against
-    synced_at), not here — there's no server-side state for it.
+    Whether a budget counts as "stale" — a matching transaction having
+    changed since synced_at, whether to warn about that, whether a user
+    has dismissed such a warning — is entirely a client concern, tracked
+    client-side (e.g. session storage, keyed against synced_at) rather
+    than computed or stored here. The API only ever reports this raw
+    timestamp.
 
     Uniqueness is on (household, name) — a period budget and a project
     budget don't need independent name slots the way Category's two types
@@ -184,17 +182,17 @@ class BudgetLine(models.Model):
     amount and a cached actual amount.
 
     actual_amount is stored, not computed at read time — it is refreshed
-    only by POST /budgets/{id}/recompute-actuals/ (api/v1/budgets.py),
-    which re-sums labeled transactions for every line in the budget
-    together (see _actuals_for_categories) and persists each result. No
-    other endpoint (listing, creating, or updating a line) touches it — a
-    line's actual_amount can only go stale or be explicitly refreshed,
-    never silently recompute as a side effect of something else.
+    only by POST /budgets/{id}/sync/ (api/v1/budgets.py), which re-sums
+    labeled transactions for every line in the budget together (see
+    _actuals_for_categories) and persists each result. No other endpoint
+    (listing, creating, or updating a line) touches it — a line's
+    actual_amount can only go stale or be explicitly refreshed, never
+    silently recompute as a side effect of something else.
 
-    When this was last refreshed, and whether it may be stale, are tracked
-    on Budget (synced_at), not here — see Budget's docstring.
-    That call always recomputes every line in a budget in one pass, so a
-    per-line timestamp would just be the same value copied onto every row.
+    When this was last refreshed is tracked on Budget (synced_at), not
+    here — see Budget's docstring. That call always recomputes every line
+    in a budget in one pass, so a per-line timestamp would just be the
+    same value copied onto every row.
 
     category is a plain CASCADE FK for now, not PROTECT — hardening that
     (so a category referenced by a historical budget line can never be

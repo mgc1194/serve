@@ -17,14 +17,10 @@ class BudgetSchema(Schema):
     """Output schema for a Budget.
 
     synced_at is when this budget was last calculated (POST
-    /budgets/{id}/recompute-actuals/), None if never. is_stale is a raw
-    signal: whether a transaction matching any of this budget's categories
-    has changed since then (see Budget's docstring for what it can't catch
-    — a matching transaction deleted outright). It is not dismissable
-    server-side; a client wanting to let a user acknowledge/dismiss the
-    warning without recomputing should track that itself (e.g. session
-    storage keyed against synced_at, so a later recompute naturally
-    invalidates the old dismissal).
+    /budgets/{id}/sync/), None if never — the only fact the API exposes
+    about freshness. Whether that counts as "stale" (and anything like a
+    dismissable warning) is a client concern, not computed here — see
+    Budget's docstring.
     """
 
     id: int
@@ -35,7 +31,6 @@ class BudgetSchema(Schema):
     is_active: bool
     household_id: int
     synced_at: datetime | None
-    is_stale: bool
 
 
 class BudgetCreateRequest(Schema):
@@ -73,11 +68,10 @@ class BudgetLineSchema(Schema):
     from Transaction.amount values that do carry cents.
 
     actual_amount is a cached figure, not computed on this request — it
-    only changes via POST /budgets/{id}/recompute-actuals/. When that was
-    last done, and whether it may be stale, are reported on the parent
-    Budget instead (see BudgetSchema) — recompute always refreshes every
-    line in a budget together, so that's a budget-wide fact, not a
-    per-line one.
+    only changes via POST /budgets/{id}/sync/. When that was last done is
+    reported on the parent Budget instead (see BudgetSchema) — a sync
+    always refreshes every line in a budget together, so that's a
+    budget-wide fact, not a per-line one.
     """
 
     id: int
@@ -119,12 +113,12 @@ class BudgetLineUpdateRequest(Schema):
     notes: str | None = None
 
 
-class RecomputeActualsResponse(Schema):
-    """Response schema for POST /budgets/{id}/recompute-actuals/.
+class SyncBudgetResponse(Schema):
+    """Response schema for POST /budgets/{id}/sync/.
 
-    Both the budget (now with synced_at bumped and is_stale False) and its
-    freshly recomputed lines, so the client can update its view of either
-    without a separate follow-up fetch.
+    Both the budget (now with synced_at bumped) and its freshly recomputed
+    lines, so the client can update its view of either without a separate
+    follow-up fetch.
     """
 
     budget: BudgetSchema
