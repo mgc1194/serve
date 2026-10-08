@@ -30,11 +30,11 @@ import { Box, Button, Container, Skeleton, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
+import { CategoryManagementDialog } from '@components/category-management-dialog';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
 import { BudgetCard } from '@pages/budgets/budget-card';
-import { CategoryManagementDialog } from '@pages/budgets/category-management-dialog';
 import { CreateBudgetDialog } from '@pages/budgets/create-budget-dialog';
 import type { Budget } from '@serve/types/global';
 import { listBudgets, ApiError } from '@services/budgets';
