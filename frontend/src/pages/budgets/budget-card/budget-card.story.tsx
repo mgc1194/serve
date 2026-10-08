@@ -6,7 +6,7 @@ import { makeBudget } from '@serve/mocks';
 const meta: Meta<typeof BudgetCard> = {
   title: 'Budgets/BudgetCard',
   component: BudgetCard,
-  parameters: { layout: 'padded' },
+  parameters: { layout: 'padded', router: true },
   args: {
     onUpdated: () => {},
     onDeactivated: () => {},

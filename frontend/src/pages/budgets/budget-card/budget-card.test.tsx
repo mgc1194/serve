@@ -12,6 +12,12 @@ vi.mock('@services/budgets', async importOriginal => {
   return { ...actual, updateBudget: vi.fn(), deleteBudget: vi.fn() };
 });
 
+const mockNavigate = vi.fn();
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual('react-router');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
 const mockUpdateBudget = vi.mocked(updateBudget);
 const mockDeleteBudget = vi.mocked(deleteBudget);
 
@@ -39,7 +45,7 @@ describe('BudgetCard rendering', () => {
       budget: makeBudget({ type: 'period', period_start: '2026-01-01', period_end: '2026-01-31' }),
     });
     expect(screen.getByText('Period')).toBeDefined();
-    expect(screen.getByText('2026-01-01 – 2026-01-31')).toBeDefined();
+    expect(screen.getByText('Jan 1, 2026 – Jan 31, 2026')).toBeDefined();
   });
 
   it('shows "No fixed period" for a project budget', () => {
@@ -164,5 +170,13 @@ describe('BudgetCard deactivate', () => {
     await waitFor(() =>
       expect(screen.getByText('You are not a member of this household.')).toBeDefined(),
     );
+  });
+});
+
+describe('BudgetCard view budget', () => {
+  it('navigates to the budget detail page when View budget is clicked', () => {
+    setup();
+    fireEvent.click(screen.getByRole('button', { name: /view budget/i }));
+    expect(mockNavigate).toHaveBeenCalledWith('/budgets/1');
   });
 });
