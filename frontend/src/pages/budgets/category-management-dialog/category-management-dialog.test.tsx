@@ -448,6 +448,7 @@ describe('CategoryManagementDialog deactivate', () => {
   });
 });
 
+
 describe('CategoryManagementDialog close', () => {
   it('calls onClose when Close is clicked in list mode', async () => {
     const { onClose } = setup();

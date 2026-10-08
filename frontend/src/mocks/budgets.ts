@@ -29,3 +29,17 @@ export function makeBudgetLine(overrides: Partial<BudgetLine> = {}): BudgetLine 
     ...overrides,
   };
 }
+
+export function makeBudgetLine(overrides: Partial<BudgetLine> = {}): BudgetLine {
+  return {
+    id: 1,
+    budget_id: 1,
+    category_id: 1,
+    category_name: 'Groceries',
+    category_type: 'spending',
+    planned_amount: 0,
+    actual_amount: '0.00',
+    notes: '',
+    ...overrides,
+  };
+}
