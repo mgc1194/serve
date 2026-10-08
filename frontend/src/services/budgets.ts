@@ -60,3 +60,14 @@ export async function updateBudgetLine(
 export async function deleteBudgetLine(id: number): Promise<void> {
   return apiFetch<void>(`/budget-lines/${id}/`, { method: 'DELETE' });
 }
+
+// Recomputes and persists every line's actual_amount for a budget, and
+// bumps the budget's own synced_at — the only call that ever changes
+// either. No request body: it always resyncs every line, not a subset.
+export async function syncBudget(
+  budgetId: number,
+): Promise<{ budget: Budget; lines: BudgetLine[] }> {
+  return apiFetch<{ budget: Budget; lines: BudgetLine[] }>(`/budgets/${budgetId}/sync/`, {
+    method: 'POST',
+  });
+}

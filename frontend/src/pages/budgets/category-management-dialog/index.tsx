@@ -4,9 +4,34 @@
 // calls, and delegates rendering to ListCategories (list mode) and
 // ManageCategory (create / edit mode). Mirrors
 // households/label-management-dialog's shape.
+//
+// "New category" stays available even while the initial list fetch is
+// still loading, so a create/edit/deactivate can complete before that
+// fetch resolves. Its eventual response then predates the mutation and
+// must not be allowed to overwrite it — every write to `categories` goes
+// through writeCategories, which bumps categoriesVersionRef, so the fetch
+// only applies its result if no write happened since it started;
+// otherwise it's simply discarded, since the mutation's own optimistic
+// update already reflects the current state. fetchIdRef is the separate,
+// simpler generation guard for isLoading/listError, so only the most
+// recently started fetch controls those.
+//
+// isMutating guards the Dialog's own onClose (backdrop click / Escape —
+// ManageCategory's own isSaving/isDeleting already disable its Back
+// button) for the duration of a create/edit/deactivate, so the dialog
+// can't be closed and reopened while one is in flight. Each handler can
+// then apply its result directly against whatever's currently loaded
+// with no staleness guard of its own — list mode (and ListCategories'
+// Close/New category/Edit controls) is never even rendered while a
+// mutation is running, since handleSave/handleDeactivate are only
+// reachable from ManageCategory's create/edit mode.
+//
+// Deactivated categories aren't otherwise exposed anywhere in this dialog
+// yet (no "show inactive" view, no reactivate) — that's a deliberate,
+// separate scope for a later change, not an oversight.
 
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ListCategories } from '@pages/budgets/category-management-dialog/list-categories';
 import { ManageCategory } from '@pages/budgets/category-management-dialog/manage-category';
@@ -42,9 +67,21 @@ export function CategoryManagementDialog({
 
   // ── List state ────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
-  const [showInactive, setShowInactive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
+
+  // categoriesRef mirrors `categories` synchronously (see writeCategories),
+  // so a mutation handler can read the latest list without risking a stale
+  // closure over `categories` from the render it was called in.
+  const categoriesRef = useRef<Category[]>([]);
+  const categoriesVersionRef = useRef(0);
+  const fetchIdRef = useRef(0);
+
+  function writeCategories(next: Category[]) {
+    categoriesVersionRef.current += 1;
+    categoriesRef.current = next;
+    setCategories(next);
+  }
 
   // ── Form state (create / edit) ────────────────────────────────────────────
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -54,24 +91,68 @@ export function CategoryManagementDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ── Load on open; reset mode and filters each time ───────────────────────
+  // True for the duration of any create/edit/deactivate — see the
+  // file-level comment on why every other action is disabled while so.
+  const isMutating = isSaving || isDeleting;
+
+  // ── Load on open ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return;
-    // Resets mode and kicks off a network fetch; loading/error state must
-    // flip synchronously before it resolves.
+    let ignore = false;
+
+    // categoriesRef/categoriesVersionRef aren't scoped to a household on
+    // their own — without this reset, reopening for a different household
+    // (the dialog can stay mounted across a close/reopen) would leave the
+    // previous household's categories in categoriesRef. "New category"
+    // stays enabled while this fetch is loading, so a create landing
+    // before it resolves would then merge the new category onto the
+    // previous household's stale list, and this fetch's own (correct)
+    // response would get discarded as predating that write.
+    categoriesRef.current = [];
+    const fetchId = ++fetchIdRef.current;
+    const versionAtStart = categoriesVersionRef.current;
+
+    // Resets mode and the list; loading/error state must flip
+    // synchronously before the fetch below resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode('list');
-    setShowInactive(false);
+    setCategories([]);
     setIsLoading(true);
     setListError(null);
-    listCategories(householdId, false)
-      .then(setCategories)
-      .catch(() => setListError('Could not load categories. Please try again.'))
-      .finally(() => setIsLoading(false));
+    listCategories(householdId)
+      .then(result => {
+        if (ignore || fetchId !== fetchIdRef.current) return;
+        // A mutation already wrote `categories` after this fetch started —
+        // this result predates that write and would revert it if applied,
+        // so it's discarded; the mutation's own optimistic update already
+        // reflects the current state.
+        if (categoriesVersionRef.current !== versionAtStart) return;
+        writeCategories(result);
+      })
+      .catch(() => {
+        if (ignore || fetchId !== fetchIdRef.current) return;
+        // Same reasoning as above: a mutation already landed, so this
+        // failure isn't about anything the user did and the list is
+        // already correct — surfacing it would be misleading.
+        if (categoriesVersionRef.current !== versionAtStart) return;
+        setListError('Could not load categories. Please try again.');
+      })
+      .finally(() => {
+        if (ignore || fetchId !== fetchIdRef.current) return;
+        setIsLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
   }, [open, householdId]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {
+    // Guards the Dialog's own onClose (backdrop click / Escape) — its own
+    // Close button is also wired to this, but list mode (where that
+    // button lives) is never rendered while isMutating is true.
+    if (isMutating) return;
     setMode('list');
     setEditingCategory(null);
     setName('');
@@ -101,16 +182,6 @@ export function CategoryManagementDialog({
     setFormError(null);
   }
 
-  function handleToggleShowInactive(next: boolean) {
-    setShowInactive(next);
-    setIsLoading(true);
-    setListError(null);
-    listCategories(householdId, next)
-      .then(setCategories)
-      .catch(() => setListError('Could not load categories. Please try again.'))
-      .finally(() => setIsLoading(false));
-  }
-
   async function handleSave() {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -129,15 +200,15 @@ export function CategoryManagementDialog({
           type,
           household_id: householdId,
         });
-        nextCategories = [...categories, created];
+        nextCategories = [...categoriesRef.current, created];
       } else if (mode === 'edit' && editingCategory) {
         const updated = await updateCategory(editingCategory.id, { name: trimmedName });
-        nextCategories = categories.map(c => (c.id === updated.id ? updated : c));
+        nextCategories = categoriesRef.current.map(c => (c.id === updated.id ? updated : c));
       } else {
         return;
       }
 
-      setCategories(nextCategories);
+      writeCategories(nextCategories);
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
     } catch (err) {
@@ -153,28 +224,14 @@ export function CategoryManagementDialog({
 
     try {
       await deleteCategory(categoryId);
-      const nextCategories = showInactive
-        ? categories.map(c => (c.id === categoryId ? { ...c, is_active: false } : c))
-        : categories.filter(c => c.id !== categoryId);
-      setCategories(nextCategories);
+      const nextCategories = categoriesRef.current.filter(c => c.id !== categoryId);
+      writeCategories(nextCategories);
       onCategoriesChanged(nextCategories.filter(c => c.is_active));
       backToList();
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : 'Could not deactivate category.');
     } finally {
       setIsDeleting(false);
-    }
-  }
-
-  async function handleReactivate(categoryId: number) {
-    setListError(null);
-    try {
-      const updated = await updateCategory(categoryId, { is_active: true });
-      const nextCategories = categories.map(c => (c.id === categoryId ? updated : c));
-      setCategories(nextCategories);
-      onCategoriesChanged(nextCategories.filter(c => c.is_active));
-    } catch {
-      setListError('Could not reactivate category. Please try again.');
     }
   }
 
@@ -192,10 +249,7 @@ export function CategoryManagementDialog({
             categories={categories}
             isLoading={isLoading}
             error={listError}
-            showInactive={showInactive}
-            onToggleShowInactive={handleToggleShowInactive}
             onEdit={openEdit}
-            onReactivate={handleReactivate}
             onNewCategory={openCreate}
             onClose={handleClose}
           />

@@ -3,7 +3,7 @@
 // Tests for the orchestration layer: mode transitions, API calls, and
 // error propagation. Subcomponent rendering is covered in their own tests.
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CategoryManagementDialog } from '@pages/budgets/category-management-dialog';
@@ -56,7 +56,7 @@ beforeEach(() => {
 describe('CategoryManagementDialog loading', () => {
   it('calls listCategories with the householdId on open', async () => {
     setup();
-    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1, false));
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1));
   });
 
   it('renders category names after loading', async () => {
@@ -120,6 +120,206 @@ describe('CategoryManagementDialog mode transitions', () => {
     fireEvent.click(screen.getByRole('button', { name: /new category/i }));
     fireEvent.click(screen.getByRole('button', { name: /^back$/i }));
     expect(screen.getByRole('button', { name: /new category/i })).toBeDefined();
+  });
+});
+
+describe('CategoryManagementDialog stale list responses', () => {
+  it('discards (rather than applies) an initial list response that predates a create', async () => {
+    let resolveInitialLoad: (categories: typeof CATEGORIES) => void = () => {};
+    mockListCategories.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveInitialLoad = resolve;
+      }),
+    );
+    const created = {
+      id: 99,
+      name: 'Utilities',
+      type: 'spending' as const,
+      is_active: true,
+      household_id: 1,
+    };
+    mockCreateCategory.mockResolvedValueOnce(created);
+
+    setup();
+
+    // "New category" is available even while the initial fetch is still
+    // loading — create one before that fetch resolves.
+    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
+
+    // This resolves with a response that predates the create — applying
+    // it directly would revert the create, so it must be discarded.
+    await act(async () => {
+      resolveInitialLoad(CATEGORIES);
+    });
+
+    expect(screen.getByText('Utilities')).toBeDefined();
+    expect(mockListCategories).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not surface a load error that arrives after a create already landed', async () => {
+    let rejectInitialLoad: (err: Error) => void = () => {};
+    mockListCategories.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectInitialLoad = reject;
+      }),
+    );
+    const created = {
+      id: 99,
+      name: 'Utilities',
+      type: 'spending' as const,
+      is_active: true,
+      household_id: 1,
+    };
+    mockCreateCategory.mockResolvedValueOnce(created);
+
+    setup();
+
+    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
+
+    // The initial fetch fails, but only after the create already landed —
+    // this failure isn't about anything the user did and the list is
+    // already correct, so it must not be shown as a load error.
+    await act(async () => {
+      rejectInitialLoad(new Error('network blip'));
+    });
+
+    expect(screen.getByText('Utilities')).toBeDefined();
+    expect(screen.queryByText(/could not load categories/i)).toBeNull();
+  });
+});
+
+describe('CategoryManagementDialog switching households', () => {
+  it('does not merge a new category onto the previous household\'s stale categories', async () => {
+    mockListCategories.mockResolvedValueOnce(CATEGORIES);
+    const onClose = vi.fn();
+    const onCategoriesChanged = vi.fn();
+
+    const { rerender } = render(
+      <CategoryManagementDialog
+        open={true}
+        householdId={1}
+        householdName="Smith Household"
+        onClose={onClose}
+        onCategoriesChanged={onCategoriesChanged}
+      />,
+    );
+    await waitFor(() => screen.getByText('Groceries'));
+
+    // The dialog stays mounted across a close/reopen for a different
+    // household — its initial fetch for household 2 is still in flight.
+    let resolveHousehold2Load: (categories: typeof CATEGORIES) => void = () => {};
+    mockListCategories.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveHousehold2Load = resolve;
+      }),
+    );
+    rerender(
+      <CategoryManagementDialog
+        open={true}
+        householdId={2}
+        householdName="Jones Household"
+        onClose={onClose}
+        onCategoriesChanged={onCategoriesChanged}
+      />,
+    );
+
+    // "New category" stays enabled while household 2's fetch is loading —
+    // create one before that fetch resolves.
+    const created = {
+      id: 99,
+      name: 'Rent',
+      type: 'spending' as const,
+      is_active: true,
+      household_id: 2,
+    };
+    mockCreateCategory.mockResolvedValueOnce(created);
+    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Rent' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
+
+    // Household 2's own (real, predating-the-create) list response
+    // resolves now — it must not overwrite the create, but the list is
+    // still masked by the loading spinner until this settles.
+    await act(async () => {
+      resolveHousehold2Load([]);
+    });
+
+    // Household 1's Groceries/Salary must never leak into household 2's
+    // list or its onCategoriesChanged report.
+    expect(screen.queryByText('Groceries')).toBeNull();
+    expect(screen.queryByText('Salary')).toBeNull();
+    expect(screen.getByText('Rent')).toBeDefined();
+    expect(onCategoriesChanged.mock.calls[0][0]).not.toContainEqual(
+      expect.objectContaining({ name: 'Groceries' }),
+    );
+  });
+});
+
+describe('CategoryManagementDialog disables every other action during a mutation', () => {
+  it('does not close on backdrop click while a create is saving', async () => {
+    let resolveCreate: (category: {
+      id: number;
+      name: string;
+      type: 'spending' | 'earning';
+      is_active: boolean;
+      household_id: number;
+    }) => void = () => {};
+    mockCreateCategory.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveCreate = resolve;
+      }),
+    );
+
+    const { onClose } = setup();
+    await waitFor(() => screen.getByText('Groceries'));
+
+    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
+
+    // Without this, the dialog could close (and later reopen) while the
+    // create is still in flight — its late response would then land in
+    // whatever session is open by then.
+    const backdrop = document.querySelector('.MuiBackdrop-root') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveCreate({ id: 99, name: 'Utilities', type: 'spending', is_active: true, household_id: 1 });
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close on backdrop click while a deactivate is in flight', async () => {
+    let resolveDelete: () => void = () => {};
+    mockDeleteCategory.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveDelete = resolve;
+      }),
+    );
+
+    const { onClose } = setup();
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /edit groceries/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^deactivate$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^yes$/i }));
+    await waitFor(() => expect(mockDeleteCategory).toHaveBeenCalled());
+
+    const backdrop = document.querySelector('.MuiBackdrop-root') as HTMLElement;
+    fireEvent.click(backdrop);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveDelete();
+    });
   });
 });
 
@@ -224,7 +424,7 @@ describe('CategoryManagementDialog deactivate', () => {
     await waitFor(() => expect(mockDeleteCategory).toHaveBeenCalledWith(CATEGORIES[0].id));
   });
 
-  it('removes the deactivated category from the (active-only) list', async () => {
+  it('removes the deactivated category from the list', async () => {
     mockDeleteCategory.mockResolvedValueOnce(undefined);
 
     setup();
@@ -248,37 +448,6 @@ describe('CategoryManagementDialog deactivate', () => {
   });
 });
 
-describe('CategoryManagementDialog reactivate', () => {
-  it('calls listCategories with include_inactive=true when Show inactive is toggled', async () => {
-    setup();
-    await waitFor(() => screen.getByText('Groceries'));
-    fireEvent.click(screen.getByRole('checkbox', { name: /show inactive/i }));
-
-    await waitFor(() => expect(mockListCategories).toHaveBeenLastCalledWith(1, true));
-  });
-
-  it('calls updateCategory with is_active: true when Reactivate is clicked', async () => {
-    mockListCategories.mockResolvedValue([
-      ...CATEGORIES,
-      { id: 3, name: 'Old', type: 'spending' as const, is_active: false, household_id: 1 },
-    ]);
-    mockUpdateCategory.mockResolvedValueOnce({
-      id: 3,
-      name: 'Old',
-      type: 'spending',
-      is_active: true,
-      household_id: 1,
-    });
-
-    setup();
-    await waitFor(() => screen.getByText('Groceries'));
-    fireEvent.click(screen.getByRole('checkbox', { name: /show inactive/i }));
-    await waitFor(() => screen.getByText('Old'));
-    fireEvent.click(screen.getByRole('button', { name: /reactivate/i }));
-
-    await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledWith(3, { is_active: true }));
-  });
-});
 
 describe('CategoryManagementDialog close', () => {
   it('calls onClose when Close is clicked in list mode', async () => {

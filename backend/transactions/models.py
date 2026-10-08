@@ -129,6 +129,28 @@ class Transaction(models.Model):
         related_name='transactions',
     )
     imported_at = models.DateTimeField(auto_now_add=True)
+    # Bumped on every save, not just import — reassigning label/category,
+    # toggling exclude_from_summary, or editing amount all count. Lets
+    # callers that cache a computation over a set of transactions (e.g.
+    # budget actuals) detect staleness by comparing against the latest
+    # updated_at in that set, without needing to redo the computation to
+    # find out whether anything changed. Covers edits to a row that still
+    # exists; it cannot reflect a row disappearing from that set entirely.
+    # Bulk operations that affect a transaction without saving it also
+    # don't bump it automatically — a label's SET_NULL cascade on delete is
+    # handled explicitly (api/v1/labels.py::delete_label touches the
+    # affected transactions directly), but a cache/invalidation scheme
+    # built on this field still needs its own explicit handling for
+    # transaction deletion itself (no row left to carry the signal) and
+    # for any other FK whose on_delete nulls a transaction field via a
+    # bulk update rather than a save() — this field alone cannot cover
+    # those cases.
+    #
+    # Deliberately a plain comment, not help_text: migrations track
+    # field kwargs as state, so a help_text edit here (likely, given how
+    # much this one has already grown) would need the matching historical
+    # AlterField kept in sync too, or makemigrations flags spurious drift.
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'transactions'
