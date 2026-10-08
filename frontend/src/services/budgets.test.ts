@@ -148,10 +148,10 @@ describe('createBudgetLine', () => {
     const spy = mockFetch(200, budgetLine);
     const result = await createBudgetLine(1, { category_id: 1, planned_amount: 500 });
     expect(result).toEqual(budgetLine);
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('/budgets/1/lines'),
-      expect.objectContaining({ method: 'POST' }),
-    );
+    const [url, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/budgets/1/lines');
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body as string)).toEqual({ category_id: 1, planned_amount: 500 });
   });
 
   it('throws ApiError with the server message on 400', async () => {
@@ -167,10 +167,10 @@ describe('updateBudgetLine', () => {
     const spy = mockFetch(200, { ...budgetLine, planned_amount: 600 });
     const result = await updateBudgetLine(1, { planned_amount: 600 });
     expect(result.planned_amount).toBe(600);
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('/budget-lines/1/'),
-      expect.objectContaining({ method: 'PATCH' }),
-    );
+    const [url, options] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/budget-lines/1/');
+    expect(options.method).toBe('PATCH');
+    expect(JSON.parse(options.body as string)).toEqual({ planned_amount: 600 });
   });
 
   it('throws ApiError with the server message on 400', async () => {
