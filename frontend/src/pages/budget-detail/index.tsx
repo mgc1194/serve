@@ -50,10 +50,19 @@ export function BudgetDetailPage() {
   // without making it a useEffect dependency.
   const loadRef = useRef<() => void>(() => {});
 
+  // Guards which fetch is allowed to touch state at all (data and loading
+  // flag alike), so an earlier request resolving after a newer one has
+  // started — e.g. Retry clicked again before the first attempt settles —
+  // can't overwrite the newer one's result or clear isLoading out from
+  // under it. Same pattern as BudgetsPage.
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
     let ignore = false;
 
     function load() {
+      const requestId = ++requestIdRef.current;
+
       if (householdId === undefined) {
         setIsLoading(false);
         return;
@@ -69,17 +78,17 @@ export function BudgetDetailPage() {
 
       listBudgets(householdId)
         .then(budgets => {
-          if (ignore) return;
+          if (ignore || requestId !== requestIdRef.current) return;
           const found = budgets.find(b => b.id === budgetId) ?? null;
           setBudget(found);
           if (!found) setError('Budget not found.');
         })
         .catch(err => {
-          if (ignore) return;
+          if (ignore || requestId !== requestIdRef.current) return;
           setError(err instanceof ApiError ? err.message : 'Could not load budget.');
         })
         .finally(() => {
-          if (!ignore) setIsLoading(false);
+          if (!ignore && requestId === requestIdRef.current) setIsLoading(false);
         });
     }
 
