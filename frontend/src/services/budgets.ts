@@ -1,6 +1,6 @@
-// services/budgets.ts — Typed fetch functions for budget endpoints.
+// services/budgets.ts — Typed fetch functions for budget and budget-line endpoints.
 
-import type { Budget } from '@serve/types/global';
+import type { Budget, BudgetLine } from '@serve/types/global';
 import { apiFetch, ApiError } from '@services/api-client';
 
 export { ApiError };
@@ -31,4 +31,43 @@ export async function updateBudget(id: number, payload: { name: string }): Promi
 
 export async function deleteBudget(id: number): Promise<void> {
   return apiFetch<void>(`/budgets/${id}/`, { method: 'DELETE' });
+}
+
+export async function listBudgetLines(budgetId: number): Promise<BudgetLine[]> {
+  return apiFetch<BudgetLine[]>(`/budgets/${budgetId}/lines`);
+}
+
+export async function createBudgetLine(
+  budgetId: number,
+  payload: { category_id: number; planned_amount: number; notes?: string },
+): Promise<BudgetLine> {
+  return apiFetch<BudgetLine>(`/budgets/${budgetId}/lines`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateBudgetLine(
+  id: number,
+  payload: { planned_amount?: number; notes?: string },
+): Promise<BudgetLine> {
+  return apiFetch<BudgetLine>(`/budget-lines/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteBudgetLine(id: number): Promise<void> {
+  return apiFetch<void>(`/budget-lines/${id}/`, { method: 'DELETE' });
+}
+
+// Recomputes and persists every line's actual_amount for a budget, and
+// bumps the budget's own synced_at — the only call that ever changes
+// either. No request body: it always resyncs every line, not a subset.
+export async function syncBudget(
+  budgetId: number,
+): Promise<{ budget: Budget; lines: BudgetLine[] }> {
+  return apiFetch<{ budget: Budget; lines: BudgetLine[] }>(`/budgets/${budgetId}/sync/`, {
+    method: 'POST',
+  });
 }
