@@ -45,7 +45,7 @@ describe('BudgetCard rendering', () => {
       budget: makeBudget({ type: 'period', period_start: '2026-01-01', period_end: '2026-01-31' }),
     });
     expect(screen.getByText('Period')).toBeDefined();
-    expect(screen.getByText('2026-01-01 – 2026-01-31')).toBeDefined();
+    expect(screen.getByText('01/01/2026 – 01/31/2026')).toBeDefined();
   });
 
   it('shows "No fixed period" for a project budget', () => {

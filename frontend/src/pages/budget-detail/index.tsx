@@ -17,10 +17,21 @@ import { AppHeader } from '@layout/app-header';
 import type { Budget } from '@serve/types/global';
 import { listBudgets, ApiError } from '@services/budgets';
 
+// Appending T00:00:00 forces local-time parsing of the bare YYYY-MM-DD
+// date — without it, `new Date(iso)` parses as UTC midnight, which can
+// display as the previous day in negative-UTC-offset timezones.
+function formatDate(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
+
 function formatPeriod(budget: Budget): string {
   if (budget.type === 'project') return 'No fixed period';
   if (!budget.period_start || !budget.period_end) return '';
-  return `${budget.period_start} – ${budget.period_end}`;
+  return `${formatDate(budget.period_start)} – ${formatDate(budget.period_end)}`;
 }
 
 export function BudgetDetailPage() {
