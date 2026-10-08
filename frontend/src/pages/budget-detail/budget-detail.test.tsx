@@ -52,7 +52,7 @@ describe('BudgetDetailPage rendering', () => {
   it("shows the budget's period range", async () => {
     renderPage();
     await screen.findByText('Monthly Budget');
-    expect(screen.getByText('01/01/2026 – 01/31/2026')).toBeDefined();
+    expect(screen.getByText('Jan 1, 2026 – Jan 31, 2026')).toBeDefined();
   });
 
   it('shows "No fixed period" for a project budget', async () => {

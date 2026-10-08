@@ -17,13 +17,14 @@ import { AppHeader } from '@layout/app-header';
 import type { Budget } from '@serve/types/global';
 import { listBudgets, ApiError } from '@services/budgets';
 
-// Appending T00:00:00 forces local-time parsing of the bare YYYY-MM-DD
-// date — without it, `new Date(iso)` parses as UTC midnight, which can
-// display as the previous day in negative-UTC-offset timezones.
+// Matches transaction-row.tsx's formatDate, for consistency across the
+// app. Appending T00:00:00 forces local-time parsing of the bare
+// YYYY-MM-DD date — without it, `new Date(iso)` parses as UTC midnight,
+// which can display as the previous day in negative-UTC-offset timezones.
 function formatDate(iso: string): string {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', {
-    month: '2-digit',
-    day: '2-digit',
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
     year: 'numeric',
   });
 }
