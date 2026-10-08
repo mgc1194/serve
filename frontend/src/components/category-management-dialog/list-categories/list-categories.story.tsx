@@ -1,8 +1,8 @@
-// pages/budgets/category-management-dialog/list-categories/list-categories.story.tsx
+// components/category-management-dialog/list-categories/list-categories.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { ListCategories } from '@pages/budgets/category-management-dialog/list-categories';
+import { ListCategories } from '@components/category-management-dialog/list-categories';
 
 const CATEGORIES = [
   { id: 1, name: 'Groceries', type: 'spending' as const, is_active: true, household_id: 1 },
@@ -11,7 +11,7 @@ const CATEGORIES = [
 ];
 
 const meta: Meta<typeof ListCategories> = {
-  title: 'Budgets/CategoryManagementDialog/ListCategories',
+  title: 'Components/CategoryManagementDialog/ListCategories',
   component: ListCategories,
   parameters: { layout: 'padded' },
   args: {

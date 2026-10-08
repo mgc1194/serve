@@ -1,9 +1,9 @@
-// pages/budgets/category-management-dialog/manage-category/manage-category.test.tsx
+// components/category-management-dialog/manage-category/manage-category.test.tsx
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ManageCategory } from '@pages/budgets/category-management-dialog/manage-category';
+import { ManageCategory } from '@components/category-management-dialog/manage-category';
 import type { Category } from '@serve/types/global';
 
 const CATEGORY: Category = {

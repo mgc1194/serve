@@ -1,4 +1,4 @@
-// pages/budgets/category-management-dialog/manage-category/index.tsx
+// components/category-management-dialog/manage-category/index.tsx
 //
 // Create and edit mode — name input, type select (locked once created; the
 // backend schema has no `type` field on update, so this is unchangeable

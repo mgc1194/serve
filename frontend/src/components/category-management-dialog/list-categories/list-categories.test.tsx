@@ -1,9 +1,9 @@
-// pages/budgets/category-management-dialog/list-categories/list-categories.test.tsx
+// components/category-management-dialog/list-categories/list-categories.test.tsx
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ListCategories } from '@pages/budgets/category-management-dialog/list-categories';
+import { ListCategories } from '@components/category-management-dialog/list-categories';
 import type { Category } from '@serve/types/global';
 
 const CATEGORIES: Category[] = [
