@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw';
 
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
 import { makeCategory, makeLabel } from '@serve/mocks';
+import { API_V1 } from '@serve/config';
 import type { Category, Label } from '@serve/types/global';
 
 // HouseholdDetailCard fetches its own labels/categories internally (see
@@ -12,16 +13,15 @@ import type { Category, Label } from '@serve/types/global';
 // determinism — an unmocked request is bypassed (see .storybook/preview.tsx)
 // and falls through to a real, backend-less fetch, which still ends up
 // empty but less predictably so.
-const API = '/api/v1';
 
 function handlersFor(householdId: number, categories: Category[], labels: Label[]) {
   return [
-    http.get(`${API}/categories/`, ({ request }) => {
+    http.get(`${API_V1}/categories/`, ({ request }) => {
       const url = new URL(request.url);
       if (Number(url.searchParams.get('household_id')) !== householdId) return HttpResponse.json([]);
       return HttpResponse.json(categories);
     }),
-    http.get(`${API}/labels/`, ({ request }) => {
+    http.get(`${API_V1}/labels/`, ({ request }) => {
       const url = new URL(request.url);
       if (Number(url.searchParams.get('household_id')) !== householdId) return HttpResponse.json([]);
       return HttpResponse.json(labels);
