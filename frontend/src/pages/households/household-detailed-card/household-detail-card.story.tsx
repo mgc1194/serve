@@ -2,8 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { http, HttpResponse } from 'msw';
 
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
-import { makeCategory, makeLabel } from '@serve/mocks';
 import { API_V1 } from '@serve/config';
+import { makeCategory, makeLabel } from '@serve/mocks';
 import type { Category, Label } from '@serve/types/global';
 
 // HouseholdDetailCard fetches its own labels/categories internally (see
