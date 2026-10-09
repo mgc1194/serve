@@ -1,4 +1,4 @@
-// pages/budgets/category-management-dialog/list-categories/index.tsx
+// components/category-management-dialog/list-categories/index.tsx
 //
 // List mode — active categories grouped into Spending/Earning sections
 // (matching the Category model's own ordering), each row with an edit

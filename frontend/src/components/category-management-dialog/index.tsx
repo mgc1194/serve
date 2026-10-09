@@ -1,4 +1,4 @@
-// pages/budgets/category-management-dialog/index.tsx
+// components/category-management-dialog/index.tsx
 //
 // Orchestrates the category management dialog: owns all state, handles API
 // calls, and delegates rendering to ListCategories (list mode) and
@@ -33,8 +33,8 @@
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 
-import { ListCategories } from '@pages/budgets/category-management-dialog/list-categories';
-import { ManageCategory } from '@pages/budgets/category-management-dialog/manage-category';
+import { ListCategories } from '@components/category-management-dialog/list-categories';
+import { ManageCategory } from '@components/category-management-dialog/manage-category';
 import type { Category } from '@serve/types/global';
 import {
   createCategory,

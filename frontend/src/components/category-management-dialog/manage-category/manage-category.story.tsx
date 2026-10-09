@@ -1,8 +1,8 @@
-// pages/budgets/category-management-dialog/manage-category/manage-category.story.tsx
+// components/category-management-dialog/manage-category/manage-category.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { ManageCategory } from '@pages/budgets/category-management-dialog/manage-category';
+import { ManageCategory } from '@components/category-management-dialog/manage-category';
 
 const CATEGORY = {
   id: 1,
@@ -13,7 +13,7 @@ const CATEGORY = {
 };
 
 const meta: Meta<typeof ManageCategory> = {
-  title: 'Budgets/CategoryManagementDialog/ManageCategory',
+  title: 'Components/CategoryManagementDialog/ManageCategory',
   component: ManageCategory,
   parameters: { layout: 'padded' },
   args: {

@@ -1,4 +1,4 @@
-// pages/budgets/category-management-dialog/category-management-dialog.test.tsx
+// components/category-management-dialog/category-management-dialog.test.tsx
 //
 // Tests for the orchestration layer: mode transitions, API calls, and
 // error propagation. Subcomponent rendering is covered in their own tests.
@@ -6,7 +6,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CategoryManagementDialog } from '@pages/budgets/category-management-dialog';
+import { CategoryManagementDialog } from '@components/category-management-dialog';
 import { createCategory, deleteCategory, listCategories, updateCategory, ApiError } from '@services/categories';
 
 vi.mock('@services/categories', async importOriginal => {
