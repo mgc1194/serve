@@ -52,6 +52,19 @@ describe('HouseholdCategoriesSection rendering', () => {
     expect(screen.getByText('Earning')).toBeDefined();
   });
 
+  it('shows a Labels column header and a placeholder per row', () => {
+    // No way to link a label to a category yet — every row shows "—"
+    // rather than real data. See the file-level comment for why.
+    setup({
+      categories: [
+        makeCategory({ id: 1, name: 'Groceries', type: 'spending' }),
+        makeCategory({ id: 2, name: 'Salary', type: 'earning' }),
+      ],
+    });
+    expect(screen.getByRole('columnheader', { name: 'Labels' })).toBeDefined();
+    expect(screen.getAllByText('—')).toHaveLength(2);
+  });
+
   it('orders categories by type then name', () => {
     setup({
       categories: [

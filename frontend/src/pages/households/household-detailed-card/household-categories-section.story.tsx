@@ -4,6 +4,8 @@
 // (chosen over grouping rows under Spending/Earning subheaders) and its
 // edge cases (Empty/SpendingOnly/ManyCategories/LongNames) — ManyCategories
 // has 12 rows, so it also demonstrates the 5-per-page pagination footer.
+// The Labels column is a placeholder ("—" for every row) until a label
+// can actually be linked to a category — see the component's own comment.
 // "Manage categories" opens the real CategoryManagementDialog, which has
 // no backend to talk to here — same as HouseholdDetailCard's own story,
 // it degrades to a loading/error state rather than crashing.

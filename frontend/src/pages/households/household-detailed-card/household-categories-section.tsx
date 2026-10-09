@@ -8,6 +8,12 @@
 // CategoryManagementDialog (always in list mode — kept simple, no
 // separate create-mode entry point).
 //
+// The Labels column is a placeholder — "—" for every row — since there's
+// currently no way to link a label to a category at all (no category_id
+// on the frontend's Label type, no UI to set one). It's here so the
+// column exists and the layout is settled; wiring it to real data is a
+// separate, later change.
+//
 // Paginated at a fixed 5 rows per page (per PR feedback), using MUI's
 // custom pagination actions pattern:
 // https://mui.com/material-ui/react-table/#custom-pagination-actions
@@ -138,6 +144,7 @@ export function HouseholdCategoriesSection({
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Type</TableCell>
+                <TableCell>Labels</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -152,6 +159,11 @@ export function HouseholdCategoriesSection({
                       variant="outlined"
                     />
                   </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.disabled">
+                      —
+                    </Typography>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -160,7 +172,7 @@ export function HouseholdCategoriesSection({
                 <TableRow>
                   <TablePagination
                     rowsPerPageOptions={[ROWS_PER_PAGE]}
-                    colSpan={2}
+                    colSpan={3}
                     count={categories.length}
                     rowsPerPage={ROWS_PER_PAGE}
                     page={safePage}
