@@ -3,25 +3,20 @@
 // Displays a household's categories as a flat table — one row per
 // category, ordered type-then-name (matching the Category model's own
 // Meta.ordering) with an explicit Type column, rather than the chip-cloud
-// HouseholdLabelsSection uses for labels. "Add category" opens the
-// management dialog in create mode; clicking a row (or its edit icon)
-// opens it in list mode — same division of labor as
-// HouseholdLabelsSection/LabelManagementDialog, just with a bigger click
-// target per row instead of a chip.
+// HouseholdLabelsSection uses for labels. CategoryManagementDialog always
+// opens in list mode (kept simple — no separate create-mode entry point);
+// "Manage categories" and clicking a row both just open it, and the user
+// picks "New category" or an existing row's edit action from inside.
 
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
 import {
   Box,
   Button,
   Chip,
-  IconButton,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -48,19 +43,12 @@ export function HouseholdCategoriesSection({
   onCategoriesChanged,
 }: HouseholdCategoriesSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogInitialMode, setDialogInitialMode] = useState<'list' | 'create'>('list');
 
   const ordered = [...categories].sort(
     (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name),
   );
 
   function openManage() {
-    setDialogInitialMode('list');
-    setDialogOpen(true);
-  }
-
-  function openCreate() {
-    setDialogInitialMode('create');
     setDialogOpen(true);
   }
 
@@ -81,7 +69,6 @@ export function HouseholdCategoriesSection({
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Type</TableCell>
-                <TableCell align="right" />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -96,21 +83,6 @@ export function HouseholdCategoriesSection({
                       variant="outlined"
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title={`Edit "${category.name}"`}>
-                      <IconButton
-                        size="small"
-                        aria-label={`Edit ${category.name}`}
-                        onClick={e => {
-                          e.stopPropagation();
-                          openManage();
-                        }}
-                        sx={{ color: 'text.disabled', '&:hover': { color: 'text.primary' } }}
-                      >
-                        <EditIcon sx={{ fontSize: 16 }} />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -119,12 +91,11 @@ export function HouseholdCategoriesSection({
 
         <Button
           size="small"
-          startIcon={<AddIcon />}
-          onClick={openCreate}
+          onClick={openManage}
           variant="outlined"
           sx={{ fontSize: '0.75rem', py: 0.5 }}
         >
-          Add category
+          Manage categories
         </Button>
       </Box>
 
@@ -132,7 +103,6 @@ export function HouseholdCategoriesSection({
         open={dialogOpen}
         householdId={householdId}
         householdName={householdName}
-        initialMode={dialogInitialMode}
         onClose={() => setDialogOpen(false)}
         onCategoriesChanged={onCategoriesChanged}
       />

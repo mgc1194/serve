@@ -3,9 +3,9 @@
 // Layout reference for HouseholdCategoriesSection's flat table (chosen
 // over grouping rows under Spending/Earning subheaders) and its edge
 // cases (Empty/SpendingOnly/ManyCategories/LongNames). Clicking a row or
-// "Add category" opens the real CategoryManagementDialog, which has no
-// backend to talk to here — same as HouseholdDetailCard's own story, it
-// degrades to a loading/error state rather than crashing.
+// "Manage categories" opens the real CategoryManagementDialog, which has
+// no backend to talk to here — same as HouseholdDetailCard's own story,
+// it degrades to a loading/error state rather than crashing.
 
 import { Box } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
