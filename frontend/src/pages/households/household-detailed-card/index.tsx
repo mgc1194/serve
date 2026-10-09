@@ -280,7 +280,6 @@ export function HouseholdDetailCard({
           householdId={household.id}
           householdName={household.name}
           categories={categories}
-          labels={labels}
           onCategoriesChanged={setCategories}
         />
       </Box>
