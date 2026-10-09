@@ -115,7 +115,6 @@ export function LabelManagementDialog({
         const created = await createLabel({
           name: trimmedName,
           color,
-          category: '',
           household_id: householdId,
         });
 

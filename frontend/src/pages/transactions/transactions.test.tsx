@@ -84,7 +84,7 @@ const EMPTY_PAGE: PaginatedTransactions = {
 };
 
 const LABELS = [
-  { id: 5, name: 'Groceries', color: '#22c55e', category: '', household_id: 1 },
+  { id: 5, name: 'Groceries', color: '#22c55e', category_id: null, household_id: 1 },
 ];
 
 const PAGE_WITH_A_ROW: PaginatedTransactions = {

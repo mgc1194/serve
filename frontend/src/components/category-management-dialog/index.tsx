@@ -48,6 +48,8 @@ interface CategoryManagementDialogProps {
   open: boolean;
   householdId: number;
   householdName: string;
+  /** Open the dialog directly into create mode (e.g. from an "Add category" button). */
+  initialMode?: 'list' | 'create';
   onClose: () => void;
   onCategoriesChanged: (categories: Category[]) => void;
 }
@@ -59,11 +61,12 @@ export function CategoryManagementDialog({
   open,
   householdId,
   householdName,
+  initialMode = 'list',
   onClose,
   onCategoriesChanged,
 }: CategoryManagementDialogProps) {
   // ── Mode ──────────────────────────────────────────────────────────────────
-  const [mode, setMode] = useState<Mode>('list');
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   // ── List state ────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
@@ -115,7 +118,7 @@ export function CategoryManagementDialog({
     // Resets mode and the list; loading/error state must flip
     // synchronously before the fetch below resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMode('list');
+    setMode(initialMode);
     setCategories([]);
     setIsLoading(true);
     setListError(null);
@@ -145,7 +148,7 @@ export function CategoryManagementDialog({
     return () => {
       ignore = true;
     };
-  }, [open, householdId]);
+  }, [open, householdId, initialMode]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {

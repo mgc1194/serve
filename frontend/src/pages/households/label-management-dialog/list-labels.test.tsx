@@ -7,9 +7,9 @@ import { ListLabels } from '@pages/households/label-management-dialog/list-label
 import type { Label } from '@serve/types/global';
 
 const LABELS: Label[] = [
-  { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 },
-  { id: 2, name: 'Transport', color: '#2563eb', category: '', household_id: 1 },
-  { id: 3, name: 'Bills', color: '#dc2626', category: '', household_id: 1 },
+  { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
+  { id: 2, name: 'Transport', color: '#2563eb', category_id: null, household_id: 1 },
+  { id: 3, name: 'Bills', color: '#dc2626', category_id: null, household_id: 1 },
 ];
 
 function setup(overrides: Partial<React.ComponentProps<typeof ListLabels>> = {}) {

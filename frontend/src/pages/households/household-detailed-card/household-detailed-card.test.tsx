@@ -13,6 +13,7 @@ vi.mock('@services/households', async (importOriginal) => {
 });
 
 vi.mock('@services/labels', () => ({ listLabels: vi.fn(() => new Promise(() => {})) }));
+vi.mock('@services/categories', () => ({ listCategories: vi.fn(() => new Promise(() => {})) }));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
