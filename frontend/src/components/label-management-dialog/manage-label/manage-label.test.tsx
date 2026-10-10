@@ -1,4 +1,4 @@
-// components/label-management-dialog/manage-label.test.tsx
+// components/label-management-dialog/manage-label/manage-label.test.tsx
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

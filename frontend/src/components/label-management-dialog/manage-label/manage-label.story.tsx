@@ -1,4 +1,4 @@
-// components/label-management-dialog/manage-label.story.tsx
+// components/label-management-dialog/manage-label/manage-label.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 

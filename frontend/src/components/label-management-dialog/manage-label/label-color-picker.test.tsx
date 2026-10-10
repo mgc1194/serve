@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LabelColorPicker } from './label-color-picker';
+import { LabelColorPicker } from '@components/label-management-dialog/manage-label/label-color-picker';
 
 const defaultProps = {
   open: true,
