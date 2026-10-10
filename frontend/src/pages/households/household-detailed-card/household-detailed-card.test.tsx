@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
-import type { User } from '@serve/types/global';
+import { makeCategory, makeLabel } from '@serve/mocks';
+import type { Category, Label, User } from '@serve/types/global';
+import { listCategories } from '@services/categories';
 import { renameHousehold, deleteHousehold, addMember, ApiError } from '@services/households';
+import { listLabels } from '@services/labels';
 
 vi.mock('@services/households', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@services/households')>();
@@ -13,6 +16,32 @@ vi.mock('@services/households', async (importOriginal) => {
 });
 
 vi.mock('@services/labels', () => ({ listLabels: vi.fn(() => new Promise(() => {})) }));
+vi.mock('@services/categories', () => ({ listCategories: vi.fn(() => new Promise(() => {})) }));
+
+// Both sections own their own management dialog and only ever hand data back
+// up via onLabelsChanged/onCategoriesChanged — stubbing them to a button that
+// fires that callback directly lets the race tests below trigger "the dialog
+// just reported a mutation" without driving the real dialog UI.
+vi.mock('@pages/households/household-detailed-card/household-labels-section', () => ({
+  HouseholdLabelsSection: ({ labels, onLabelsChanged }: { labels: Label[]; onLabelsChanged: (labels: Label[]) => void }) => (
+    <>
+      <button type="button" onClick={() => onLabelsChanged([makeLabel({ id: 99, name: 'Mutated Label' })])}>
+        simulate label mutation
+      </button>
+      {labels.map(label => <span key={label.id}>{label.name}</span>)}
+    </>
+  ),
+}));
+vi.mock('@pages/households/household-detailed-card/household-categories-section', () => ({
+  HouseholdCategoriesSection: ({ categories, onCategoriesChanged }: { categories: Category[]; onCategoriesChanged: (categories: Category[]) => void }) => (
+    <>
+      <button type="button" onClick={() => onCategoriesChanged([makeCategory({ id: 99, name: 'Mutated Category' })])}>
+        simulate category mutation
+      </button>
+      {categories.map(category => <span key={category.id}>{category.name}</span>)}
+    </>
+  ),
+}));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -23,6 +52,14 @@ vi.mock('react-router', async () => {
 const mockRenameHousehold = vi.mocked(renameHousehold);
 const mockDeleteHousehold = vi.mocked(deleteHousehold);
 const mockAddMember = vi.mocked(addMember);
+const mockListLabels = vi.mocked(listLabels);
+const mockListCategories = vi.mocked(listCategories);
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => { resolve = res; });
+  return { promise, resolve };
+}
 
 const household = {
   id: 1,
@@ -236,5 +273,40 @@ describe('HouseholdDetailCard delete', () => {
     fireEvent.click(screen.getByRole('button', { name: /delete household/i }));
     fireEvent.click(screen.getByRole('button', { name: /yes, delete/i }));
     expect(await screen.findByText('This household still has accounts.')).toBeDefined();
+  });
+});
+
+describe('HouseholdDetailCard stale mount-fetch protection', () => {
+  // Regression tests for: a slow mount-time listLabels/listCategories call
+  // resolving AFTER the dialog reports a mutation via onLabelsChanged/
+  // onCategoriesChanged must not revert the fresher, mutated state with its
+  // stale pre-mutation snapshot.
+
+  it('does not let a slow labels fetch revert a label mutation that lands first', async () => {
+    const mountFetch = deferred<Label[]>();
+    mockListLabels.mockReturnValueOnce(mountFetch.promise);
+    setup();
+
+    fireEvent.click(screen.getByText('simulate label mutation'));
+    expect(await screen.findByText('Mutated Label')).toBeDefined();
+
+    mountFetch.resolve([makeLabel({ id: 1, name: 'Stale Label' })]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Stale Label')).toBeNull();
+    expect(screen.getByText('Mutated Label')).toBeDefined();
+  });
+
+  it('does not let a slow categories fetch revert a category mutation that lands first', async () => {
+    const mountFetch = deferred<Category[]>();
+    mockListCategories.mockReturnValueOnce(mountFetch.promise);
+    setup();
+
+    fireEvent.click(screen.getByText('simulate category mutation'));
+    expect(await screen.findByText('Mutated Category')).toBeDefined();
+
+    mountFetch.resolve([makeCategory({ id: 1, name: 'Stale Category' })]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Stale Category')).toBeNull();
+    expect(screen.getByText('Mutated Category')).toBeDefined();
   });
 });

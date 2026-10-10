@@ -1,8 +1,9 @@
 // pages/households/household-detailed-card/index.tsx — Full management card for a single household.
 //
 // Displays household name with inline rename, member list with add-by-email,
-// labels section, account count chip (sets this household active and links
-// to /accounts), add-account shortcut, and delete with inline confirmation.
+// labels section, categories section, account count chip (sets this
+// household active and links to /accounts), add-account shortcut, and
+// delete with inline confirmation.
 
 import AccountBalanceOutlinedIcon from '@mui/icons-material/AccountBalanceOutlined';
 import AddIcon from '@mui/icons-material/Add';
@@ -22,14 +23,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useActiveHousehold } from '@context/active-household-context';
 import { AddHouseholdMemberForm } from '@pages/households/household-detailed-card/add-household-member-form';
+import { HouseholdCategoriesSection } from '@pages/households/household-detailed-card/household-categories-section';
 import { HouseholdLabelsSection } from '@pages/households/household-detailed-card/household-labels-section';
 import { HouseholdMemberList } from '@pages/households/household-detailed-card/household-member-list';
-import type { HouseholdDetail, Label } from '@serve/types/global';
+import type { Category, HouseholdDetail, Label } from '@serve/types/global';
+import { listCategories } from '@services/categories';
 import { renameHousehold, deleteHousehold, ApiError } from '@services/households';
 import { listLabels } from '@services/labels';
 
@@ -63,15 +66,50 @@ export function HouseholdDetailCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Labels — fetched on mount; updated optimistically when dialog reports changes.
+  // Labels — fetched on mount; updated when the dialog reports a
+  // create/edit/deactivate via onLabelsChanged. labelsVersionRef guards
+  // against the mount fetch resolving AFTER such a mutation: its result
+  // predates the mutation, so applying it would revert the table. Mirrors
+  // the categoriesVersionRef/writeCategories pattern CategoryManagementDialog
+  // uses internally for its own list fetch vs its own mutations — here it's
+  // one level up, since the mutation arrives via a callback instead.
   // Failure is non-fatal: the section degrades gracefully to "No labels yet."
   const [labels, setLabels] = useState<Label[]>([]);
+  const labelsVersionRef = useRef(0);
+  function writeLabels(next: Label[]) {
+    labelsVersionRef.current += 1;
+    setLabels(next);
+  }
   useEffect(() => {
+    const versionAtStart = labelsVersionRef.current;
     listLabels(household.id)
-      .then(setLabels)
+      .then(result => {
+        if (labelsVersionRef.current !== versionAtStart) return;
+        writeLabels(result);
+      })
       .catch(() => { /* non-fatal — section shows empty state */ });
   // household.id is stable for the lifetime of this card instance
-   
+
+  }, [household.id]);
+
+  // Categories — same fetch-on-mount/non-fatal-failure shape as labels above,
+  // with the same stale-response guard (flagged in PR review for this state).
+  const [categories, setCategories] = useState<Category[]>([]);
+  const categoriesVersionRef = useRef(0);
+  function writeCategories(next: Category[]) {
+    categoriesVersionRef.current += 1;
+    setCategories(next);
+  }
+  useEffect(() => {
+    const versionAtStart = categoriesVersionRef.current;
+    listCategories(household.id)
+      .then(result => {
+        if (categoriesVersionRef.current !== versionAtStart) return;
+        writeCategories(result);
+      })
+      .catch(() => { /* non-fatal — section shows empty state */ });
+  // household.id is stable for the lifetime of this card instance
+
   }, [household.id]);
 
   function startEditing() {
@@ -255,7 +293,19 @@ export function HouseholdDetailCard({
           householdId={household.id}
           householdName={household.name}
           labels={labels}
-          onLabelsChanged={setLabels}
+          onLabelsChanged={writeLabels}
+        />
+      </Box>
+
+      <Divider />
+
+      {/* Categories */}
+      <Box sx={{ px: 3, py: 2 }}>
+        <HouseholdCategoriesSection
+          householdId={household.id}
+          householdName={household.name}
+          categories={categories}
+          onCategoriesChanged={writeCategories}
         />
       </Box>
 
