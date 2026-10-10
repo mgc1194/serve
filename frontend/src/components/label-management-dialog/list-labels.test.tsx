@@ -1,9 +1,9 @@
-// pages/households/label-management-dialog/list-labels.test.tsx
+// components/label-management-dialog/list-labels.test.tsx
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ListLabels } from '@pages/households/label-management-dialog/list-labels';
+import { ListLabels } from '@components/label-management-dialog/list-labels';
 import type { Label } from '@serve/types/global';
 
 const LABELS: Label[] = [

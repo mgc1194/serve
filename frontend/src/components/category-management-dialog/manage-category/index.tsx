@@ -22,7 +22,7 @@ import {
 import { useState } from 'react';
 
 import { DeleteConfirmation } from '@components/delete-confirmation';
-import { useAutoFocus } from '@pages/households/label-management-dialog/manage-label/use-auto-focus';
+import { useAutoFocus } from '@components/label-management-dialog/manage-label/use-auto-focus';
 import type { Category } from '@serve/types/global';
 
 type CategoryType = 'spending' | 'earning';

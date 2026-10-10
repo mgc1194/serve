@@ -3,7 +3,7 @@
 // Orchestrates the category management dialog: owns all state, handles API
 // calls, and delegates rendering to ListCategories (list mode) and
 // ManageCategory (create / edit mode). Mirrors
-// households/label-management-dialog's shape.
+// components/label-management-dialog's shape.
 //
 // "New category" stays available even while the initial list fetch is
 // still loading, so a create/edit/deactivate can complete before that

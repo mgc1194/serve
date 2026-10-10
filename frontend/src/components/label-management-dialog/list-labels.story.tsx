@@ -1,8 +1,8 @@
-// pages/households/label-management-dialog/list-labels.story.tsx
+// components/label-management-dialog/list-labels.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { ListLabels } from '@pages/households/label-management-dialog/list-labels';
+import { ListLabels } from '@components/label-management-dialog/list-labels';
 
 const LABELS = [
   { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
@@ -11,7 +11,7 @@ const LABELS = [
 ];
 
 const meta: Meta<typeof ListLabels> = {
-  title: 'Households/LabelManagementDialog/ListLabels',
+  title: 'Components/LabelManagementDialog/ListLabels',
   component: ListLabels,
   parameters: { layout: 'padded' },
   args: {

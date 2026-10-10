@@ -1,4 +1,4 @@
-// pages/households/label-management-dialog/list-labels.tsx
+// components/label-management-dialog/list-labels.tsx
 //
 // List mode — renders all labels as coloured chips with a per-label edit
 // button (pencil icon) that opens the edit form. Deletion is handled inside

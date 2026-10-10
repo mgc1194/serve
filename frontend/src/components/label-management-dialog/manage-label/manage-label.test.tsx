@@ -1,9 +1,9 @@
-// pages/households/label-management-dialog/manage-label.test.tsx
+// components/label-management-dialog/manage-label/manage-label.test.tsx
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ManageLabel } from '@serve/pages/households/label-management-dialog/manage-label';
+import { ManageLabel } from '@components/label-management-dialog/manage-label';
 import type { Label } from '@serve/types/global';
 
 const LABEL: Label = { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 };

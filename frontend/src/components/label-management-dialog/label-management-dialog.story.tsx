@@ -1,11 +1,11 @@
-// pages/households/label-management-dialog/label-management-dialog.story.tsx
+// components/label-management-dialog/label-management-dialog.story.tsx
 
 import type { Meta, StoryObj } from '@storybook/react';
 
-import { LabelManagementDialog } from '@pages/households/label-management-dialog';
+import { LabelManagementDialog } from '@components/label-management-dialog';
 
 const meta: Meta<typeof LabelManagementDialog> = {
-  title: 'Households/LabelManagementDialog',
+  title: 'Components/LabelManagementDialog',
   component: LabelManagementDialog,
   parameters: { layout: 'centered' },
   args: {

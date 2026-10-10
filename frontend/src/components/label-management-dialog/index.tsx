@@ -1,4 +1,4 @@
-// pages/households/label-management-dialog/index.tsx
+// components/label-management-dialog/index.tsx
 //
 // Orchestrates the label management dialog: owns all state, handles API calls,
 // and delegates rendering to ListLabels (list mode) and ManageLabel
@@ -11,8 +11,8 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 
-import { ListLabels } from '@pages/households/label-management-dialog/list-labels';
-import { ManageLabel } from '@pages/households/label-management-dialog/manage-label';
+import { ListLabels } from '@components/label-management-dialog/list-labels';
+import { ManageLabel } from '@components/label-management-dialog/manage-label';
 import type { Label } from '@serve/types/global';
 import { createLabel, deleteLabel, listLabels, updateLabel, ApiError } from '@services/labels';
 

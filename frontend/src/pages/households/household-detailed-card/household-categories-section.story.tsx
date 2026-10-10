@@ -1,17 +1,20 @@
 // pages/households/household-detailed-card/household-categories-section.story.tsx
 //
-// Layout reference for HouseholdCategoriesSection's flat table (chosen
-// over grouping rows under Spending/Earning subheaders) and its edge
-// cases (Empty/SpendingOnly/ManyCategories/LongNames/WithLabels). Clicking
-// a row or "Add category" opens the real CategoryManagementDialog, which
-// has no backend to talk to here — same as HouseholdDetailCard's own
-// story, it degrades to a loading/error state rather than crashing.
+// Layout reference for HouseholdCategoriesSection's flat, read-only table
+// (chosen over grouping rows under Spending/Earning subheaders) and its
+// edge cases (Empty/SpendingOnly/ManyCategories/LongNames) — ManyCategories
+// has 12 rows, so it also demonstrates the 5-per-page pagination footer.
+// The Labels column is a placeholder ("—" for every row) until a label
+// can actually be linked to a category — see the component's own comment.
+// "Manage categories" opens the real CategoryManagementDialog, which has
+// no backend to talk to here — same as HouseholdDetailCard's own story,
+// it degrades to a loading/error state rather than crashing.
 
 import { Box } from '@mui/material';
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { HouseholdCategoriesSection } from '@pages/households/household-detailed-card/household-categories-section';
-import { makeCategory, makeLabel } from '@serve/mocks';
+import { makeCategory } from '@serve/mocks';
 
 const CATEGORIES = [
   makeCategory({ id: 1, name: 'Groceries', type: 'spending' }),
@@ -36,7 +39,6 @@ const meta: Meta<typeof HouseholdCategoriesSection> = {
     householdId: 1,
     householdName: 'Smith Household',
     categories: CATEGORIES,
-    labels: [],
     onCategoriesChanged: () => {},
   },
 };
@@ -75,19 +77,6 @@ export const LongNames: Story = {
       makeCategory({ id: 1, name: 'Home Maintenance & Repairs', type: 'spending' }),
       makeCategory({ id: 2, name: 'Subscriptions and Memberships', type: 'spending' }),
       makeCategory({ id: 3, name: 'Side Business Consulting Income', type: 'earning' }),
-    ],
-  },
-};
-
-export const WithLabels: Story = {
-  args: {
-    labels: [
-      makeLabel({ id: 1, name: 'Trader Joes', color: '#16a34a', category_id: 1 }),
-      makeLabel({ id: 2, name: 'Whole Foods', color: '#2563eb', category_id: 1 }),
-      makeLabel({ id: 3, name: 'Landlord', color: '#dc2626', category_id: 2 }),
-      makeLabel({ id: 4, name: 'Day Job', color: '#7c3aed', category_id: 4 }),
-      // Not assigned to any category — doesn't appear in any row.
-      makeLabel({ id: 5, name: 'Misc', color: '#6B7280', category_id: null }),
     ],
   },
 };
