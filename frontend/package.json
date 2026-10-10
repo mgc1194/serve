@@ -55,6 +55,7 @@
     "happy-dom": "^20.14.5",
     "lint-staged": "^17.5.1",
     "msw": "^2.15.0",
+    "msw-storybook-addon": "^3.0.3",
     "playwright": "^1.63.0",
     "storybook": "^10.6.0",
     "typescript": "^6.0.3",
@@ -65,5 +66,10 @@
   "lint-staged": {
     "src/**/*.{ts,tsx}": "eslint --max-warnings=0",
     "tests/**/*.{ts,tsx}": "eslint --max-warnings=0"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
