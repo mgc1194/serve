@@ -1,4 +1,4 @@
-// pages/households/label-management-dialog/label-management-dialog.test.tsx
+// components/label-management-dialog/label-management-dialog.test.tsx
 //
 // Tests for the orchestration layer: mode transitions, API calls, and
 // error propagation. Subcomponent rendering is covered in their own tests.
@@ -6,7 +6,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LabelManagementDialog } from '@pages/households/label-management-dialog';
+import { LabelManagementDialog } from '@components/label-management-dialog';
 import {
   createLabel,
   deleteLabel,

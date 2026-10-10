@@ -3,7 +3,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LabelColorField } from './label-color-field';
+import { LabelColorField } from '@components/label-management-dialog/manage-label/label-color-field';
 
 const defaultProps = {
   color: '#0052cc',

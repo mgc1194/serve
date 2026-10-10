@@ -5,7 +5,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { LabelColorField } from './label-color-field';
 
 const meta: Meta<typeof LabelColorField> = {
-  title: 'Households/LabelManagementDialog/LabelColorField',
+  title: 'Components/LabelManagementDialog/LabelColorField',
   component: LabelColorField,
   parameters: { layout: 'padded' },
   args: {
