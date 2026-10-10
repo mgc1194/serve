@@ -1,10 +1,16 @@
 // components/label-management-dialog/manage-label/index.tsx
 //
-// Create and edit mode — name input, colour picker with hex preview chip,
-// delete with confirmation (edit only), and Back / Save actions.
+// Create and edit mode — name input, category picker, colour picker with
+// hex preview chip, delete with confirmation (edit only), and Back / Save
+// actions.
 //
-// Category field is intentionally omitted until the budget.Category model
-// and migration are implemented (Issue 1/2).
+// The category picker sits between Name and the colour picker: it's a
+// classification field like Name (mirrors ManageCategory's own Name-then-
+// Type ordering), and keeping it out of the colour-picker/preview-chip
+// pair leaves that visual pairing unbroken. Options are a household's
+// active categories only (categories are fetched by the dialog, not this
+// component) — matching CategoryManagementDialog's own scope, a deactivated
+// category already assigned to a label simply won't appear as an option.
 
 import {
   Alert,
@@ -12,6 +18,10 @@ import {
   Button,
   Chip,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
   TextField,
   Typography,
 } from '@mui/material';
@@ -20,7 +30,7 @@ import { useState } from 'react';
 import { DeleteConfirmation } from '@components/delete-confirmation';
 import { LabelColorField } from '@components/label-management-dialog/manage-label/label-color-field';
 import { useAutoFocus } from '@components/label-management-dialog/manage-label/use-auto-focus';
-import type { Label } from '@serve/types/global';
+import type { Category, Label } from '@serve/types/global';
 import { contrastTextColor } from '@utils/contrast-text-color';
 
 
@@ -29,11 +39,14 @@ interface ManageLabelProps {
   editingLabel: Label | null;
   name: string;
   color: string;
+  categories: Category[];
+  categoryId: number | null;
   isSaving: boolean;
   isDeleting: boolean;
   error: string | null;
   onNameChange: (value: string) => void;
   onColorChange: (value: string) => void;
+  onCategoryChange: (value: number | null) => void;
   onSave: () => void;
   onDelete: (labelId: number) => void;
   onBack: () => void;
@@ -42,16 +55,25 @@ interface ManageLabelProps {
 
 const DEFAULT_COLOR = '#6B7280';
 
+// A real, non-empty sentinel for "no category" — using '' here instead
+// makes MUI's OutlinedInput treat the field as "not filled" only in that
+// state, so the border's notch/label-shrink would inconsistently differ
+// between "No category" and an actual selection.
+const NO_CATEGORY = 'none';
+
 export function ManageLabel({
   mode,
   editingLabel,
   name,
   color,
+  categories,
+  categoryId,
   isSaving,
   isDeleting,
   error,
   onNameChange,
   onColorChange,
+  onCategoryChange,
   onSave,
   onDelete,
   onBack,
@@ -81,6 +103,25 @@ export function ManageLabel({
         fullWidth
         disabled={isSaving || isDeleting}
       />
+
+      <FormControl size="small" fullWidth disabled={isSaving || isDeleting}>
+        <InputLabel id="label-category-select">Category</InputLabel>
+        <Select
+          labelId="label-category-select"
+          label="Category"
+          value={categoryId === null ? NO_CATEGORY : String(categoryId)}
+          onChange={e => onCategoryChange(e.target.value === NO_CATEGORY ? null : Number(e.target.value))}
+        >
+          <MenuItem value={NO_CATEGORY}>
+            <em>No category</em>
+          </MenuItem>
+          {categories.map(category => (
+            <MenuItem key={category.id} value={String(category.id)}>
+              {category.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
 
       <LabelColorField
         color={color}

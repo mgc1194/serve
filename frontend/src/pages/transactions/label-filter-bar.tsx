@@ -15,7 +15,7 @@ const UNLABELED_OPTION: Label = {
   id: -1,
   name: 'Unlabeled',
   color: '',
-  category: '',
+  category_id: null,
   household_id: -1,
 };
 
