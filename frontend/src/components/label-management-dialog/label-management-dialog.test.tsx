@@ -7,6 +7,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LabelManagementDialog } from '@components/label-management-dialog';
+import { makeCategory } from '@serve/mocks';
+import { listCategories } from '@services/categories';
 import {
   createLabel,
   deleteLabel,
@@ -25,15 +27,25 @@ vi.mock('@services/labels', async importOriginal => {
     deleteLabel: vi.fn(),
   };
 });
+vi.mock('@services/categories', async importOriginal => {
+  const actual = await importOriginal<typeof import('@services/categories')>();
+  return { ...actual, listCategories: vi.fn() };
+});
 
 const mockListLabels = vi.mocked(listLabels);
 const mockCreateLabel = vi.mocked(createLabel);
 const mockUpdateLabel = vi.mocked(updateLabel);
 const mockDeleteLabel = vi.mocked(deleteLabel);
+const mockListCategories = vi.mocked(listCategories);
 
 const LABELS = [
-  { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 },
-  { id: 2, name: 'Transport', color: '#2563eb', category: '', household_id: 1 },
+  { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
+  { id: 2, name: 'Transport', color: '#2563eb', category_id: 2, household_id: 1 },
+];
+
+const CATEGORIES = [
+  makeCategory({ id: 1, name: 'Food', type: 'spending' }),
+  makeCategory({ id: 2, name: 'Transportation', type: 'spending' }),
 ];
 
 function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDialog>> = {}) {
@@ -57,6 +69,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDia
 beforeEach(() => {
   vi.clearAllMocks();
   mockListLabels.mockResolvedValue(LABELS);
+  mockListCategories.mockResolvedValue(CATEGORIES);
 });
 
 // ── Loading ────────────────────────────────────────────────────────────────────
@@ -155,12 +168,77 @@ describe('LabelManagementDialog mode transitions', () => {
   });
 });
 
+// ── Category picker ──────────────────────────────────────────────────────────
+
+describe('LabelManagementDialog category picker', () => {
+  it('fetches categories with the householdId on open', async () => {
+    setup();
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1));
+  });
+
+  it('defaults to "No category" in create mode', async () => {
+    setup();
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /new label/i }));
+    expect(screen.getByText('No category')).toBeDefined();
+  });
+
+  it("pre-fills the category picker with the label's existing category in edit mode", async () => {
+    setup();
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /edit transport/i }));
+    expect(screen.getByText('Transportation')).toBeDefined();
+  });
+
+  it('sends the selected category_id when creating a label', async () => {
+    mockCreateLabel.mockResolvedValueOnce(
+      { id: 99, name: 'Bills', color: '#6B7280', category_id: 1, household_id: 1 },
+    );
+
+    setup();
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /new label/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Bills' } });
+    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
+    fireEvent.click(await screen.findByRole('option', { name: 'Food' }));
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateLabel).toHaveBeenCalledWith({
+        name: 'Bills',
+        color: '#6B7280',
+        category_id: 1,
+        household_id: 1,
+      }),
+    );
+  });
+
+  it('clears the category when "No category" is selected on an existing assignment', async () => {
+    mockUpdateLabel.mockResolvedValueOnce({ ...LABELS[1], category_id: null });
+
+    setup();
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /edit transport/i }));
+    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
+    fireEvent.click(await screen.findByRole('option', { name: 'No category' }));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateLabel).toHaveBeenCalledWith(LABELS[1].id, {
+        name: 'Transport',
+        color: '#2563eb',
+        category_id: null,
+      }),
+    );
+  });
+});
+
 // ── Create ─────────────────────────────────────────────────────────────────────
 
 describe('LabelManagementDialog create', () => {
   it('calls createLabel with name, color, and householdId on save', async () => {
     mockCreateLabel.mockResolvedValueOnce(
-      { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 },
+      { id: 99, name: 'Bills', color: '#6B7280', category_id: null, household_id: 1 },
     );
 
     setup();
@@ -173,14 +251,14 @@ describe('LabelManagementDialog create', () => {
       expect(mockCreateLabel).toHaveBeenCalledWith({
         name: 'Bills',
         color: '#6B7280',
-        category: '',
+        category_id: null,
         household_id: 1,
       }),
     );
   });
 
   it('calls onLabelsChanged after successful create', async () => {
-    const newLabel = { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 };
+    const newLabel = { id: 99, name: 'Bills', color: '#6B7280', category_id: null, household_id: 1 };
     mockCreateLabel.mockResolvedValueOnce(newLabel);
 
     const { onLabelsChanged } = setup();
@@ -195,7 +273,7 @@ describe('LabelManagementDialog create', () => {
 
   it('returns to list mode after successful create', async () => {
     mockCreateLabel.mockResolvedValueOnce(
-      { id: 99, name: 'Bills', color: '#6B7280', category: '', household_id: 1 },
+      { id: 99, name: 'Bills', color: '#6B7280', category_id: null, household_id: 1 },
     );
 
     setup();
@@ -241,6 +319,7 @@ describe('LabelManagementDialog edit', () => {
       expect(mockUpdateLabel).toHaveBeenCalledWith(LABELS[0].id, {
         name: 'Food',
         color: '#dc2626',
+        category_id: null,
       }),
     );
   });

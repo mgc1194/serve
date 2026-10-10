@@ -4,20 +4,29 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ManageLabel } from '@components/label-management-dialog/manage-label';
+import { makeCategory } from '@serve/mocks';
 import type { Label } from '@serve/types/global';
 
-const LABEL: Label = { id: 1, name: 'Groceries', color: '#16a34a', category: '', household_id: 1 };
+const LABEL: Label = { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 };
+
+const CATEGORIES = [
+  makeCategory({ id: 1, name: 'Food', type: 'spending' }),
+  makeCategory({ id: 2, name: 'Transportation', type: 'spending' }),
+];
 
 const defaultProps: React.ComponentProps<typeof ManageLabel> = {
   mode: 'create',
   editingLabel: null,
   name: '',
   color: '#6B7280',
+  categories: CATEGORIES,
+  categoryId: null,
   isSaving: false,
   isDeleting: false,
   error: null,
   onNameChange: vi.fn(),
   onColorChange: vi.fn(),
+  onCategoryChange: vi.fn(),
   onSave: vi.fn(),
   onDelete: vi.fn(),
   onBack: vi.fn(),
@@ -202,6 +211,39 @@ describe('ManageLabel interactions', () => {
     expect(screen.getByRole('button', { name: /^no$/i }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: /^save$/i }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: /^back$/i }).hasAttribute('disabled')).toBe(true);
+  });
+});
+
+describe('ManageLabel category picker', () => {
+  it('renders the Category select', () => {
+    setup();
+    expect(screen.getByLabelText(/^category$/i)).toBeDefined();
+  });
+
+  it('shows "No category" when categoryId is null', () => {
+    setup({ categoryId: null });
+    expect(screen.getByText('No category')).toBeDefined();
+  });
+
+  it("shows the selected category's name when categoryId is set", () => {
+    setup({ categoryId: 2 });
+    expect(screen.getByText('Transportation')).toBeDefined();
+  });
+
+  it('calls onCategoryChange with the selected category id', async () => {
+    const onCategoryChange = vi.fn();
+    setup({ onCategoryChange });
+    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
+    fireEvent.click(await screen.findByRole('option', { name: 'Food' }));
+    expect(onCategoryChange).toHaveBeenCalledWith(1);
+  });
+
+  it('calls onCategoryChange with null when "No category" is selected', async () => {
+    const onCategoryChange = vi.fn();
+    setup({ categoryId: 2, onCategoryChange });
+    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
+    fireEvent.click(await screen.findByRole('option', { name: 'No category' }));
+    expect(onCategoryChange).toHaveBeenCalledWith(null);
   });
 });
 
