@@ -2,8 +2,17 @@
 //
 // Tests for the orchestration layer: mode transitions, API calls, and
 // error propagation. Subcomponent rendering is covered in their own tests.
+//
+// No regression tests here for stale-response races (an initial list load
+// that resolves after a mutation already landed, or a leftover fetch from
+// a previous household leaking into a new one after a prop change) — that
+// used to be hand-rolled state here (categoriesRef/categoriesVersionRef/
+// fetchIdRef) and was tested accordingly, but it's now TanStack Query's
+// job: queries are keyed by householdId, and it already guarantees only
+// the latest request for a given key is ever applied.
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CategoryManagementDialog } from '@components/category-management-dialog';
@@ -30,9 +39,21 @@ const CATEGORIES = [
   { id: 2, name: 'Salary', type: 'earning' as const, is_active: true, household_id: 1 },
 ];
 
+// Needs its own QueryClient (the dialog reads categories via useCategories)
+// — rerender re-wraps with the SAME client instance so a prop change (e.g.
+// householdId) behaves like it would under the app's one long-lived client.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const result = rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return {
+    ...result,
+    rerender: (nextUi: React.ReactElement) =>
+      result.rerender(<QueryClientProvider client={queryClient}>{nextUi}</QueryClientProvider>),
+  };
+}
+
 function setup(overrides: Partial<React.ComponentProps<typeof CategoryManagementDialog>> = {}) {
   const onClose = vi.fn();
-  const onCategoriesChanged = vi.fn();
 
   render(
     <CategoryManagementDialog
@@ -40,12 +61,11 @@ function setup(overrides: Partial<React.ComponentProps<typeof CategoryManagement
       householdId={1}
       householdName="Smith Household"
       onClose={onClose}
-      onCategoriesChanged={onCategoriesChanged}
       {...overrides}
     />,
   );
 
-  return { onClose, onCategoriesChanged };
+  return { onClose };
 }
 
 beforeEach(() => {
@@ -54,15 +74,25 @@ beforeEach(() => {
 });
 
 describe('CategoryManagementDialog loading', () => {
-  it('calls listCategories with the householdId on open', async () => {
+  it('calls listCategories with the householdId (including inactive) on open', async () => {
     setup();
-    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1, true));
   });
 
   it('renders category names after loading', async () => {
     setup();
     await waitFor(() => expect(screen.getByText('Groceries')).toBeDefined());
     expect(screen.getByText('Salary')).toBeDefined();
+  });
+
+  it('omits inactive categories from the list', async () => {
+    mockListCategories.mockResolvedValue([
+      ...CATEGORIES,
+      { id: 3, name: 'Old Rent', type: 'spending' as const, is_active: false, household_id: 1 },
+    ]);
+    setup();
+    await waitFor(() => expect(screen.getByText('Groceries')).toBeDefined());
+    expect(screen.queryByText('Old Rent')).toBeNull();
   });
 
   it('shows error alert when listCategories fails', async () => {
@@ -123,142 +153,24 @@ describe('CategoryManagementDialog mode transitions', () => {
   });
 });
 
-describe('CategoryManagementDialog stale list responses', () => {
-  it('discards (rather than applies) an initial list response that predates a create', async () => {
-    let resolveInitialLoad: (categories: typeof CATEGORIES) => void = () => {};
-    mockListCategories.mockReturnValueOnce(
-      new Promise(resolve => {
-        resolveInitialLoad = resolve;
-      }),
-    );
-    const created = {
-      id: 99,
-      name: 'Utilities',
-      type: 'spending' as const,
-      is_active: true,
-      household_id: 1,
-    };
-    mockCreateCategory.mockResolvedValueOnce(created);
-
-    setup();
-
-    // "New category" is available even while the initial fetch is still
-    // loading — create one before that fetch resolves.
-    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
-    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
-
-    // This resolves with a response that predates the create — applying
-    // it directly would revert the create, so it must be discarded.
-    await act(async () => {
-      resolveInitialLoad(CATEGORIES);
-    });
-
-    expect(screen.getByText('Utilities')).toBeDefined();
-    expect(mockListCategories).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not surface a load error that arrives after a create already landed', async () => {
-    let rejectInitialLoad: (err: Error) => void = () => {};
-    mockListCategories.mockReturnValueOnce(
-      new Promise((_resolve, reject) => {
-        rejectInitialLoad = reject;
-      }),
-    );
-    const created = {
-      id: 99,
-      name: 'Utilities',
-      type: 'spending' as const,
-      is_active: true,
-      household_id: 1,
-    };
-    mockCreateCategory.mockResolvedValueOnce(created);
-
-    setup();
-
-    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
-    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
-
-    // The initial fetch fails, but only after the create already landed —
-    // this failure isn't about anything the user did and the list is
-    // already correct, so it must not be shown as a load error.
-    await act(async () => {
-      rejectInitialLoad(new Error('network blip'));
-    });
-
-    expect(screen.getByText('Utilities')).toBeDefined();
-    expect(screen.queryByText(/could not load categories/i)).toBeNull();
-  });
-});
-
 describe('CategoryManagementDialog switching households', () => {
-  it('does not merge a new category onto the previous household\'s stale categories', async () => {
-    mockListCategories.mockResolvedValueOnce(CATEGORIES);
+  it('shows the new household\'s categories, not the previous one\'s, after householdId changes', async () => {
+    mockListCategories.mockImplementation((householdId: number) =>
+      Promise.resolve(householdId === 1 ? CATEGORIES : []),
+    );
     const onClose = vi.fn();
-    const onCategoriesChanged = vi.fn();
 
     const { rerender } = render(
-      <CategoryManagementDialog
-        open={true}
-        householdId={1}
-        householdName="Smith Household"
-        onClose={onClose}
-        onCategoriesChanged={onCategoriesChanged}
-      />,
+      <CategoryManagementDialog open={true} householdId={1} householdName="Smith Household" onClose={onClose} />,
     );
     await waitFor(() => screen.getByText('Groceries'));
 
-    // The dialog stays mounted across a close/reopen for a different
-    // household — its initial fetch for household 2 is still in flight.
-    let resolveHousehold2Load: (categories: typeof CATEGORIES) => void = () => {};
-    mockListCategories.mockReturnValueOnce(
-      new Promise(resolve => {
-        resolveHousehold2Load = resolve;
-      }),
-    );
     rerender(
-      <CategoryManagementDialog
-        open={true}
-        householdId={2}
-        householdName="Jones Household"
-        onClose={onClose}
-        onCategoriesChanged={onCategoriesChanged}
-      />,
+      <CategoryManagementDialog open={true} householdId={2} householdName="Jones Household" onClose={onClose} />,
     );
 
-    // "New category" stays enabled while household 2's fetch is loading —
-    // create one before that fetch resolves.
-    const created = {
-      id: 99,
-      name: 'Rent',
-      type: 'spending' as const,
-      is_active: true,
-      household_id: 2,
-    };
-    mockCreateCategory.mockResolvedValueOnce(created);
-    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Rent' } });
-    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
-    await waitFor(() => expect(mockCreateCategory).toHaveBeenCalled());
-
-    // Household 2's own (real, predating-the-create) list response
-    // resolves now — it must not overwrite the create, but the list is
-    // still masked by the loading spinner until this settles.
-    await act(async () => {
-      resolveHousehold2Load([]);
-    });
-
-    // Household 1's Groceries/Salary must never leak into household 2's
-    // list or its onCategoriesChanged report.
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(2, true));
     expect(screen.queryByText('Groceries')).toBeNull();
-    expect(screen.queryByText('Salary')).toBeNull();
-    expect(screen.getByText('Rent')).toBeDefined();
-    expect(onCategoriesChanged.mock.calls[0][0]).not.toContainEqual(
-      expect.objectContaining({ name: 'Groceries' }),
-    );
   });
 });
 
@@ -348,7 +260,7 @@ describe('CategoryManagementDialog create', () => {
     );
   });
 
-  it('calls onCategoriesChanged with active categories after successful create', async () => {
+  it('shows the newly created category in the list after returning from create mode', async () => {
     const created = {
       id: 99,
       name: 'Utilities',
@@ -356,16 +268,16 @@ describe('CategoryManagementDialog create', () => {
       is_active: true,
       household_id: 1,
     };
+    mockListCategories.mockResolvedValueOnce(CATEGORIES).mockResolvedValueOnce([...CATEGORIES, created]);
     mockCreateCategory.mockResolvedValueOnce(created);
 
-    const { onCategoriesChanged } = setup();
+    setup();
     await waitFor(() => screen.getByText('Groceries'));
     fireEvent.click(screen.getByRole('button', { name: /new category/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
     fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
 
-    await waitFor(() => expect(onCategoriesChanged).toHaveBeenCalled());
-    expect(onCategoriesChanged.mock.calls[0][0]).toContainEqual(created);
+    expect(await screen.findByText('Utilities')).toBeDefined();
   });
 
   it('shows error when createCategory throws an ApiError', async () => {
@@ -425,6 +337,9 @@ describe('CategoryManagementDialog deactivate', () => {
   });
 
   it('removes the deactivated category from the list', async () => {
+    mockListCategories
+      .mockResolvedValueOnce(CATEGORIES)
+      .mockResolvedValueOnce(CATEGORIES.filter(c => c.id !== 1));
     mockDeleteCategory.mockResolvedValueOnce(undefined);
 
     setup();

@@ -3,11 +3,13 @@
 // Tests for the orchestration layer: mode transitions, API calls, and
 // error propagation. Subcomponent rendering is covered in their own tests.
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LabelManagementDialog } from '@components/label-management-dialog';
 import { makeCategory } from '@serve/mocks';
+import { listCategories } from '@services/categories';
 import {
   createLabel,
   deleteLabel,
@@ -15,6 +17,12 @@ import {
   updateLabel,
   ApiError,
 } from '@services/labels';
+
+// Needs its own QueryClient — the dialog reads categories via useCategories.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 vi.mock('@services/labels', async importOriginal => {
   const actual = await importOriginal<typeof import('@services/labels')>();
@@ -26,11 +34,16 @@ vi.mock('@services/labels', async importOriginal => {
     deleteLabel: vi.fn(),
   };
 });
+vi.mock('@services/categories', async importOriginal => {
+  const actual = await importOriginal<typeof import('@services/categories')>();
+  return { ...actual, listCategories: vi.fn() };
+});
 
 const mockListLabels = vi.mocked(listLabels);
 const mockCreateLabel = vi.mocked(createLabel);
 const mockUpdateLabel = vi.mocked(updateLabel);
 const mockDeleteLabel = vi.mocked(deleteLabel);
+const mockListCategories = vi.mocked(listCategories);
 
 const LABELS = [
   { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
@@ -53,7 +66,6 @@ function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDia
       open={true}
       householdId={1}
       householdName="Smith Household"
-      categories={CATEGORIES}
       onClose={onClose}
       onLabelsChanged={onLabelsChanged}
       {...overrides}
@@ -66,6 +78,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDia
 beforeEach(() => {
   vi.clearAllMocks();
   mockListLabels.mockResolvedValue(LABELS);
+  mockListCategories.mockResolvedValue(CATEGORIES);
 });
 
 // ── Loading ────────────────────────────────────────────────────────────────────

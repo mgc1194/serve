@@ -8,11 +8,14 @@
 // CategoryManagementDialog (always in list mode — kept simple, no
 // separate create-mode entry point).
 //
-// The `categories` prop may include inactive ones — the household card
-// fetches the full set once to share with HouseholdLabelsSection's own
-// category picker — so this component filters back down to active-only
-// itself; this table has no "show inactive" view (deactivated categories
-// aren't otherwise exposed anywhere in this dialog yet).
+// Reads the household's categories from the shared query (see
+// queries/categories.ts) rather than taking them as a prop — the same
+// cache entry CategoryManagementDialog and the label picker read, so a
+// mutation from either of those is reflected here too without any
+// callback prop. That shared cache includes inactive categories (the
+// label picker needs them); this component filters back down to
+// active-only itself, since this table has no "show inactive" view
+// (deactivated categories aren't otherwise exposed anywhere here yet).
 //
 // The Labels column is a placeholder — "—" for every row — since there's
 // currently no way to link a label to a category at all (no category_id
@@ -46,6 +49,7 @@ import {
 import { useState } from 'react';
 
 import { CategoryManagementDialog } from '@components/category-management-dialog';
+import { useCategories } from '@serve/queries/categories';
 import type { Category } from '@serve/types/global';
 
 const TYPE_LABELS: Record<Category['type'], string> = {
@@ -105,19 +109,16 @@ function TablePaginationActions({ count, page, rowsPerPage, onPageChange }: Tabl
 interface HouseholdCategoriesSectionProps {
   householdId: number;
   householdName: string;
-  categories: Category[];
-  onCategoriesChanged: (categories: Category[]) => void;
 }
 
 export function HouseholdCategoriesSection({
   householdId,
   householdName,
-  categories,
-  onCategoriesChanged,
 }: HouseholdCategoriesSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
 
+  const { data: categories = [] } = useCategories(householdId);
   const activeCategories = categories.filter(category => category.is_active);
   const ordered = [...activeCategories].sort(
     (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name),
@@ -207,7 +208,6 @@ export function HouseholdCategoriesSection({
         householdId={householdId}
         householdName={householdName}
         onClose={() => setDialogOpen(false)}
-        onCategoriesChanged={onCategoriesChanged}
       />
     </>
   );

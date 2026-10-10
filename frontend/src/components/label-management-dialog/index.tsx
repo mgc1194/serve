@@ -2,9 +2,10 @@
 //
 // Orchestrates the label management dialog: owns all state, handles API calls,
 // and delegates rendering to ListLabels (list mode) and ManageLabel
-// (create / edit mode). categories (for ManageLabel's category picker) is
-// the one exception to "owns all state" — it's fetched once by the
-// household card and passed in, rather than fetched here too.
+// (create / edit mode). categories (for ManageLabel's category picker)
+// reads the same shared query HouseholdCategoriesSection and
+// CategoryManagementDialog do (see queries/categories.ts) rather than
+// fetching its own copy.
 
 import {
   Dialog,
@@ -15,7 +16,8 @@ import { useEffect, useState } from 'react';
 
 import { ListLabels } from '@components/label-management-dialog/list-labels';
 import { ManageLabel } from '@components/label-management-dialog/manage-label';
-import type { Category, Label } from '@serve/types/global';
+import { useCategories } from '@serve/queries/categories';
+import type { Label } from '@serve/types/global';
 import { createLabel, deleteLabel, listLabels, updateLabel, ApiError } from '@services/labels';
 
 interface LabelManagementDialogProps {
@@ -24,14 +26,6 @@ interface LabelManagementDialogProps {
   householdName: string;
   /** Open the dialog directly into create mode (e.g. from the "Add label" button). */
   initialMode?: 'list' | 'create';
-  /**
-   * The household's categories (active and inactive — see ManageLabel's
-   * own comment on why inactive ones must stay in this list) for the
-   * category picker. Owned and fetched by the household card, not this
-   * dialog, so it's shared with HouseholdCategoriesSection instead of
-   * being fetched twice.
-   */
-  categories: Category[];
   onClose: () => void;
   onLabelsChanged: (labels: Label[]) => void;
 }
@@ -45,10 +39,10 @@ export function LabelManagementDialog({
   householdId,
   householdName,
   initialMode = 'list',
-  categories,
   onClose,
   onLabelsChanged,
 }: LabelManagementDialogProps) {
+  const { data: categories = [] } = useCategories(householdId, { enabled: open });
   // ── Mode ──────────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>(initialMode);
 

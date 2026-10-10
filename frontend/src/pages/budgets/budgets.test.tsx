@@ -1,5 +1,6 @@
 // pages/budgets/budgets.test.tsx — Unit tests for BudgetsPage.
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,15 +47,18 @@ function mockUser(households: (typeof HOUSEHOLD)[]) {
 }
 
 function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={['/budgets']}>
-      <ActiveHouseholdProvider>
-        <Routes>
-          <Route path="/" element={<div>Dashboard page</div>} />
-          <Route path="/budgets" element={<BudgetsPage />} />
-        </Routes>
-      </ActiveHouseholdProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={['/budgets']}>
+        <ActiveHouseholdProvider>
+          <Routes>
+            <Route path="/" element={<div>Dashboard page</div>} />
+            <Route path="/budgets" element={<BudgetsPage />} />
+          </Routes>
+        </ActiveHouseholdProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -103,7 +107,7 @@ describe('BudgetsPage category management', () => {
     fireEvent.click(screen.getByRole('button', { name: /manage categories/i }));
     expect(screen.getByRole('dialog')).toBeDefined();
     expect(screen.getByText('Categories — Test Household')).toBeDefined();
-    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledWith(1, true));
   });
 });
 
