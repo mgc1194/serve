@@ -94,8 +94,8 @@ export const WithCategoriesAndLabels: Story = {
         makeCategory({ id: 3, name: 'Salary', type: 'earning' }),
       ],
       [
-        makeLabel({ id: 1, name: 'Trader Joes', color: '#16a34a', category_id: 1 }),
-        makeLabel({ id: 2, name: 'Whole Foods', color: '#2563eb', category_id: 1 }),
+        makeLabel({ id: 1, name: 'Trader Joes', color: '#16a34a' }),
+        makeLabel({ id: 2, name: 'Whole Foods', color: '#2563eb' }),
       ],
     ),
   },
