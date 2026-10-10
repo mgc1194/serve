@@ -112,6 +112,11 @@ describe('HouseholdDetailCard rendering', () => {
     expect(screen.getByText('Test Household')).toBeDefined();
   });
 
+  it('fetches categories including inactive ones (shared with the label picker)', () => {
+    setup();
+    expect(mockListCategories).toHaveBeenCalledWith(1, true);
+  });
+
   it('renders member initials and email', () => {
     setup();
     expect(screen.getByText('TU')).toBeDefined();

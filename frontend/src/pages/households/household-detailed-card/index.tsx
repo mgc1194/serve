@@ -94,6 +94,12 @@ export function HouseholdDetailCard({
 
   // Categories — same fetch-on-mount/non-fatal-failure shape as labels above,
   // with the same stale-response guard (flagged in PR review for this state).
+  // Fetched with includeInactive: this list is shared with
+  // HouseholdLabelsSection (passed down to LabelManagementDialog's own
+  // category picker, which needs a since-deactivated assigned category
+  // still present to display it) rather than having that dialog fetch its
+  // own — HouseholdCategoriesSection filters back down to active-only
+  // itself for its own table.
   const [categories, setCategories] = useState<Category[]>([]);
   const categoriesVersionRef = useRef(0);
   function writeCategories(next: Category[]) {
@@ -102,7 +108,7 @@ export function HouseholdDetailCard({
   }
   useEffect(() => {
     const versionAtStart = categoriesVersionRef.current;
-    listCategories(household.id)
+    listCategories(household.id, true)
       .then(result => {
         if (categoriesVersionRef.current !== versionAtStart) return;
         writeCategories(result);
@@ -293,6 +299,7 @@ export function HouseholdDetailCard({
           householdId={household.id}
           householdName={household.name}
           labels={labels}
+          categories={categories}
           onLabelsChanged={writeLabels}
         />
       </Box>

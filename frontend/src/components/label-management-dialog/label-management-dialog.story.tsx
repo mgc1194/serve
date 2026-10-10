@@ -3,6 +3,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
 import { LabelManagementDialog } from '@components/label-management-dialog';
+import { makeCategory } from '@serve/mocks';
 
 const meta: Meta<typeof LabelManagementDialog> = {
   title: 'Components/LabelManagementDialog',
@@ -12,6 +13,11 @@ const meta: Meta<typeof LabelManagementDialog> = {
     open: true,
     householdId: 1,
     householdName: 'Smith Household',
+    categories: [
+      makeCategory({ id: 1, name: 'Food', type: 'spending' }),
+      makeCategory({ id: 2, name: 'Transportation', type: 'spending' }),
+      makeCategory({ id: 3, name: 'Salary', type: 'earning' }),
+    ],
     onClose: () => {},
     onLabelsChanged: () => {},
   },

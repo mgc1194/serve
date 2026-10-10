@@ -8,7 +8,7 @@ import { Box, Button, Chip, Typography } from '@mui/material';
 import { useState } from 'react';
 
 import { LabelManagementDialog } from '@components/label-management-dialog';
-import type { Label } from '@serve/types/global';
+import type { Category, Label } from '@serve/types/global';
 import { contrastTextColor } from '@utils/contrast-text-color';
 
 const MAX_PREVIEW = 5;
@@ -17,6 +17,7 @@ interface HouseholdLabelsSectionProps {
   householdId: number;
   householdName: string;
   labels: Label[];
+  categories: Category[];
   onLabelsChanged: (labels: Label[]) => void;
 }
 
@@ -24,6 +25,7 @@ export function HouseholdLabelsSection({
   householdId,
   householdName,
   labels,
+  categories,
   onLabelsChanged,
 }: HouseholdLabelsSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -109,6 +111,7 @@ export function HouseholdLabelsSection({
         householdId={householdId}
         householdName={householdName}
         initialMode={dialogInitialMode}
+        categories={categories}
         onClose={() => setDialogOpen(false)}
         onLabelsChanged={updated => {
           onLabelsChanged(updated);

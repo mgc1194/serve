@@ -52,6 +52,24 @@ describe('HouseholdCategoriesSection rendering', () => {
     expect(screen.getByText('Earning')).toBeDefined();
   });
 
+  it('omits inactive categories — the household card fetches both, for the label picker', () => {
+    setup({
+      categories: [
+        makeCategory({ id: 1, name: 'Groceries', type: 'spending' }),
+        makeCategory({ id: 2, name: 'Old Rent', type: 'spending', is_active: false }),
+      ],
+    });
+    expect(screen.getByText('Groceries')).toBeDefined();
+    expect(screen.queryByText('Old Rent')).toBeNull();
+  });
+
+  it('shows the empty message when only inactive categories exist', () => {
+    setup({
+      categories: [makeCategory({ id: 1, name: 'Old Rent', is_active: false })],
+    });
+    expect(screen.getByText('No categories yet.')).toBeDefined();
+  });
+
   it('shows a Labels column header and a placeholder per row', () => {
     // No way to link a label to a category yet — every row shows "—"
     // rather than real data. See the file-level comment for why.

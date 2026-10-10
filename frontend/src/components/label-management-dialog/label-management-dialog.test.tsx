@@ -8,8 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LabelManagementDialog } from '@components/label-management-dialog';
 import { makeCategory } from '@serve/mocks';
-import type { Category } from '@serve/types/global';
-import { listCategories } from '@services/categories';
 import {
   createLabel,
   deleteLabel,
@@ -17,12 +15,6 @@ import {
   updateLabel,
   ApiError,
 } from '@services/labels';
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>(res => { resolve = res; });
-  return { promise, resolve };
-}
 
 vi.mock('@services/labels', async importOriginal => {
   const actual = await importOriginal<typeof import('@services/labels')>();
@@ -34,16 +26,11 @@ vi.mock('@services/labels', async importOriginal => {
     deleteLabel: vi.fn(),
   };
 });
-vi.mock('@services/categories', async importOriginal => {
-  const actual = await importOriginal<typeof import('@services/categories')>();
-  return { ...actual, listCategories: vi.fn() };
-});
 
 const mockListLabels = vi.mocked(listLabels);
 const mockCreateLabel = vi.mocked(createLabel);
 const mockUpdateLabel = vi.mocked(updateLabel);
 const mockDeleteLabel = vi.mocked(deleteLabel);
-const mockListCategories = vi.mocked(listCategories);
 
 const LABELS = [
   { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
@@ -66,6 +53,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDia
       open={true}
       householdId={1}
       householdName="Smith Household"
+      categories={CATEGORIES}
       onClose={onClose}
       onLabelsChanged={onLabelsChanged}
       {...overrides}
@@ -78,7 +66,6 @@ function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDia
 beforeEach(() => {
   vi.clearAllMocks();
   mockListLabels.mockResolvedValue(LABELS);
-  mockListCategories.mockResolvedValue(CATEGORIES);
 });
 
 // ── Loading ────────────────────────────────────────────────────────────────────
@@ -180,55 +167,6 @@ describe('LabelManagementDialog mode transitions', () => {
 // ── Category picker ──────────────────────────────────────────────────────────
 
 describe('LabelManagementDialog category picker', () => {
-  it('fetches categories (including inactive) with the householdId on open', async () => {
-    setup();
-    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1, true));
-  });
-
-  it('does not apply a stale categories response after switching to a different household', async () => {
-    const household1Load = deferred<Category[]>();
-    mockListCategories.mockReturnValueOnce(household1Load.promise);
-    const onClose = vi.fn();
-    const onLabelsChanged = vi.fn();
-
-    const { rerender } = render(
-      <LabelManagementDialog
-        open={true}
-        householdId={1}
-        householdName="Smith Household"
-        onClose={onClose}
-        onLabelsChanged={onLabelsChanged}
-      />,
-    );
-    await waitFor(() => screen.getByText('Groceries'));
-
-    // Household 1's categories fetch is still pending when the dialog is
-    // reopened for a different household.
-    mockListCategories.mockResolvedValueOnce([makeCategory({ id: 9, name: 'Jones Rent', type: 'spending' })]);
-    rerender(
-      <LabelManagementDialog
-        open={true}
-        householdId={2}
-        householdName="Jones Household"
-        onClose={onClose}
-        onLabelsChanged={onLabelsChanged}
-      />,
-    );
-    await waitFor(() => screen.getByText('Labels — Jones Household'));
-
-    fireEvent.click(screen.getByRole('button', { name: /new label/i }));
-    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
-    expect(await screen.findByRole('option', { name: 'Jones Rent' })).toBeDefined();
-    expect(screen.queryByRole('option', { name: 'Food' })).toBeNull();
-
-    // Household 1's (now stale) response resolves late — it must not
-    // overwrite household 2's categories with household 1's.
-    household1Load.resolve(CATEGORIES);
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(screen.queryByRole('option', { name: 'Food' })).toBeNull();
-    expect(screen.getByRole('option', { name: 'Jones Rent' })).toBeDefined();
-  });
-
   it('defaults to "No category" in create mode', async () => {
     setup();
     await waitFor(() => screen.getByText('Groceries'));

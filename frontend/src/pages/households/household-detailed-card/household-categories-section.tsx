@@ -8,6 +8,12 @@
 // CategoryManagementDialog (always in list mode — kept simple, no
 // separate create-mode entry point).
 //
+// The `categories` prop may include inactive ones — the household card
+// fetches the full set once to share with HouseholdLabelsSection's own
+// category picker — so this component filters back down to active-only
+// itself; this table has no "show inactive" view (deactivated categories
+// aren't otherwise exposed anywhere in this dialog yet).
+//
 // The Labels column is a placeholder — "—" for every row — since there's
 // currently no way to link a label to a category at all (no category_id
 // on the frontend's Label type, no UI to set one). It's here so the
@@ -112,7 +118,8 @@ export function HouseholdCategoriesSection({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
 
-  const ordered = [...categories].sort(
+  const activeCategories = categories.filter(category => category.is_active);
+  const ordered = [...activeCategories].sort(
     (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name),
   );
   // Clamped display-only — if categories shrink (e.g. a deactivation) while
@@ -134,7 +141,7 @@ export function HouseholdCategoriesSection({
           Categories
         </Typography>
 
-        {categories.length === 0 ? (
+        {activeCategories.length === 0 ? (
           <Typography variant="body2" color="text.disabled" sx={{ mb: 1.5 }}>
             No categories yet.
           </Typography>
@@ -167,13 +174,13 @@ export function HouseholdCategoriesSection({
                 </TableRow>
               ))}
             </TableBody>
-            {categories.length > ROWS_PER_PAGE && (
+            {activeCategories.length > ROWS_PER_PAGE && (
               <TableFooter>
                 <TableRow>
                   <TablePagination
                     rowsPerPageOptions={[ROWS_PER_PAGE]}
                     colSpan={3}
-                    count={categories.length}
+                    count={activeCategories.length}
                     rowsPerPage={ROWS_PER_PAGE}
                     page={safePage}
                     onPageChange={(_event, newPage) => setPage(newPage)}
