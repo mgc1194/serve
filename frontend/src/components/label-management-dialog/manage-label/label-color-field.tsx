@@ -3,7 +3,7 @@
 import { Box, TextField } from '@mui/material';
 import { useState } from 'react';
 
-import { LabelColorPicker } from '@pages/households/label-management-dialog/manage-label/label-color-picker';
+import { LabelColorPicker } from '@components/label-management-dialog/manage-label/label-color-picker';
 
 const DEFAULT_COLOR = '#6B7280';
 

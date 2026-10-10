@@ -1,4 +1,4 @@
-// pages/households/label-management-dialog/manage-label/index.tsx
+// components/label-management-dialog/manage-label/index.tsx
 //
 // Create and edit mode — name input, colour picker with hex preview chip,
 // delete with confirmation (edit only), and Back / Save actions.
@@ -18,8 +18,8 @@ import {
 import { useState } from 'react';
 
 import { DeleteConfirmation } from '@components/delete-confirmation';
-import { LabelColorField } from '@pages/households/label-management-dialog/manage-label/label-color-field';
-import { useAutoFocus } from '@pages/households/label-management-dialog/manage-label/use-auto-focus';
+import { LabelColorField } from '@components/label-management-dialog/manage-label/label-color-field';
+import { useAutoFocus } from '@components/label-management-dialog/manage-label/use-auto-focus';
 import type { Label } from '@serve/types/global';
 import { contrastTextColor } from '@utils/contrast-text-color';
 

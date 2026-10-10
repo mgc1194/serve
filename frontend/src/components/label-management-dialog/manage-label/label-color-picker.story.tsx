@@ -14,7 +14,7 @@ const containerDecorator: Decorator = Story => (
 );
 
 const meta: Meta<typeof LabelColorPicker> = {
-  title: 'Households/LabelManagementDialog/LabelColorPicker',
+  title: 'Components/LabelManagementDialog/LabelColorPicker',
   component: LabelColorPicker,
   decorators: [containerDecorator],
   parameters: { layout: 'padded' },
