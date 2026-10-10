@@ -8,9 +8,12 @@
 // classification field like Name (mirrors ManageCategory's own Name-then-
 // Type ordering), and keeping it out of the colour-picker/preview-chip
 // pair leaves that visual pairing unbroken. Options are a household's
-// active categories only (categories are fetched by the dialog, not this
-// component) — matching CategoryManagementDialog's own scope, a deactivated
-// category already assigned to a label simply won't appear as an option.
+// active categories (categories are fetched by the dialog, not this
+// component, which also fetches inactive ones for exactly this reason):
+// a label can already be assigned to a since-deactivated category, which
+// won't appear among the active ones — rendering it as a disabled option
+// lets the controlled Select still show the existing assignment instead
+// of going blank, without letting it be chosen for a new one.
 
 import {
   Alert,
@@ -85,6 +88,14 @@ export function ManageLabel({
   const isValidColor = /^#[0-9A-Fa-f]{6}$/.test(color);
   const previewColor = isValidColor ? color : DEFAULT_COLOR;
 
+  const activeCategories = categories.filter(category => category.is_active);
+  // The currently assigned category may have been deactivated since — it
+  // won't be in activeCategories, but the Select's value still points at
+  // it, so render it too (disabled) or MUI renders the field blank.
+  const assignedInactiveCategory = categories.find(
+    category => category.id === categoryId && !category.is_active,
+  );
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
       {error && (
@@ -115,7 +126,12 @@ export function ManageLabel({
           <MenuItem value={NO_CATEGORY}>
             <em>No category</em>
           </MenuItem>
-          {categories.map(category => (
+          {assignedInactiveCategory && (
+            <MenuItem value={String(assignedInactiveCategory.id)} disabled>
+              {assignedInactiveCategory.name} (inactive)
+            </MenuItem>
+          )}
+          {activeCategories.map(category => (
             <MenuItem key={category.id} value={String(category.id)}>
               {category.name}
             </MenuItem>

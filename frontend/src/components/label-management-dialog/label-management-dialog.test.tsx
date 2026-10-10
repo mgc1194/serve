@@ -41,11 +41,13 @@ const mockListCategories = vi.mocked(listCategories);
 const LABELS = [
   { id: 1, name: 'Groceries', color: '#16a34a', category_id: null, household_id: 1 },
   { id: 2, name: 'Transport', color: '#2563eb', category_id: 2, household_id: 1 },
+  { id: 3, name: 'Old Rent', color: '#dc2626', category_id: 3, household_id: 1 },
 ];
 
 const CATEGORIES = [
   makeCategory({ id: 1, name: 'Food', type: 'spending' }),
   makeCategory({ id: 2, name: 'Transportation', type: 'spending' }),
+  makeCategory({ id: 3, name: 'Rent', type: 'spending', is_active: false }),
 ];
 
 function setup(overrides: Partial<React.ComponentProps<typeof LabelManagementDialog>> = {}) {
@@ -171,9 +173,9 @@ describe('LabelManagementDialog mode transitions', () => {
 // ── Category picker ──────────────────────────────────────────────────────────
 
 describe('LabelManagementDialog category picker', () => {
-  it('fetches categories with the householdId on open', async () => {
+  it('fetches categories (including inactive) with the householdId on open', async () => {
     setup();
-    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1));
+    await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(1, true));
   });
 
   it('defaults to "No category" in create mode', async () => {
@@ -211,6 +213,16 @@ describe('LabelManagementDialog category picker', () => {
         household_id: 1,
       }),
     );
+  });
+
+  it('shows a since-deactivated assigned category as a disabled option instead of rendering blank', async () => {
+    setup();
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /edit old rent/i }));
+    expect(screen.getByText('Rent (inactive)')).toBeDefined();
+    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
+    const option = await screen.findByRole('option', { name: 'Rent (inactive)' });
+    expect(option.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('clears the category when "No category" is selected on an existing assignment', async () => {

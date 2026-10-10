@@ -76,6 +76,17 @@ export const EditWithCategory: Story = {
   },
 };
 
+export const EditWithDeactivatedCategory: Story = {
+  args: {
+    mode: 'edit',
+    editingLabel: { ...LABEL, category_id: 4 },
+    name: LABEL.name,
+    color: LABEL.color,
+    categories: [...CATEGORIES, makeCategory({ id: 4, name: 'Rent', is_active: false })],
+    categoryId: 4,
+  },
+};
+
 export const EditDeleting: Story = {
   args: {
     mode: 'edit',

@@ -61,6 +61,12 @@ export function LabelManagementDialog({
   // self-contained the same way it already is for labels (see listLabels
   // below). A failure here is non-fatal: the picker just shows no options
   // rather than blocking the rest of the dialog.
+  //
+  // Fetched with includeInactive: a label can already be assigned to a
+  // since-deactivated category (the backend deliberately preserves that
+  // FK rather than clearing it), and ManageLabel needs that category in
+  // this list — as a disabled option — so the controlled Select has a
+  // matching MenuItem to display instead of rendering blank.
   const [categories, setCategories] = useState<Category[]>([]);
 
   // ── Load on open; reset mode to initialMode each time ────────────────────
@@ -76,7 +82,7 @@ export function LabelManagementDialog({
       .then(setLabels)
       .catch(() => setListError('Could not load labels. Please try again.'))
       .finally(() => setIsLoading(false));
-    listCategories(householdId)
+    listCategories(householdId, true)
       .then(setCategories)
       .catch(() => { /* non-fatal — category picker just shows no options */ });
   }, [open, householdId, initialMode]);

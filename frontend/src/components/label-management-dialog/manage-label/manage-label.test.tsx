@@ -245,6 +245,22 @@ describe('ManageLabel category picker', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'No category' }));
     expect(onCategoryChange).toHaveBeenCalledWith(null);
   });
+
+  it('shows a since-deactivated assigned category as a disabled option', async () => {
+    setup({
+      categories: [...CATEGORIES, makeCategory({ id: 3, name: 'Rent', is_active: false })],
+      categoryId: 3,
+    });
+    expect(screen.getByText('Rent (inactive)')).toBeDefined();
+    fireEvent.mouseDown(screen.getByLabelText(/^category$/i));
+    const option = await screen.findByRole('option', { name: 'Rent (inactive)' });
+    expect(option.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('omits an inactive category not assigned to this label', () => {
+    setup({ categories: [...CATEGORIES, makeCategory({ id: 3, name: 'Rent', is_active: false })] });
+    expect(screen.queryByText(/rent/i)).toBeNull();
+  });
 });
 
 describe('ManageLabel color validation', () => {
