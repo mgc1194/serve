@@ -72,19 +72,42 @@ export function LabelManagementDialog({
   // ── Load on open; reset mode to initialMode each time ────────────────────
   useEffect(() => {
     if (!open) return;
+    let ignore = false;
+
     // Resets mode and kicks off a network fetch; loading/error state must
     // flip synchronously before it resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode(initialMode);
     setIsLoading(true);
     setListError(null);
+    // Cleared up front (unlike labels, which isLoading already masks behind
+    // a spinner): the category picker has no loading state of its own, so a
+    // stale previous household's options would otherwise stay visible —
+    // and selectable — until this fetch resolves.
+    setCategories([]);
     listLabels(householdId)
-      .then(setLabels)
-      .catch(() => setListError('Could not load labels. Please try again.'))
-      .finally(() => setIsLoading(false));
+      .then(result => {
+        if (ignore) return;
+        setLabels(result);
+      })
+      .catch(() => {
+        if (ignore) return;
+        setListError('Could not load labels. Please try again.');
+      })
+      .finally(() => {
+        if (ignore) return;
+        setIsLoading(false);
+      });
     listCategories(householdId, true)
-      .then(setCategories)
+      .then(result => {
+        if (ignore) return;
+        setCategories(result);
+      })
       .catch(() => { /* non-fatal — category picker just shows no options */ });
+
+    return () => {
+      ignore = true;
+    };
   }, [open, householdId, initialMode]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
