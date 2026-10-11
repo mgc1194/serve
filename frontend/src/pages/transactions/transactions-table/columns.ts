@@ -5,7 +5,7 @@
 // transaction-row.tsx only export components, satisfying Vite's fast-refresh
 // constraint.
 
-export type ColumnKey = 'date' | 'concept' | 'amount' | 'account' | 'label' | 'category';
+export type ColumnKey = 'date' | 'concept' | 'amount' | 'account' | 'label';
 
 export const COLUMN_LABELS: Record<ColumnKey, string> = {
   date: 'Date',
@@ -13,7 +13,6 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
   amount: 'Amount',
   account: 'Account',
   label: 'Label',
-  category: 'Category',
 };
 
 export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
@@ -22,5 +21,4 @@ export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
   'amount',
   'account',
   'label',
-  'category',
 ];

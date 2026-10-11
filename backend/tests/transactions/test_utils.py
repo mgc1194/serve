@@ -2,7 +2,7 @@
 tests/transactions/test_utils.py — Unit tests for transactions.utils.
 
 Covers upsert_transactions (dedupe-safe transaction insertion that
-preserves user-managed fields like label and category on re-import).
+preserves user-managed fields like label on re-import).
 Moved from tests/banking/test_utils.py as part of the Option A boundary
 cleanup — upsert_transactions is owned by the transactions app since it
 only creates and queries Transaction rows.
@@ -93,15 +93,6 @@ class TestUpsertTransactions:
         upsert_transactions(sample_df, account)
         txn.refresh_from_db()
         assert txn.label == label
-
-    def test_preserves_existing_category(self, account, sample_df):
-        upsert_transactions(sample_df, account)
-        txn = Transaction.objects.get(dedupe_hash='abc123' * 10 + 'abc1')
-        txn.category = 'Groceries'
-        txn.save()
-        upsert_transactions(sample_df, account)
-        txn.refresh_from_db()
-        assert txn.category == 'Groceries'
 
     def test_stores_correct_values(self, account, sample_df):
         upsert_transactions(sample_df, account)
