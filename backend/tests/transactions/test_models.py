@@ -161,9 +161,6 @@ class TestTransaction:
     def test_label_is_optional(self, transaction):
         assert transaction.label is None
 
-    def test_category_is_optional(self, transaction):
-        assert transaction.category is None
-
     def test_additional_labels_is_optional(self, transaction):
         assert transaction.additional_labels is None
 

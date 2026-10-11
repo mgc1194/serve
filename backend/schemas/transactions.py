@@ -40,7 +40,6 @@ class TransactionSchema(Schema):
     label_id: int | None
     label_name: str | None
     label_color: str | None
-    category: str | None
     additional_labels: str | None
     exclude_from_summary: bool
     source: str

@@ -54,7 +54,7 @@ export const Credit: Story = {
   },
 };
 
-// Row with a label and category pre-assigned
+// Row with a label pre-assigned
 export const WithLabel: Story = {
   args: {
     transaction: makeTransaction({
@@ -63,7 +63,6 @@ export const WithLabel: Story = {
       label_id: 2,
       label_name: 'Subscriptions',
       label_color: '#7c3aed',
-      category: 'Entertainment',
     }),
   },
 };

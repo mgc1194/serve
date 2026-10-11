@@ -9,7 +9,6 @@ describe('columnKeyToSortField', () => {
     expect(columnKeyToSortField('amount')).toBe('amount');
     expect(columnKeyToSortField('account')).toBe('account');
     expect(columnKeyToSortField('label')).toBe('label');
-    expect(columnKeyToSortField('category')).toBe('category');
   });
 });
 

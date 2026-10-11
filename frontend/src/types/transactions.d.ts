@@ -8,7 +8,6 @@ export interface Transaction {
   label_id: number | null;
   label_name: string | null;
   label_color: string | null;
-  category: string | null;
   additional_labels: string | null;
   /** When true this transaction is omitted from all summary aggregations. */
   exclude_from_summary: boolean;
@@ -19,7 +18,7 @@ export interface Transaction {
   imported_at: string;
 }
 
-export type SortField = 'date' | 'concept' | 'amount' | 'account' | 'label' | 'category';
+export type SortField = 'date' | 'concept' | 'amount' | 'account' | 'label';
 export type SortDir = 'asc' | 'desc';
 
 export interface PaginatedTransactions {
