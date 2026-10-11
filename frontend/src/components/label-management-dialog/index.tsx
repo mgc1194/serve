@@ -13,7 +13,8 @@ import { useEffect, useState } from 'react';
 
 import { ListLabels } from '@components/label-management-dialog/list-labels';
 import { ManageLabel } from '@components/label-management-dialog/manage-label';
-import type { Label } from '@serve/types/global';
+import type { Category, Label } from '@serve/types/global';
+import { listCategories } from '@services/categories';
 import { createLabel, deleteLabel, listLabels, updateLabel, ApiError } from '@services/labels';
 
 interface LabelManagementDialogProps {
@@ -50,23 +51,63 @@ export function LabelManagementDialog({
   const [editingLabel, setEditingLabel] = useState<Label | null>(null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [categoryId, setCategoryId] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // ── Category picker options ──────────────────────────────────────────────
+  // Fetched alongside labels, not passed in as a prop — this dialog is
+  // self-contained the same way it already is for labels (see listLabels
+  // below). A failure here is non-fatal: the picker just shows no options
+  // rather than blocking the rest of the dialog.
+  //
+  // Fetched with includeInactive: a label can already be assigned to a
+  // since-deactivated category (the backend deliberately preserves that
+  // FK rather than clearing it), and ManageLabel needs that category in
+  // this list — as a disabled option — so the controlled Select has a
+  // matching MenuItem to display instead of rendering blank.
+  const [categories, setCategories] = useState<Category[]>([]);
+
   // ── Load on open; reset mode to initialMode each time ────────────────────
   useEffect(() => {
     if (!open) return;
+    let ignore = false;
+
     // Resets mode and kicks off a network fetch; loading/error state must
     // flip synchronously before it resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMode(initialMode);
     setIsLoading(true);
     setListError(null);
+    // Cleared up front (unlike labels, which isLoading already masks behind
+    // a spinner): the category picker has no loading state of its own, so a
+    // stale previous household's options would otherwise stay visible —
+    // and selectable — until this fetch resolves.
+    setCategories([]);
     listLabels(householdId)
-      .then(setLabels)
-      .catch(() => setListError('Could not load labels. Please try again.'))
-      .finally(() => setIsLoading(false));
+      .then(result => {
+        if (ignore) return;
+        setLabels(result);
+      })
+      .catch(() => {
+        if (ignore) return;
+        setListError('Could not load labels. Please try again.');
+      })
+      .finally(() => {
+        if (ignore) return;
+        setIsLoading(false);
+      });
+    listCategories(householdId, true)
+      .then(result => {
+        if (ignore) return;
+        setCategories(result);
+      })
+      .catch(() => { /* non-fatal — category picker just shows no options */ });
+
+    return () => {
+      ignore = true;
+    };
   }, [open, householdId, initialMode]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
@@ -75,6 +116,7 @@ export function LabelManagementDialog({
     setEditingLabel(null);
     setName('');
     setColor(DEFAULT_COLOR);
+    setCategoryId(null);
     setFormError(null);
     onClose();
   }
@@ -83,6 +125,7 @@ export function LabelManagementDialog({
     setEditingLabel(null);
     setName('');
     setColor(DEFAULT_COLOR);
+    setCategoryId(null);
     setFormError(null);
     setMode('create');
   }
@@ -91,6 +134,7 @@ export function LabelManagementDialog({
     setEditingLabel(label);
     setName(label.name);
     setColor(label.color);
+    setCategoryId(label.category_id);
     setFormError(null);
     setMode('edit');
   }
@@ -115,7 +159,7 @@ export function LabelManagementDialog({
         const created = await createLabel({
           name: trimmedName,
           color,
-          category: '',
+          category_id: categoryId,
           household_id: householdId,
         });
 
@@ -123,7 +167,7 @@ export function LabelManagementDialog({
         setLabels(updated);
         onLabelsChanged(updated);
       } else if (mode === 'edit' && editingLabel) {
-        const updated = await updateLabel(editingLabel.id, { name: trimmedName, color });
+        const updated = await updateLabel(editingLabel.id, { name: trimmedName, color, category_id: categoryId });
         const updatedList = labels.map(l => (l.id === updated.id ? updated : l));
         setLabels(updatedList);
         onLabelsChanged(updatedList);
@@ -184,11 +228,14 @@ export function LabelManagementDialog({
             editingLabel={editingLabel}
             name={name}
             color={color}
+            categories={categories}
+            categoryId={categoryId}
             isSaving={isSaving}
             isDeleting={isDeleting}
             error={formError}
             onNameChange={setName}
             onColorChange={setColor}
+            onCategoryChange={setCategoryId}
             onSave={handleSave}
             onDelete={handleDelete}
             onBack={backToList}
