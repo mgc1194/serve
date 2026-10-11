@@ -2,7 +2,10 @@
 //
 // Orchestrates the label management dialog: owns all state, handles API calls,
 // and delegates rendering to ListLabels (list mode) and ManageLabel
-// (create / edit mode).
+// (create / edit mode). categories (for ManageLabel's category picker)
+// reads the same shared query HouseholdCategoriesSection and
+// CategoryManagementDialog do (see queries/categories.ts) rather than
+// fetching its own copy.
 
 import {
   Dialog,
@@ -13,8 +16,8 @@ import { useEffect, useState } from 'react';
 
 import { ListLabels } from '@components/label-management-dialog/list-labels';
 import { ManageLabel } from '@components/label-management-dialog/manage-label';
-import type { Category, Label } from '@serve/types/global';
-import { listCategories } from '@services/categories';
+import { useCategories } from '@serve/queries/categories';
+import type { Label } from '@serve/types/global';
 import { createLabel, deleteLabel, listLabels, updateLabel, ApiError } from '@services/labels';
 
 interface LabelManagementDialogProps {
@@ -39,6 +42,7 @@ export function LabelManagementDialog({
   onClose,
   onLabelsChanged,
 }: LabelManagementDialogProps) {
+  const { data: categories = [] } = useCategories(householdId, { enabled: open });
   // ── Mode ──────────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<Mode>(initialMode);
 
@@ -56,19 +60,6 @@ export function LabelManagementDialog({
   const [isDeleting, setIsDeleting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // ── Category picker options ──────────────────────────────────────────────
-  // Fetched alongside labels, not passed in as a prop — this dialog is
-  // self-contained the same way it already is for labels (see listLabels
-  // below). A failure here is non-fatal: the picker just shows no options
-  // rather than blocking the rest of the dialog.
-  //
-  // Fetched with includeInactive: a label can already be assigned to a
-  // since-deactivated category (the backend deliberately preserves that
-  // FK rather than clearing it), and ManageLabel needs that category in
-  // this list — as a disabled option — so the controlled Select has a
-  // matching MenuItem to display instead of rendering blank.
-  const [categories, setCategories] = useState<Category[]>([]);
-
   // ── Load on open; reset mode to initialMode each time ────────────────────
   useEffect(() => {
     if (!open) return;
@@ -80,11 +71,6 @@ export function LabelManagementDialog({
     setMode(initialMode);
     setIsLoading(true);
     setListError(null);
-    // Cleared up front (unlike labels, which isLoading already masks behind
-    // a spinner): the category picker has no loading state of its own, so a
-    // stale previous household's options would otherwise stay visible —
-    // and selectable — until this fetch resolves.
-    setCategories([]);
     listLabels(householdId)
       .then(result => {
         if (ignore) return;
@@ -98,12 +84,6 @@ export function LabelManagementDialog({
         if (ignore) return;
         setIsLoading(false);
       });
-    listCategories(householdId, true)
-      .then(result => {
-        if (ignore) return;
-        setCategories(result);
-      })
-      .catch(() => { /* non-fatal — category picker just shows no options */ });
 
     return () => {
       ignore = true;

@@ -1,5 +1,6 @@
 // pages/households/index.test.tsx — Unit tests for the HouseholdsPage.
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
@@ -8,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { HouseholdsPage } from '@pages/households';
 import * as accountsService from '@services/accounts';
+import * as categoriesService from '@services/categories';
 import * as service from '@services/households';
 import * as labelsService from '@services/labels';
 
@@ -71,12 +73,15 @@ const account = {
 };
 
 function renderPage() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <ActiveHouseholdProvider>
-        <HouseholdsPage />
-      </ActiveHouseholdProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <ActiveHouseholdProvider>
+          <HouseholdsPage />
+        </ActiveHouseholdProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -84,6 +89,7 @@ beforeEach(() => {
   vi.spyOn(service, 'listHouseholds').mockResolvedValue([household]);
   vi.spyOn(accountsService, 'listAccounts').mockResolvedValue([account]);
   vi.spyOn(labelsService, 'listLabels').mockResolvedValue([]);
+  vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
   mockNavigate.mockReset();
 });
 

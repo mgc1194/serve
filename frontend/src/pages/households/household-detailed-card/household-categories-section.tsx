@@ -8,6 +8,15 @@
 // CategoryManagementDialog (always in list mode — kept simple, no
 // separate create-mode entry point).
 //
+// Reads the household's categories from the shared query (see
+// queries/categories.ts) rather than taking them as a prop — the same
+// cache entry CategoryManagementDialog and the label picker read, so a
+// mutation from either of those is reflected here too without any
+// callback prop. That shared cache includes inactive categories (the
+// label picker needs them); this component filters back down to
+// active-only itself, since this table has no "show inactive" view
+// (deactivated categories aren't otherwise exposed anywhere here yet).
+//
 // The Labels column is a placeholder — "—" for every row — since there's
 // currently no way to link a label to a category at all (no category_id
 // on the frontend's Label type, no UI to set one). It's here so the
@@ -40,6 +49,7 @@ import {
 import { useState } from 'react';
 
 import { CategoryManagementDialog } from '@components/category-management-dialog';
+import { useCategories } from '@serve/queries/categories';
 import type { Category } from '@serve/types/global';
 
 const TYPE_LABELS: Record<Category['type'], string> = {
@@ -99,20 +109,18 @@ function TablePaginationActions({ count, page, rowsPerPage, onPageChange }: Tabl
 interface HouseholdCategoriesSectionProps {
   householdId: number;
   householdName: string;
-  categories: Category[];
-  onCategoriesChanged: (categories: Category[]) => void;
 }
 
 export function HouseholdCategoriesSection({
   householdId,
   householdName,
-  categories,
-  onCategoriesChanged,
 }: HouseholdCategoriesSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [page, setPage] = useState(0);
 
-  const ordered = [...categories].sort(
+  const { data: categories = [] } = useCategories(householdId);
+  const activeCategories = categories.filter(category => category.is_active);
+  const ordered = [...activeCategories].sort(
     (a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name),
   );
   // Clamped display-only — if categories shrink (e.g. a deactivation) while
@@ -134,7 +142,7 @@ export function HouseholdCategoriesSection({
           Categories
         </Typography>
 
-        {categories.length === 0 ? (
+        {activeCategories.length === 0 ? (
           <Typography variant="body2" color="text.disabled" sx={{ mb: 1.5 }}>
             No categories yet.
           </Typography>
@@ -167,13 +175,13 @@ export function HouseholdCategoriesSection({
                 </TableRow>
               ))}
             </TableBody>
-            {categories.length > ROWS_PER_PAGE && (
+            {activeCategories.length > ROWS_PER_PAGE && (
               <TableFooter>
                 <TableRow>
                   <TablePagination
                     rowsPerPageOptions={[ROWS_PER_PAGE]}
                     colSpan={3}
-                    count={categories.length}
+                    count={activeCategories.length}
                     rowsPerPage={ROWS_PER_PAGE}
                     page={safePage}
                     onPageChange={(_event, newPage) => setPage(newPage)}
@@ -200,7 +208,6 @@ export function HouseholdCategoriesSection({
         householdId={householdId}
         householdName={householdName}
         onClose={() => setDialogOpen(false)}
-        onCategoriesChanged={onCategoriesChanged}
       />
     </>
   );

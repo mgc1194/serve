@@ -2,8 +2,8 @@
 //
 // "Manage categories" opens the household-wide category catalog, managed
 // independently of any one budget (categories stay a flat household-level
-// taxonomy; the page has no use for the list itself, so onCategoriesChanged
-// is a no-op here — a follow-up budget detail page will).
+// taxonomy, now owned by the shared categories query — see
+// queries/categories.ts — rather than reported back through a callback).
 //
 // "Create budget" opens CreateBudgetDialog for the active household, and
 // rename/deactivate act directly on a BudgetCard — all three stay enabled
@@ -290,7 +290,6 @@ export function BudgetsPage() {
           householdId={activeHousehold.id}
           householdName={activeHousehold.name}
           onClose={() => setCategoryDialogOpen(false)}
-          onCategoriesChanged={() => {}}
         />
       )}
     </Box>

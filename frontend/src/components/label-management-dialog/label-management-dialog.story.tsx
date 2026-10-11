@@ -20,6 +20,9 @@ const meta: Meta<typeof LabelManagementDialog> = {
 export default meta;
 type Story = StoryObj<typeof LabelManagementDialog>;
 
-// MSW provides the GET /labels/?household_id=1 response (see msw.ts handlers).
-// The dialog opens in list mode and loads labels automatically.
+// No parameters.msw here, so GET /labels/ and GET /categories/ are both
+// bypassed (see .storybook/preview.tsx) and fall through to a real,
+// backend-less fetch — same graceful degradation as HouseholdDetailCard's
+// own default story: the dialog opens in list mode with no labels, and the
+// category picker in create/edit mode has no options.
 export const Default: Story = {};

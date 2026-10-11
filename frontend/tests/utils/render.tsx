@@ -3,6 +3,12 @@
 // Wraps RTL's render with MUI ThemeProvider, QueryClientProvider,
 // AuthProvider, ActiveHouseholdProvider, and BrowserRouter so components
 // render in a realistic context without boilerplate in every test.
+//
+// AuthProvider is given an injected value (a default test user) rather
+// than left to its own default behavior — with none, it calls the real
+// getMe() on mount, which has no server to answer it in a unit test and
+// just fails noisily. A test that needs a specific user/session state
+// still wraps the component itself rather than using this helper.
 
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
@@ -14,7 +20,10 @@ import { BrowserRouter } from 'react-router';
 
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
+import { makeUser } from '@serve/mocks';
 import theme from '@serve/theme';
+
+const testUser = makeUser();
 
 function makeQueryClient() {
   return new QueryClient({
@@ -30,7 +39,7 @@ function AllProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={makeQueryClient()}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AuthProvider>
+        <AuthProvider value={{ user: testUser, setUser: () => {}, isLoading: false, sessionError: false }}>
           <ActiveHouseholdProvider>
             <BrowserRouter>
               {children}

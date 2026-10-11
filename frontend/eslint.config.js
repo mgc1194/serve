@@ -6,6 +6,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import importPlugin from 'eslint-plugin-import';
 import storybook from 'eslint-plugin-storybook';
+import tanstackQuery from '@tanstack/eslint-plugin-query';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -15,6 +16,7 @@ export default tseslint.config(
       js.configs.recommended,
       ...tseslint.configs.recommended,
       jsxA11y.flatConfigs.recommended,
+      ...tanstackQuery.configs['flat/recommended'],
     ],
     files: ['**/*.{ts,tsx}'],
     languageOptions: {

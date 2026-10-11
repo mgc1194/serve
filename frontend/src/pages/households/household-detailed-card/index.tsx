@@ -31,8 +31,7 @@ import { AddHouseholdMemberForm } from '@pages/households/household-detailed-car
 import { HouseholdCategoriesSection } from '@pages/households/household-detailed-card/household-categories-section';
 import { HouseholdLabelsSection } from '@pages/households/household-detailed-card/household-labels-section';
 import { HouseholdMemberList } from '@pages/households/household-detailed-card/household-member-list';
-import type { Category, HouseholdDetail, Label } from '@serve/types/global';
-import { listCategories } from '@services/categories';
+import type { HouseholdDetail, Label } from '@serve/types/global';
 import { renameHousehold, deleteHousehold, ApiError } from '@services/households';
 import { listLabels } from '@services/labels';
 
@@ -86,26 +85,6 @@ export function HouseholdDetailCard({
       .then(result => {
         if (labelsVersionRef.current !== versionAtStart) return;
         writeLabels(result);
-      })
-      .catch(() => { /* non-fatal — section shows empty state */ });
-  // household.id is stable for the lifetime of this card instance
-
-  }, [household.id]);
-
-  // Categories — same fetch-on-mount/non-fatal-failure shape as labels above,
-  // with the same stale-response guard (flagged in PR review for this state).
-  const [categories, setCategories] = useState<Category[]>([]);
-  const categoriesVersionRef = useRef(0);
-  function writeCategories(next: Category[]) {
-    categoriesVersionRef.current += 1;
-    setCategories(next);
-  }
-  useEffect(() => {
-    const versionAtStart = categoriesVersionRef.current;
-    listCategories(household.id)
-      .then(result => {
-        if (categoriesVersionRef.current !== versionAtStart) return;
-        writeCategories(result);
       })
       .catch(() => { /* non-fatal — section shows empty state */ });
   // household.id is stable for the lifetime of this card instance
@@ -304,8 +283,6 @@ export function HouseholdDetailCard({
         <HouseholdCategoriesSection
           householdId={household.id}
           householdName={household.name}
-          categories={categories}
-          onCategoriesChanged={writeCategories}
         />
       </Box>
 
