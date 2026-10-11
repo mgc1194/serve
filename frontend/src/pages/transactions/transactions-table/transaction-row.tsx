@@ -3,7 +3,7 @@
 // component. The Actions cell is always pinned last. Inline errors from any
 // cell bubble up here and are shown in a full-width error row beneath.
 
-import { Alert, Chip, TableCell, TableRow, Typography } from '@mui/material';
+import { Alert, TableCell, TableRow, Typography } from '@mui/material';
 import { useRef, useState } from 'react';
 
 import { type ColumnKey } from '@pages/transactions/transactions-table/columns';
@@ -113,17 +113,6 @@ export function TransactionRow({
             onUpdated={onUpdated}
             onError={setRowError}
           />
-        );
-
-      case 'category':
-        return (
-          <TableCell key="category" sx={{ py: 1.5 }}>
-            {transaction.category ? (
-              <Chip label={transaction.category} size="small" variant="outlined" />
-            ) : (
-              <Typography variant="body2" color="text.disabled">—</Typography>
-            )}
-          </TableCell>
         );
     }
   }

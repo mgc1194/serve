@@ -145,7 +145,6 @@ describe('TransactionsTable with data', () => {
     expect(screen.getByText('Amount')).toBeDefined();
     expect(screen.getByText('Account')).toBeDefined();
     expect(screen.getByText('Label')).toBeDefined();
-    expect(screen.getByText('Category')).toBeDefined();
     expect(screen.getByText('Actions')).toBeDefined();
   });
 
