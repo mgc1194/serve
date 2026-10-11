@@ -172,6 +172,53 @@ describe('CategoryManagementDialog switching households', () => {
     await waitFor(() => expect(mockListCategories).toHaveBeenCalledWith(2, true));
     expect(screen.queryByText('Groceries')).toBeNull();
   });
+
+  it('resets out of edit mode (and the stale form) when householdId changes', async () => {
+    mockListCategories.mockImplementation((householdId: number) =>
+      Promise.resolve(householdId === 1 ? CATEGORIES : []),
+    );
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <CategoryManagementDialog open={true} householdId={1} householdName="Smith Household" onClose={onClose} />,
+    );
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /edit groceries/i }));
+    expect((screen.getByLabelText(/^name$/i) as HTMLInputElement).value).toBe('Groceries');
+
+    // Without a reset, this would still be in edit mode for household 1's
+    // "Groceries" (id 1) — saving would call updateCategory against the
+    // wrong household's category.
+    rerender(
+      <CategoryManagementDialog open={true} householdId={2} householdName="Jones Household" onClose={onClose} />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /new category/i })).toBeDefined());
+    expect(screen.queryByLabelText(/^name$/i)).toBeNull();
+  });
+
+  it('resets out of create mode (and a typed name) when householdId changes', async () => {
+    mockListCategories.mockImplementation((householdId: number) =>
+      Promise.resolve(householdId === 1 ? CATEGORIES : []),
+    );
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <CategoryManagementDialog open={true} householdId={1} householdName="Smith Household" onClose={onClose} />,
+    );
+    await waitFor(() => screen.getByText('Groceries'));
+    fireEvent.click(screen.getByRole('button', { name: /new category/i }));
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Utilities' } });
+
+    // Without a reset, this would still be in create mode with "Utilities"
+    // typed — saving would create it under the wrong household.
+    rerender(
+      <CategoryManagementDialog open={true} householdId={2} householdName="Jones Household" onClose={onClose} />,
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /new category/i })).toBeDefined());
+    expect(screen.queryByLabelText(/^name$/i)).toBeNull();
+  });
 });
 
 describe('CategoryManagementDialog disables every other action during a mutation', () => {

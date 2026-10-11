@@ -25,7 +25,7 @@
 // separate scope for a later change, not an oversight.
 
 import { Dialog, DialogContent, DialogTitle } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { ListCategories } from '@components/category-management-dialog/list-categories';
 import { ManageCategory } from '@components/category-management-dialog/manage-category';
@@ -79,6 +79,22 @@ export function CategoryManagementDialog({
   // True for the duration of any create/edit/deactivate — see the
   // file-level comment on why every other action is disabled while so.
   const isMutating = isSaving || isDeleting;
+
+  // This is a controlled dialog that can stay mounted across a household
+  // switch while open (it doesn't unmount/remount on its own) — without
+  // this, mode/editingCategory/the form fields would still refer to the
+  // previous household: saving in edit mode would call updateCategory
+  // with the old household's category id, and create could carry a stale
+  // name/type into the new household.
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMode('list');
+    setEditingCategory(null);
+    setName('');
+    setType('spending');
+    setFormError(null);
+  }, [open, householdId]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
   function handleClose() {
