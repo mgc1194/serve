@@ -20,6 +20,7 @@ import { DateRangeFilter } from '@pages/transactions/date-range-filter';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
+import { useCategories } from '@serve/queries/categories';
 import type {
   FileImportResult,
   Label,
@@ -45,6 +46,14 @@ export function TransactionsPage() {
   const { activeHousehold } = useActiveHousehold();
 
   const householdId = activeHousehold?.id;
+
+  // Shared with HouseholdCategoriesSection/CategoryManagementDialog/the
+  // label picker (see queries/categories.ts) — reads from the same cache
+  // entry rather than fetching its own copy. householdId can be undefined
+  // (no active household yet); the dummy 0 is never used since enabled
+  // gates the fetch on a real id being present.
+  const categoriesQuery = useCategories(householdId ?? 0, { enabled: householdId !== undefined });
+  const categories = categoriesQuery.data ?? [];
 
   // ── URL-driven state ────────────────────────────────────────────────────────
   const sortKey = (searchParams.get('sort') ?? DEFAULT_SORT) as SortField;
@@ -386,6 +395,7 @@ export function TransactionsPage() {
         <TransactionsTable
           transactions={paginated?.results ?? []}
           labels={labels}
+          categories={categories}
           isLoading={isLoading}
           error={error}
           hasActiveFilter={labelId !== undefined || dateFrom !== undefined || dateTo !== undefined}

@@ -24,16 +24,17 @@ import {
   Typography,
 } from '@mui/material';
 
-import { type ColumnKey } from '@pages/transactions/transactions-table/columns';
+import { type ColumnKey, SORTABLE_COLUMNS } from '@pages/transactions/transactions-table/columns';
 import { TransactionRow } from '@pages/transactions/transactions-table/transaction-row';
 import { TransactionsTableHeader } from '@pages/transactions/transactions-table/transactions-table-header';
 import { useColumnOrder } from '@pages/transactions/transactions-table/use-column-order';
 import { columnKeyToSortField, nextSortDir } from '@pages/transactions/transactions-table/use-sort';
-import type { Label, SortDir, SortField, Transaction } from '@serve/types/global';
+import type { Category, Label, SortDir, SortField, Transaction } from '@serve/types/global';
 
 interface TransactionsTableProps {
   transactions: Transaction[];
   labels?: Label[];
+  categories?: Category[];
   isLoading: boolean;
   error: string | null;
   /** Whether a filter (e.g. label) is currently narrowing the results —
@@ -63,6 +64,7 @@ interface TransactionsTableProps {
 export function TransactionsTable({
   transactions,
   labels = [],
+  categories = [],
   isLoading,
   error,
   hasActiveFilter = false,
@@ -97,6 +99,7 @@ export function TransactionsTable({
   } = useColumnOrder();
 
   function handleHeaderKeyDown(e: React.KeyboardEvent, key: ColumnKey) {
+    if (!SORTABLE_COLUMNS.has(key)) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       const field = columnKeyToSortField(key);
@@ -144,6 +147,7 @@ export function TransactionsTable({
                 onDragEnd={handleDragEnd}
                 onHeaderClick={(e, key) =>
                   handleHeaderClick(e, key, k => {
+                    if (!SORTABLE_COLUMNS.has(k)) return;
                     const field = columnKeyToSortField(k);
                     onSortChange(field, nextSortDir(sortKey as ColumnKey, k, sortDir));
                   })
@@ -158,6 +162,7 @@ export function TransactionsTable({
                     transaction={tx}
                     columnOrder={columnOrder}
                     labels={labels}
+                    categories={categories}
                     onUpdated={onUpdated}
                     onDeleted={onDeleted}
                   />
