@@ -20,7 +20,6 @@ const TRANSACTIONS = [
     label_id: 1,
     label_name: 'Groceries',
     label_color: '#16a34a',
-    category: 'Food',
   }),
   makeTransaction({
     id: 2,
@@ -30,7 +29,6 @@ const TRANSACTIONS = [
     label_id: null,
     label_name: null,
     label_color: null,
-    category: null,
     account_id: 2,
     account_name: "Seth's Checking",
     bank_name: 'SoFi',
@@ -43,7 +41,6 @@ const TRANSACTIONS = [
     label_id: 2,
     label_name: 'Subscriptions',
     label_color: '#7c3aed',
-    category: 'Entertainment',
     account_id: 2,
     account_name: "Seth's Checking",
     bank_name: 'SoFi',
@@ -56,7 +53,6 @@ const TRANSACTIONS = [
     label_id: 3,
     label_name: 'Transport',
     label_color: '#2563eb',
-    category: null,
     exclude_from_summary: true,
   }),
 ];

@@ -30,7 +30,7 @@ const LABELS = [
   makeLabel({ id: 2, name: 'Transport', color: '#2563eb' }),
 ];
  
-const TX = makeTransaction({ category: 'Groceries' });
+const TX = makeTransaction();
 
 function setup(props: Partial<React.ComponentProps<typeof TransactionRow>> = {}) {
   const onUpdated = vi.fn();
@@ -79,15 +79,6 @@ describe('TransactionRow rendering', () => {
     expect(screen.getByText(/\+\$2,400\.00/)).toBeDefined();
   });
 
-  it('renders the category chip', () => {
-    setup();
-    expect(screen.getByText('Groceries')).toBeDefined();
-  });
-
-  it('renders — when category is null', () => {
-    setup({ transaction: { ...TX, category: null } });
-    expect(screen.getByText('—')).toBeDefined();
-  });
 });
 
 // ── Inline concept edit ───────────────────────────────────────────────────────

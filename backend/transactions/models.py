@@ -88,8 +88,7 @@ class Transaction(models.Model):
     simply becomes unlabelled. Earlier versions of this model used a free-text
     label field; that has now been replaced by the structured ForeignKey.
 
-    category and additional_labels are manually assigned and never overwritten
-    on re-import.
+    additional_labels is manually assigned and never overwritten on re-import.
     exclude_from_summary is user-controlled and never overwritten on re-import.
     """
 
@@ -113,7 +112,6 @@ class Transaction(models.Model):
         related_name='transactions',
     )
 
-    category = models.CharField(max_length=255, blank=True, null=True)  # noqa: DJ001
     additional_labels = models.TextField(blank=True, null=True)  # noqa: DJ001
     exclude_from_summary = models.BooleanField(
         default=False,
@@ -129,7 +127,7 @@ class Transaction(models.Model):
         related_name='transactions',
     )
     imported_at = models.DateTimeField(auto_now_add=True)
-    # Bumped on every save, not just import — reassigning label/category,
+    # Bumped on every save, not just import — reassigning label,
     # toggling exclude_from_summary, or editing amount all count. Lets
     # callers that cache a computation over a set of transactions (e.g.
     # budget actuals) detect staleness by comparing against the latest
