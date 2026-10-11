@@ -19,11 +19,20 @@ export function categoriesQueryKey(householdId: number) {
   return ['categories', householdId] as const;
 }
 
+// Categories change rarely (a deliberate create/edit/deactivate, not
+// something external), so a short staleTime avoids a second request when
+// another observer mounts shortly after the first — opening the category
+// or label dialog right after the section itself has already loaded,
+// for instance. Mutations invalidate this key regardless of staleTime, so
+// a change is still picked up immediately by every mounted observer.
+const STALE_TIME_MS = 30_000;
+
 export function useCategories(householdId: number, options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: categoriesQueryKey(householdId),
     queryFn: () => listCategories(householdId, true),
     enabled: options.enabled ?? true,
+    staleTime: STALE_TIME_MS,
   });
 }
 

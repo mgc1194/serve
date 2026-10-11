@@ -60,6 +60,21 @@ describe('useCategories', () => {
     renderHook(() => useCategories(1, { enabled: false }), { wrapper: wrapper() });
     expect(mockListCategories).not.toHaveBeenCalled();
   });
+
+  it('does not refetch for a second observer mounting shortly after the first', async () => {
+    // The exact scenario a zero staleTime would cause: a section has
+    // already loaded this household's categories, then a dialog opens
+    // and mounts its own useCategories — without a staleTime, that
+    // second observer would refetch even though nothing invalidated it.
+    const Wrapper = wrapper();
+    const { result: first } = renderHook(() => useCategories(1), { wrapper: Wrapper });
+    await waitFor(() => expect(first.current.isSuccess).toBe(true));
+    expect(mockListCategories).toHaveBeenCalledTimes(1);
+
+    renderHook(() => useCategories(1), { wrapper: Wrapper });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(mockListCategories).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useCreateCategory', () => {
