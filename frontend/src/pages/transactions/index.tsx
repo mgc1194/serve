@@ -9,10 +9,12 @@
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import { Alert, Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { LabelManagementDialog } from '@components/label-management-dialog';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
@@ -118,6 +120,7 @@ export function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   // Bumped to force a refetch (e.g. after a CSV import) even when none of
   // the URL-driven params below have changed.
   const [refreshToken, setRefreshToken] = useState(0);
@@ -354,7 +357,16 @@ export function TransactionsPage() {
           Dashboard
         </Button>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           {activeHousehold ? (
             <Typography variant="h4">
               <SwitchHouseholdButton
@@ -374,13 +386,31 @@ export function TransactionsPage() {
           ) : (
             <Typography variant="h4">Transactions</Typography>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<FileUploadOutlinedIcon />}
-            onClick={() => setImportOpen(true)}
-          >
-            Import CSV
-          </Button>
+
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {activeHousehold && (
+              // Disabled while the page's own load() is in flight: that
+              // fetch's setLabels(lbls) (below) would otherwise land after
+              // a dialog mutation's setLabels and silently restore the
+              // pre-mutation list — the created/edited/deleted label would
+              // vanish from the filter bar until the next reload.
+              <Button
+                variant="outlined"
+                startIcon={<LocalOfferOutlinedIcon />}
+                onClick={() => setLabelDialogOpen(true)}
+                disabled={isLoading}
+              >
+                Manage labels
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<FileUploadOutlinedIcon />}
+              onClick={() => setImportOpen(true)}
+            >
+              Import CSV
+            </Button>
+          </Box>
         </Box>
 
         {categoriesQuery.isError && (
@@ -440,6 +470,16 @@ export function TransactionsPage() {
           onImported={handleImported}
           onClose={() => setImportOpen(false)}
         />
+
+        {householdId !== undefined && (
+          <LabelManagementDialog
+            open={labelDialogOpen}
+            householdId={householdId}
+            householdName={activeHousehold?.name ?? ''}
+            onClose={() => setLabelDialogOpen(false)}
+            onLabelsChanged={setLabels}
+          />
+        )}
       </Container>
     </Box>
   );
