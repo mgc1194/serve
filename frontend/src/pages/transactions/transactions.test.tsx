@@ -572,6 +572,45 @@ describe('TransactionsPage stale label_id', () => {
   );
 });
 
+// Lets the user create/edit/delete labels from the Transactions page itself
+// (previously only possible from the household card), since relabeling
+// transactions is exactly when a missing or wrong label tends to surface.
+describe('TransactionsPage label management', () => {
+  it('opens the label management dialog when "Manage labels" is clicked', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage labels/i }));
+
+    expect(await screen.findByText('Labels — Test Household')).toBeDefined();
+  });
+
+  it('adds the new label to the label filter bar once created', async () => {
+    const created = { id: 99, name: 'Subscriptions', color: '#7c3aed', category_id: null, household_id: 1 };
+    vi.spyOn(labelsService, 'createLabel').mockResolvedValue(created);
+    // Page's initial fetch and the dialog's own fetch on open both resolve
+    // empty — the new label reaches the page purely via onLabelsChanged,
+    // not a refetch, so listLabels is never called a third time.
+    vi.spyOn(labelsService, 'listLabels').mockResolvedValue([]);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage labels/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /new label/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'Subscriptions');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(labelsService.createLabel).toHaveBeenCalledOnce());
+
+    await userEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await userEvent.click(screen.getByRole('combobox', { name: /filter by label/i }));
+    expect(await screen.findByRole('option', { name: 'Subscriptions' })).toBeDefined();
+  });
+});
+
 // A failed categories fetch must not be silently presented as "no
 // categories" — that would render every categorized transaction's Category
 // cell as "—", indistinguishable from a genuinely uncategorized one.

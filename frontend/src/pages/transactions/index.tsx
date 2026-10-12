@@ -9,10 +9,12 @@
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import { Alert, Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { LabelManagementDialog } from '@components/label-management-dialog';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
@@ -118,6 +120,7 @@ export function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   // Bumped to force a refetch (e.g. after a CSV import) even when none of
   // the URL-driven params below have changed.
   const [refreshToken, setRefreshToken] = useState(0);
@@ -409,6 +412,16 @@ export function TransactionsPage() {
             onDateFromChange={handleDateFromChange}
             onDateToChange={handleDateToChange}
           />
+          {householdId !== undefined && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<LocalOfferOutlinedIcon />}
+              onClick={() => setLabelDialogOpen(true)}
+            >
+              Manage labels
+            </Button>
+          )}
         </Box>
 
         <TransactionsTable
@@ -440,6 +453,16 @@ export function TransactionsPage() {
           onImported={handleImported}
           onClose={() => setImportOpen(false)}
         />
+
+        {householdId !== undefined && (
+          <LabelManagementDialog
+            open={labelDialogOpen}
+            householdId={householdId}
+            householdName={activeHousehold?.name ?? ''}
+            onClose={() => setLabelDialogOpen(false)}
+            onLabelsChanged={setLabels}
+          />
+        )}
       </Container>
     </Box>
   );
