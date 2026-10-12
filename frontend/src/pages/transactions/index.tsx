@@ -9,7 +9,7 @@
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
-import { Box, Button, Container, Typography } from '@mui/material';
+import { Alert, Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -20,6 +20,7 @@ import { DateRangeFilter } from '@pages/transactions/date-range-filter';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
+import { useCategories } from '@serve/queries/categories';
 import type {
   FileImportResult,
   Label,
@@ -45,6 +46,19 @@ export function TransactionsPage() {
   const { activeHousehold } = useActiveHousehold();
 
   const householdId = activeHousehold?.id;
+
+  // Shared with HouseholdCategoriesSection/CategoryManagementDialog/the
+  // label picker (see queries/categories.ts) — reads from the same cache
+  // entry rather than fetching its own copy. householdId can be undefined
+  // (no active household yet); the dummy 0 is never used since enabled
+  // gates the fetch on a real id being present.
+  const categoriesQuery = useCategories(householdId ?? 0, { enabled: householdId !== undefined });
+  // A failed fetch with nothing cached yet falls back to [] here, which
+  // would otherwise render every categorized transaction as "—", identical
+  // to a genuinely uncategorized one — the banner below (keyed off isError)
+  // is what tells the two apart, rather than silently passing off missing
+  // data as an empty category list.
+  const categories = categoriesQuery.data ?? [];
 
   // ── URL-driven state ────────────────────────────────────────────────────────
   const sortKey = (searchParams.get('sort') ?? DEFAULT_SORT) as SortField;
@@ -369,6 +383,20 @@ export function TransactionsPage() {
           </Button>
         </Box>
 
+        {categoriesQuery.isError && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => categoriesQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            Could not load categories — the Category column may be incomplete.
+          </Alert>
+        )}
+
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
           <LabelFilterBar
             labels={labels}
@@ -386,6 +414,7 @@ export function TransactionsPage() {
         <TransactionsTable
           transactions={paginated?.results ?? []}
           labels={labels}
+          categories={categories}
           isLoading={isLoading}
           error={error}
           hasActiveFilter={labelId !== undefined || dateFrom !== undefined || dateTo !== undefined}

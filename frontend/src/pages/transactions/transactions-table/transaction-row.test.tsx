@@ -5,7 +5,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_COLUMN_ORDER } from '@pages/transactions/transactions-table/columns';
-import { makeLabel, makeTransaction } from '@serve/mocks';
+import { makeCategory, makeLabel, makeTransaction } from '@serve/mocks';
 import { ApiError } from '@services/transactions';
 import * as transactionsService from '@services/transactions';
 
@@ -25,11 +25,15 @@ vi.mock('@services/transactions', async importOriginal => {
 const mockUpdateConcept = vi.mocked(transactionsService.updateTransactionConcept);
 const mockDeleteTransaction = vi.mocked(transactionsService.deleteTransaction);
 
-const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a' }),
-  makeLabel({ id: 2, name: 'Transport', color: '#2563eb' }),
+const CATEGORIES = [
+  makeCategory({ id: 10, name: 'Food', type: 'spending' }),
 ];
- 
+
+const LABELS = [
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category_id: 10 }),
+  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category_id: null }),
+];
+
 const TX = makeTransaction();
 
 function setup(props: Partial<React.ComponentProps<typeof TransactionRow>> = {}) {
@@ -43,6 +47,7 @@ function setup(props: Partial<React.ComponentProps<typeof TransactionRow>> = {})
           transaction={TX}
           columnOrder={DEFAULT_COLUMN_ORDER}
           labels={LABELS}
+          categories={CATEGORIES}
           onUpdated={onUpdated}
           onDeleted={onDeleted}
           {...props}
@@ -79,6 +84,30 @@ describe('TransactionRow rendering', () => {
     expect(screen.getByText(/\+\$2,400\.00/)).toBeDefined();
   });
 
+});
+
+// ── Category cell (derived from the assigned label's category_id) ──────────────
+
+describe('TransactionRow category cell', () => {
+  it("renders the assigned label's category name", () => {
+    setup({ transaction: { ...TX, label_id: 1 } });
+    expect(screen.getByText('Food')).toBeDefined();
+  });
+
+  it('renders — when the transaction has no label', () => {
+    setup({ transaction: { ...TX, label_id: null } });
+    expect(screen.getByText('—')).toBeDefined();
+  });
+
+  it("renders — when the assigned label has no category", () => {
+    setup({ transaction: { ...TX, label_id: 2 } });
+    expect(screen.getByText('—')).toBeDefined();
+  });
+
+  it('renders — when categories have not loaded yet', () => {
+    setup({ transaction: { ...TX, label_id: 1 }, categories: [] });
+    expect(screen.getByText('—')).toBeDefined();
+  });
 });
 
 // ── Inline concept edit ───────────────────────────────────────────────────────

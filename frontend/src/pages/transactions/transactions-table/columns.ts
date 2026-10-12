@@ -5,7 +5,7 @@
 // transaction-row.tsx only export components, satisfying Vite's fast-refresh
 // constraint.
 
-export type ColumnKey = 'date' | 'concept' | 'amount' | 'account' | 'label';
+export type ColumnKey = 'date' | 'concept' | 'amount' | 'account' | 'label' | 'category';
 
 export const COLUMN_LABELS: Record<ColumnKey, string> = {
   date: 'Date',
@@ -13,6 +13,7 @@ export const COLUMN_LABELS: Record<ColumnKey, string> = {
   amount: 'Amount',
   account: 'Account',
   label: 'Label',
+  category: 'Category',
 };
 
 export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
@@ -21,4 +22,18 @@ export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
   'amount',
   'account',
   'label',
+  'category',
 ];
+
+// category is derived client-side (from the transaction's label's
+// category_id, looked up against the household's categories — both
+// already fetched for other reasons) rather than sorted/filtered
+// server-side, so it's reorderable like every other column but excluded
+// from the sort system: there's no backend SortField for it yet.
+export const SORTABLE_COLUMNS: ReadonlySet<ColumnKey> = new Set([
+  'date',
+  'concept',
+  'amount',
+  'account',
+  'label',
+]);

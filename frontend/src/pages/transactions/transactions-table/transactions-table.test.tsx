@@ -145,6 +145,7 @@ describe('TransactionsTable with data', () => {
     expect(screen.getByText('Amount')).toBeDefined();
     expect(screen.getByText('Account')).toBeDefined();
     expect(screen.getByText('Label')).toBeDefined();
+    expect(screen.getByText('Category')).toBeDefined();
     expect(screen.getByText('Actions')).toBeDefined();
   });
 
@@ -228,5 +229,20 @@ describe('TransactionsTable sorting', () => {
     });
     fireEvent.click(screen.getByRole('columnheader', { name: /description/i }));
     expect(onSortChange).toHaveBeenCalledWith('concept', 'desc');
+  });
+
+  // category is derived client-side — there's no backend SortField for it
+  // yet (see columns.ts's SORTABLE_COLUMNS), so clicking or activating its
+  // header must not attempt to sort by it.
+  it('does not call onSortChange when the category header is clicked', () => {
+    const { onSortChange } = setup({ transactions: [TX] });
+    fireEvent.click(screen.getByRole('columnheader', { name: /category/i }));
+    expect(onSortChange).not.toHaveBeenCalled();
+  });
+
+  it('does not call onSortChange when Enter is pressed on the category header', () => {
+    const { onSortChange } = setup({ transactions: [TX] });
+    fireEvent.keyDown(screen.getByRole('columnheader', { name: /category/i }), { key: 'Enter' });
+    expect(onSortChange).not.toHaveBeenCalled();
   });
 });

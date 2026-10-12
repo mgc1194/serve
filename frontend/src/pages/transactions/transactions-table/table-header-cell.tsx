@@ -7,7 +7,7 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { Box, IconButton, TableCell, Tooltip } from '@mui/material';
 
-import { type ColumnKey, COLUMN_LABELS } from '@pages/transactions/transactions-table/columns';
+import { type ColumnKey, COLUMN_LABELS, SORTABLE_COLUMNS } from '@pages/transactions/transactions-table/columns';
 import type { SortDir } from '@pages/transactions/transactions-table/use-sort';
 
 const HEADER_CELL_SX = {
@@ -52,6 +52,7 @@ export function TableHeaderCell({
   onHandleKeyDown,
 }: TableHeaderCellProps) {
   const isActive = sortKey === columnKey;
+  const isSortable = SORTABLE_COLUMNS.has(columnKey);
   const isHeld = heldKey === columnKey;
   const SortIcon = sortDir === 'asc' ? ArrowUpwardIcon : ArrowDownwardIcon;
   const ariaSort = isActive ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
@@ -73,7 +74,7 @@ export function TableHeaderCell({
       tabIndex={0}
       sx={{
         ...HEADER_CELL_SX,
-        cursor: 'pointer',
+        cursor: isSortable ? 'pointer' : 'default',
         ...(columnKey === 'amount' ? { textAlign: 'right' } : {}),
         color: isActive ? 'primary.main' : 'text.secondary',
         outline: dragOver === columnKey ? '2px solid' : 'none',
