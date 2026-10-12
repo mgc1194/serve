@@ -220,11 +220,19 @@ export function BudgetDetailPage() {
               </Box>
             )}
 
+            {/* Disabled while the lines GET is in flight: creating a line
+                during that window would append it locally (onCreate
+                below), only for the older GET to resolve afterward and
+                setLines(result) overwrite it with the pre-create snapshot
+                — the new line would disappear even though it exists on
+                the backend. Simpler to just wait for the one request this
+                page itself is already making than to reconcile the two. */}
             <Button
               startIcon={<AddIcon />}
               variant="outlined"
               size="small"
               onClick={() => setLineDialogOpen(true)}
+              disabled={isLoadingLines}
               sx={{ mt: 2 }}
             >
               Add category

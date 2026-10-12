@@ -270,6 +270,34 @@ describe('BudgetDetailPage budget lines', () => {
     await waitFor(() => expect(screen.queryByText('Loading categories…')).toBeNull());
   });
 
+  // Regresses to a bug where "Add category" stayed enabled while the
+  // initial listBudgetLines GET was still in flight. Creating a line in
+  // that window appended it locally (onCreate), but the older GET then
+  // resolved afterward and setLines(result) overwrote that with its
+  // pre-create snapshot — the new line vanished even though it existed on
+  // the backend. Disabling the trigger while that fetch is in flight
+  // removes the race entirely, rather than reconciling the two results.
+  it('disables "Add category" while the initial lines fetch is in flight', async () => {
+    const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
+        true,
+      ),
+    );
+
+    linesPromise.resolve([]);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
+        false,
+      ),
+    );
+  });
+
   it('shows an error with a retry button when lines fail to load', async () => {
     const listBudgetLines = vi
       .spyOn(budgetsService, 'listBudgetLines')
