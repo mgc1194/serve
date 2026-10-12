@@ -23,6 +23,7 @@ from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
+from budgets.models import Category
 from schemas.summary import CategorySummarySchema, LabelSummarySchema, SummarySchema
 from transactions.models import Transaction
 from users.models import Household
@@ -77,11 +78,17 @@ def get_summary(
 ):
     """Returns transactions aggregated by label for a household.
 
-    Transactions are split into earnings (positive net) and spending (negative
-    net) sections, each grouped by the label's category.  Labels with no
-    category appear at the bottom of their section under a category_id=None key.
-    Transactions that have no label at all are counted separately in
-    ``uncategorised_total`` and are not included in either section.
+    Transactions are split into earnings and spending sections by the label's
+    assigned category type (Category.Type.EARNING / SPENDING) — a category
+    marked "spending" always surfaces under Spending, even for a label whose
+    own net total happens to be positive (e.g. a refund or deposit filed
+    under an otherwise-spending category). A label with no category falls
+    back to splitting by the sign of its net total (positive -> earnings,
+    negative -> spending), since there's no category type to defer to.
+    Labels with no category appear at the bottom of their section under a
+    category_id=None key. Transactions that have no label at all are counted
+    separately in ``uncategorised_total`` and are not included in either
+    section.
 
     The response always includes ``earliest_transaction_date`` — the ISO date
     of the oldest transaction in the household (regardless of the month filter),
@@ -145,6 +152,7 @@ def get_summary(
             'label__color',
             'label__category_id',
             'label__category__name',
+            'label__category__type',
         )
         .annotate(total=Sum('amount'))
     )
@@ -162,7 +170,12 @@ def get_summary(
             category_name=row['label__category__name'] or '',
             total=total_val,
         )
-        if total_val >= 0:
+
+        category_type = row['label__category__type']
+        is_earning = (
+            category_type == Category.Type.EARNING if category_type is not None else total_val >= 0
+        )
+        if is_earning:
             earnings_labels.append(label_row)
         else:
             spending_labels.append(label_row)
