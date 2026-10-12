@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { BudgetDetailPage } from '@pages/budget-detail';
-import { makeBudget } from '@serve/mocks';
+import { makeBudget, makeBudgetLine } from '@serve/mocks';
 import type { Budget } from '@serve/types/global';
 import * as budgetsService from '@services/budgets';
 import * as categoriesService from '@services/categories';
@@ -78,6 +78,7 @@ function renderPageWithNav(id = '9') {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([BUDGET]);
+  vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([]);
   vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
 });
 
@@ -187,7 +188,7 @@ describe('BudgetDetailPage add category', () => {
     expect(await screen.findByText('Add category', { selector: 'h2' })).toBeDefined();
   });
 
-  it('closes the dialog without rendering anything from the created line', async () => {
+  it('closes the dialog on Cancel without creating a line', async () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
@@ -197,9 +198,8 @@ describe('BudgetDetailPage add category', () => {
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    // The placeholder net figure is untouched — this PR doesn't wire a
-    // created line into anything on the page.
-    expect(screen.getByText('Net this month: —')).toBeDefined();
+    // Both columns (Earnings and Spending) show the empty state.
+    expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
   });
 
   // Regresses to a bug where `budget` (and the dialog's open state) stayed
@@ -234,5 +234,79 @@ describe('BudgetDetailPage add category', () => {
     // The new budget loads, and the dialog does NOT reappear open.
     await screen.findByText('Vacation Fund');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('BudgetDetailPage budget lines', () => {
+  it('splits fetched lines into Earnings and Spending columns', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_name: 'Paycheck', category_type: 'earning' }),
+      makeBudgetLine({ id: 2, category_name: 'Groceries', category_type: 'spending' }),
+    ]);
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    const earningsHeading = await screen.findByText('Earnings');
+    const spendingHeading = screen.getByText('Spending');
+    expect(
+      earningsHeading.compareDocumentPosition(screen.getByText('Paycheck')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      spendingHeading.compareDocumentPosition(screen.getByText('Groceries')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('shows a loading state while lines are being fetched', async () => {
+    const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    await waitFor(() => expect(screen.getByText('Loading categories…')).toBeDefined());
+
+    linesPromise.resolve([]);
+    await waitFor(() => expect(screen.queryByText('Loading categories…')).toBeNull());
+  });
+
+  it('shows an error with a retry button when lines fail to load', async () => {
+    const listBudgetLines = vi
+      .spyOn(budgetsService, 'listBudgetLines')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([makeBudgetLine({ category_name: 'Groceries' })]);
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    await screen.findByText('Could not load categories.');
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    await screen.findByText('Groceries');
+    expect(listBudgetLines).toHaveBeenCalledTimes(2);
+  });
+
+  it('appends a newly-created line into the right column immediately', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
+    ]);
+    vi.spyOn(budgetsService, 'createBudgetLine').mockResolvedValue(
+      makeBudgetLine({ id: 3, category_id: 5, category_name: 'Bonus', category_type: 'earning' }),
+    );
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    await screen.findByText('Bonus');
+    // The Spending column still shows its own empty state — the new line
+    // landed only in Earnings.
+    expect(screen.getByText('No categories yet.')).toBeDefined();
   });
 });
