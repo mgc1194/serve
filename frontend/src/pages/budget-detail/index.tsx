@@ -69,6 +69,18 @@ export function BudgetDetailPage() {
     function load() {
       const requestId = ++requestIdRef.current;
 
+      // Clears the previous scope's budget (and closes any open dialog
+      // reading budgetId/householdId off it) synchronously, before the new
+      // fetch even starts. Without this, a route change to a different
+      // budget — or the active household changing — left `budget` (and a
+      // still-open CreateBudgetLineDialog) pointing at the old scope for
+      // the whole duration of the new fetch: a submit in that window could
+      // create a line on the wrong budget, and the dialog could reappear
+      // open once the new budget loaded, since lineDialogOpen was never
+      // reset either.
+      setBudget(null);
+      setLineDialogOpen(false);
+
       if (householdId === undefined) {
         setIsLoading(false);
         return;

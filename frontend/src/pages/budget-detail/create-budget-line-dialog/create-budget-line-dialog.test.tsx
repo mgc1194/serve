@@ -31,6 +31,7 @@ function render(ui: React.ReactElement) {
   const result = rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
   return {
     ...result,
+    queryClient,
     rerender: (nextUi: React.ReactElement) =>
       result.rerender(<QueryClientProvider client={queryClient}>{nextUi}</QueryClientProvider>),
   };
@@ -39,7 +40,7 @@ function render(ui: React.ReactElement) {
 function setup(overrides: Partial<React.ComponentProps<typeof CreateBudgetLineDialog>> = {}) {
   const onClose = vi.fn();
   const onCreate = vi.fn();
-  render(
+  const { queryClient } = render(
     <CreateBudgetLineDialog
       open
       budgetId={9}
@@ -49,7 +50,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof CreateBudgetLineDi
       {...overrides}
     />,
   );
-  return { onClose, onCreate };
+  return { onClose, onCreate, queryClient };
 }
 
 beforeEach(() => {
@@ -95,15 +96,94 @@ describe('CreateBudgetLineDialog rendering', () => {
   it('renders the active categories as options', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    expect(await screen.findByRole('option', { name: 'Groceries' })).toBeDefined();
-    expect(screen.getByRole('option', { name: 'Salary' })).toBeDefined();
+    expect(await screen.findByRole('option', { name: 'Groceries (Spending)' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Salary (Earning)' })).toBeDefined();
   });
 
   it('does not offer an inactive category', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    await screen.findByRole('option', { name: 'Groceries' });
+    await screen.findByRole('option', { name: 'Groceries (Spending)' });
     expect(screen.queryByRole('option', { name: 'Old Hobby' })).toBeNull();
+  });
+
+  // A household can have both an earning and a spending category with the
+  // same name (Category's uniqueness includes type) — without the type
+  // suffix, picking between "Rent (Spending)" and a hypothetical
+  // "Rent (Earning)" would be impossible to tell apart.
+  it('disambiguates two categories that share a name but differ in type', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      makeCategory({ id: 10, name: 'Rent', type: 'spending' }),
+      makeCategory({ id: 11, name: 'Rent', type: 'earning' }),
+    ]);
+    setup();
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    expect(await screen.findByRole('option', { name: 'Rent (Spending)' })).toBeDefined();
+    expect(screen.getByRole('option', { name: 'Rent (Earning)' })).toBeDefined();
+  });
+});
+
+describe('CreateBudgetLineDialog stale/refetching selection', () => {
+  // isLoading is only true for the very first fetch — a background
+  // refetch of already-cached data (e.g. the 30s staleTime in
+  // queries/categories.ts expiring while this dialog sits open) only
+  // flips isFetching. Add must stay disabled for that window too, since
+  // the in-flight refetch could be about to deactivate the selected
+  // category.
+  it('disables Add while a background refetch is in flight, even with a category already selected', async () => {
+    const { queryClient } = setup();
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
+
+    // A deferred promise, not an already-resolved one — otherwise the
+    // refetch's start and resolution could land in the same React commit,
+    // making the in-between isFetching:true state invisible to the test
+    // even though real/slower network latency would show it.
+    let resolveRefetch!: (value: typeof CATEGORIES) => void;
+    vi.spyOn(categoriesService, 'listCategories').mockReturnValue(
+      new Promise(resolve => {
+        resolveRefetch = resolve;
+      }),
+    );
+
+    // Trigger a background refetch of the same query key without
+    // unmounting anything — isLoading stays false (data is cached), only
+    // isFetching flips true.
+    void queryClient.refetchQueries({ queryKey: ['categories', 1] });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true),
+    );
+
+    resolveRefetch(CATEGORIES);
+  });
+
+  // The backend doesn't reject an inactive category_id on its own — if the
+  // selected category is deactivated by the time a refetch resolves (e.g.
+  // someone else in the household deactivated it from
+  // CategoryManagementDialog), submitting the stale selection would still
+  // reach the API and create a line for a category the picker no longer
+  // even offers.
+  it('disables Add once the selected category is no longer active after a refetch resolves', async () => {
+    const { queryClient } = setup();
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
+
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      makeCategory({ id: 1, name: 'Groceries', type: 'spending', is_active: false }),
+      makeCategory({ id: 2, name: 'Salary', type: 'earning' }),
+    ]);
+    await queryClient.refetchQueries({ queryKey: ['categories', 1] });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true),
+    );
   });
 });
 
@@ -113,7 +193,7 @@ describe('CreateBudgetLineDialog validation', () => {
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
@@ -123,7 +203,7 @@ describe('CreateBudgetLineDialog validation', () => {
   it('keeps Add disabled for a negative amount', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '-5' } });
 
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
@@ -132,7 +212,7 @@ describe('CreateBudgetLineDialog validation', () => {
   it('keeps Add disabled for a non-integer amount', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '49.99' } });
 
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
@@ -151,7 +231,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     mockCreateBudgetLine.mockResolvedValueOnce(makeBudgetLine());
     setup();
 
-    await fillAndSubmit('Groceries', '500');
+    await fillAndSubmit('Groceries (Spending)', '500');
 
     await waitFor(() =>
       expect(mockCreateBudgetLine).toHaveBeenCalledWith(9, { category_id: 1, planned_amount: 500 }),
@@ -163,7 +243,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     mockCreateBudgetLine.mockResolvedValueOnce(created);
     const { onCreate, onClose } = setup();
 
-    await fillAndSubmit('Groceries', '500');
+    await fillAndSubmit('Groceries (Spending)', '500');
 
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(created));
     expect(onClose).toHaveBeenCalledOnce();
@@ -175,7 +255,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     );
     const { onClose } = setup();
 
-    await fillAndSubmit('Groceries', '500');
+    await fillAndSubmit('Groceries (Spending)', '500');
 
     await screen.findByText('"Groceries" is already part of this budget.');
     expect(onClose).not.toHaveBeenCalled();
@@ -185,7 +265,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     mockCreateBudgetLine.mockRejectedValueOnce(new Error('network down'));
     setup();
 
-    await fillAndSubmit('Groceries', '500');
+    await fillAndSubmit('Groceries (Spending)', '500');
 
     await screen.findByText('Could not add category.');
   });
