@@ -33,7 +33,7 @@ interface CategoryRowProps {
 }
 
 function CategoryRow({ row }: CategoryRowProps) {
-  const categoryLabel = row.category || 'Uncategorised';
+  const categoryLabel = row.category_name || 'Uncategorised';
 
   return (
     <>
@@ -106,7 +106,7 @@ function CategoryTable({ categories, emptyMessage }: CategoryTableProps) {
         </TableHead>
         <TableBody>
           {categories.map(cat => (
-            <CategoryRow key={cat.category} row={cat} />
+            <CategoryRow key={cat.category_id ?? 'uncategorised'} row={cat} />
           ))}
         </TableBody>
       </Table>
