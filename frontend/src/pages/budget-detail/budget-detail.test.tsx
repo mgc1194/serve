@@ -1,7 +1,7 @@
 // pages/budget-detail/budget-detail.test.tsx
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import { Link, MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,6 +66,7 @@ function renderPageWithNav(id = '9') {
   return render(
     <MemoryRouter initialEntries={[`/budgets/${id}`]}>
       <ActiveHouseholdProvider>
+        <Link to="/budgets/9">Go to budget 9</Link>
         <Link to="/budgets/10">Go to budget 10</Link>
         <Routes>
           <Route path="/budgets/:id" element={<BudgetDetailPage />} />
@@ -246,16 +247,19 @@ describe('BudgetDetailPage budget lines', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    const earningsHeading = await screen.findByText('Earnings');
-    const spendingHeading = screen.getByText('Spending');
-    expect(
-      earningsHeading.compareDocumentPosition(screen.getByText('Paycheck')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(
-      spendingHeading.compareDocumentPosition(screen.getByText('Groceries')) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    // Each BudgetColumn's title Typography and its table/empty-message are
+    // direct siblings under the same root Box, so the heading's own
+    // parentElement is exactly that column's container — scoping on it
+    // (rather than just checking document order, which both columns being
+    // on the same page would satisfy even if a line landed in the wrong
+    // one) actually verifies which column each line is inside of.
+    const earningsColumn = within((await screen.findByText('Earnings')).parentElement!);
+    const spendingColumn = within(screen.getByText('Spending').parentElement!);
+
+    expect(earningsColumn.getByText('Paycheck')).toBeDefined();
+    expect(earningsColumn.queryByText('Groceries')).toBeNull();
+    expect(spendingColumn.getByText('Groceries')).toBeDefined();
+    expect(spendingColumn.queryByText('Paycheck')).toBeNull();
   });
 
   it('shows a loading state while lines are being fetched', async () => {
@@ -433,5 +437,63 @@ describe('BudgetDetailPage budget lines', () => {
     });
 
     expect(screen.queryByText('Bonus')).toBeNull();
+  });
+
+  // The budget_id guard above (from the previous finding) only tells two
+  // DIFFERENT budgets apart — it doesn't help for two separate visits to
+  // the SAME budget. Navigate 9 -> 10 -> back to 9 while a create for
+  // budget 9 is still in flight, and budget 9's second lines GET can
+  // already include that line (the backend had processed the create by
+  // then) before the stale create callback finally resolves — appending
+  // it again would duplicate the row (and its React key).
+  it('does not duplicate a line already present after navigating away and back to the same budget', async () => {
+    const createdLine = makeBudgetLine({
+      id: 3,
+      budget_id: 9,
+      category_id: 5,
+      category_name: 'Bonus',
+      category_type: 'earning',
+    });
+
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET]) // initial /budgets/9
+      .mockResolvedValueOnce([makeBudget({ id: 10, name: 'Vacation Fund' })]) // -> /budgets/10
+      .mockResolvedValueOnce([BUDGET]); // -> back to /budgets/9
+
+    vi.spyOn(budgetsService, 'listBudgetLines')
+      .mockResolvedValueOnce([]) // budget 9, first visit
+      .mockResolvedValueOnce([]) // budget 10
+      .mockResolvedValueOnce([createdLine]); // budget 9, second visit — already has it
+
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
+    ]);
+    const createPromise = deferred<ReturnType<typeof makeBudgetLine>>();
+    vi.spyOn(budgetsService, 'createBudgetLine').mockReturnValue(createPromise.promise);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Navigate away, then back to budget 9 — its second lines GET already
+    // includes the (by-now-persisted) created line.
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await screen.findByText('Vacation Fund');
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 9/i, hidden: true }));
+    await screen.findByText('Bonus');
+
+    // The original, now-stale create callback resolves only now.
+    await act(async () => {
+      createPromise.resolve(createdLine);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(screen.getAllByText('Bonus')).toHaveLength(1);
   });
 });

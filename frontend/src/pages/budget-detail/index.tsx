@@ -277,7 +277,17 @@ export function BudgetDetailPage() {
               // different budget. Reject it rather than appending a line
               // from the old budget into whatever's currently on screen.
               if (created.budget_id !== currentBudgetIdRef.current) return;
-              setLines(prev => [...prev, created]);
+              setLines(prev => {
+                // Budget ids alone don't distinguish two separate visits to
+                // the SAME budget: navigate 9 -> 10 -> back to 9 while this
+                // create is still in flight, and budget 9's lines GET (run
+                // again on the way back) can already include it by the
+                // time this stale callback finally resolves. Skip the
+                // append rather than adding a second row with a duplicate
+                // id (and a duplicate React key).
+                if (prev.some(line => line.id === created.id)) return prev;
+                return [...prev, created];
+              });
             }}
           />
         )}
