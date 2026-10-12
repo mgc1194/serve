@@ -3,14 +3,7 @@
 import { Box, Typography } from '@mui/material';
 
 import type { Summary } from '@serve/types/global';
-
-function currency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    signDisplay: 'never',
-  }).format(Math.abs(value));
-}
+import { formatCurrency, signPrefix } from '@utils/currency';
 
 interface TotalItemProps {
   label: string;
@@ -26,7 +19,7 @@ function TotalItem({ label, value, color, prefix }: TotalItemProps) {
         {label}
       </Typography>
       <Typography variant="h6" fontWeight={700} color={color}>
-        {prefix}{currency(value)}
+        {prefix}{formatCurrency(value)}
       </Typography>
     </Box>
   );
@@ -60,13 +53,13 @@ export function SummaryTotalsBar({ summary }: SummaryTotalsBarProps) {
         label="Earnings"
         value={totalEarnings}
         color="success.main"
-        prefix="+"
+        prefix={signPrefix(totalEarnings)}
       />
       <TotalItem
         label="Spending"
         value={totalSpending}
         color="error.main"
-        prefix="−"
+        prefix={signPrefix(totalSpending)}
       />
       <TotalItem
         label="Balance"
@@ -79,7 +72,7 @@ export function SummaryTotalsBar({ summary }: SummaryTotalsBarProps) {
           label="Unlabelled"
           value={summary.uncategorised_total}
           color="text.secondary"
-          prefix={summary.uncategorised_total > 0 ? '+' : summary.uncategorised_total < 0 ? '−' : undefined}
+          prefix={signPrefix(summary.uncategorised_total)}
         />
       )}
     </Box>

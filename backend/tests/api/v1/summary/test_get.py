@@ -5,8 +5,9 @@ Covers: access control, aggregation, month filter, exclude_from_summary filter,
 and earliest_transaction_date.
 
 summary/conftest.py provides: user, other_user, account, food_label,
-income_label, transport_label, earnings_label, no_category_label, auth_client,
-and the _tx() helper.
+income_label, transport_label, earnings_label, no_category_label,
+misc_spending_label, earning_category_refund_label, auth_client, and the
+_tx() helper.
 Root conftest provides: household, other_household, account_type.
 """
 
@@ -94,6 +95,43 @@ class TestSummaryAggregation:
         data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
         assert data['spending'] == []
         assert data['total'] == pytest.approx(1000.00)
+
+    # Regression: the earnings/spending split used to key off a label's own
+    # net total sign, ignoring the label's assigned category's type entirely
+    # — a spending category with a net-positive label (a deposit, a refund)
+    # would surface under Earnings instead of staying with its category.
+    def test_positive_label_under_spending_category_stays_in_spending(
+        self, auth_client, account, household, misc_spending_label
+    ):
+        _tx(account, 500.00, misc_spending_label)
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['earnings'] == []
+        assert len(data['spending']) == 1
+        assert data['spending'][0]['category_name'] == 'Miscellaneous'
+        assert data['spending'][0]['labels'][0]['label_name'] == 'Deposits & Transfers'
+
+    # Mirror case: a negative-total label under an *earning* category (e.g.
+    # a clawback) must stay in Earnings too — the category type wins in
+    # both directions, not just spending-stays-spending.
+    def test_negative_label_under_earning_category_stays_in_earnings(
+        self, auth_client, account, household, earning_category_refund_label
+    ):
+        _tx(account, -100.00, earning_category_refund_label)
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['spending'] == []
+        assert len(data['earnings']) == 1
+        assert data['earnings'][0]['category_name'] == 'Bonus'
+
+    # A label with no category at all has no type to defer to, so it still
+    # falls back to splitting by its own net sign.
+    def test_uncategorised_label_falls_back_to_sign(
+        self, auth_client, account, household, no_category_label
+    ):
+        _tx(account, 50.00, no_category_label)
+        data = auth_client.get(f'/api/v1/summary/?household_id={household.id}').json()
+        assert data['spending'] == []
+        assert len(data['earnings']) == 1
+        assert data['earnings'][0]['category_name'] == ''
 
     def test_other_household_transactions_not_included(
         self, auth_client, other_household, household, account_type, food_label
