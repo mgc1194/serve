@@ -238,6 +238,46 @@ describe('CreateBudgetLineDialog validation', () => {
 
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
   });
+
+  // Number(amount) (the previous check) happily parses all of these as a
+  // valid non-negative integer — exponential notation, hex/octal/binary
+  // literals, a leading "+", Infinity — none of which is "a whole-dollar
+  // amount" a household would actually mean. amount is a plain string this
+  // component doesn't otherwise constrain (fireEvent.change, a paste, or a
+  // future non-native input could all set it to any of these), so the
+  // validation regex is what must reject them, not the native number
+  // input's own keystroke filtering.
+  it.each(['1e3', '0x10', '0b101', '0o17', '+500', 'Infinity'])(
+    'keeps Add disabled for %s, which Number() parses but is not a plain digit string',
+    async value => {
+      setup();
+      fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+      fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value } });
+
+      expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
+    },
+  );
+
+  it('keeps Add disabled for a digit string too large to represent exactly', async () => {
+    setup();
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), {
+      target: { value: '99999999999999999999' },
+    });
+
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('allows a plain whole-dollar amount with leading zeros', async () => {
+    setup();
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '0050' } });
+
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
+  });
 });
 
 describe('CreateBudgetLineDialog create flow', () => {

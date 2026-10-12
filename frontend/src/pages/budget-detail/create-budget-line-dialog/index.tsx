@@ -70,8 +70,18 @@ export function CreateBudgetLineDialog({
     setError(null);
   }, [open, budgetId, householdId]);
 
-  const parsedAmount = Number(amount);
-  const isValidAmount = amount.trim() !== '' && Number.isInteger(parsedAmount) && parsedAmount >= 0;
+  // A strict digits-only match, not Number.isInteger(Number(amount)) — the
+  // latter also accepts forms Number() happily parses but no one would
+  // call "a whole-dollar amount": exponential notation ("1e3"), hex/octal/
+  // binary literals ("0x10"), and a leading "+". None of those are
+  // reachable by typing into the native number input, but amount is a
+  // plain string this component doesn't otherwise constrain, so the
+  // validation itself — not the input widget — needs to be the actual
+  // gate. isSafeInteger is a cheap backstop against float precision loss
+  // on an implausibly long digit string; not a household-budget size cap.
+  const trimmedAmount = amount.trim();
+  const isValidAmount = /^\d+$/.test(trimmedAmount) && Number.isSafeInteger(Number(trimmedAmount));
+  const parsedAmount = Number(trimmedAmount);
   // One flag for "the category list is safe to submit against", instead of
   // accumulating a separate check per fetch state (loading, erroring, a
   // background refetch in flight, a background refetch that just failed —
