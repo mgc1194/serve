@@ -9,7 +9,7 @@
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
-import { Box, Button, Container, Typography } from '@mui/material';
+import { Alert, Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -53,6 +53,11 @@ export function TransactionsPage() {
   // (no active household yet); the dummy 0 is never used since enabled
   // gates the fetch on a real id being present.
   const categoriesQuery = useCategories(householdId ?? 0, { enabled: householdId !== undefined });
+  // A failed fetch with nothing cached yet falls back to [] here, which
+  // would otherwise render every categorized transaction as "—", identical
+  // to a genuinely uncategorized one — the banner below (keyed off isError)
+  // is what tells the two apart, rather than silently passing off missing
+  // data as an empty category list.
   const categories = categoriesQuery.data ?? [];
 
   // ── URL-driven state ────────────────────────────────────────────────────────
@@ -377,6 +382,20 @@ export function TransactionsPage() {
             Import CSV
           </Button>
         </Box>
+
+        {categoriesQuery.isError && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => categoriesQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            Could not load categories — the Category column may be incomplete.
+          </Alert>
+        )}
 
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
           <LabelFilterBar

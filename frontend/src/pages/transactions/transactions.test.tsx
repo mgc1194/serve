@@ -571,3 +571,39 @@ describe('TransactionsPage stale label_id', () => {
     },
   );
 });
+
+// A failed categories fetch must not be silently presented as "no
+// categories" — that would render every categorized transaction's Category
+// cell as "—", indistinguishable from a genuinely uncategorized one.
+describe('TransactionsPage categories error', () => {
+  it('shows a warning banner when categories fail to load', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockRejectedValue(
+      new categoriesService.ApiError(500, 'Server error.'),
+    );
+
+    renderPage();
+
+    await screen.findByText(/could not load categories/i);
+  });
+
+  it('does not show the categories warning banner when categories load successfully', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByText(/could not load categories/i)).toBeNull();
+  });
+
+  it('refetches categories when Retry is clicked on the categories banner', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockRejectedValueOnce(
+      new categoriesService.ApiError(500, 'Server error.'),
+    );
+
+    renderPage();
+    await screen.findByText(/could not load categories/i);
+
+    vi.mocked(categoriesService.listCategories).mockResolvedValueOnce([]);
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    await waitFor(() => expect(screen.queryByText(/could not load categories/i)).toBeNull());
+  });
+});
