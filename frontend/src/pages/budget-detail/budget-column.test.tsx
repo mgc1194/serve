@@ -1,0 +1,44 @@
+// pages/budget-detail/budget-column.test.tsx
+
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+
+import { BudgetColumn } from '@pages/budget-detail/budget-column';
+import { makeBudgetLine } from '@serve/mocks';
+
+const LINES = [
+  makeBudgetLine({ id: 1, category_name: 'Groceries', planned_amount: 500, actual_amount: '420.00' }),
+  makeBudgetLine({ id: 2, category_name: 'Transport', planned_amount: 200, actual_amount: '250.00' }),
+];
+
+describe('BudgetColumn rendering', () => {
+  it('renders the section title', () => {
+    render(<BudgetColumn title="Spending" lines={LINES} />);
+    expect(screen.getByText('Spending')).toBeDefined();
+  });
+
+  it('renders the column headers', () => {
+    render(<BudgetColumn title="Spending" lines={LINES} />);
+    expect(screen.getByText('Category')).toBeDefined();
+    expect(screen.getByText('Budgeted')).toBeDefined();
+    expect(screen.getByText('Total')).toBeDefined();
+    expect(screen.getByText('Diff')).toBeDefined();
+  });
+
+  it('renders a row per line', () => {
+    render(<BudgetColumn title="Spending" lines={LINES} />);
+    expect(screen.getByText('Groceries')).toBeDefined();
+    expect(screen.getByText('Transport')).toBeDefined();
+  });
+
+  it('shows a default empty message when there are no lines', () => {
+    render(<BudgetColumn title="Earnings" lines={[]} />);
+    expect(screen.getByText('No categories yet.')).toBeDefined();
+    expect(screen.queryByText('Category')).toBeNull();
+  });
+
+  it('shows a custom empty message when given one', () => {
+    render(<BudgetColumn title="Earnings" lines={[]} emptyMessage="No earning categories yet." />);
+    expect(screen.getByText('No earning categories yet.')).toBeDefined();
+  });
+});

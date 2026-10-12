@@ -138,3 +138,14 @@ describe('BudgetDetailPage rendering', () => {
     await screen.findByText('Monthly Budget');
   });
 });
+
+describe('BudgetDetailPage net this month placeholder', () => {
+  // No real figure yet — wiring the actual net (sourced from the budget's
+  // lines) is deferred to a follow-up PR. This just confirms the section
+  // itself is present.
+  it('shows the placeholder net section', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    expect(screen.getByText('Net this month: —')).toBeDefined();
+  });
+});
