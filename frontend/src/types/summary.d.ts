@@ -4,12 +4,16 @@ export interface LabelSummary {
   label_id: number;
   label_name: string;
   label_color: string;
-  category: string;
+  category_id: number | null;
+  /** Empty string when the label has no category. */
+  category_name: string;
   total: number;
 }
 
 export interface CategorySummary {
-  category: string;
+  category_id: number | null;
+  /** Empty string for the "Uncategorised" bucket. */
+  category_name: string;
   total: number;
   labels: LabelSummary[];
 }
