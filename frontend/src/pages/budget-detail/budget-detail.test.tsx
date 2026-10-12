@@ -1,13 +1,13 @@
 // pages/budget-detail/budget-detail.test.tsx
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import { Link, MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { BudgetDetailPage } from '@pages/budget-detail';
-import { makeBudget } from '@serve/mocks';
+import { makeBudget, makeBudgetLine } from '@serve/mocks';
 import type { Budget } from '@serve/types/global';
 import * as budgetsService from '@services/budgets';
 import * as categoriesService from '@services/categories';
@@ -66,6 +66,7 @@ function renderPageWithNav(id = '9') {
   return render(
     <MemoryRouter initialEntries={[`/budgets/${id}`]}>
       <ActiveHouseholdProvider>
+        <Link to="/budgets/9">Go to budget 9</Link>
         <Link to="/budgets/10">Go to budget 10</Link>
         <Routes>
           <Route path="/budgets/:id" element={<BudgetDetailPage />} />
@@ -78,6 +79,7 @@ function renderPageWithNav(id = '9') {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([BUDGET]);
+  vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([]);
   vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
 });
 
@@ -187,7 +189,7 @@ describe('BudgetDetailPage add category', () => {
     expect(await screen.findByText('Add category', { selector: 'h2' })).toBeDefined();
   });
 
-  it('closes the dialog without rendering anything from the created line', async () => {
+  it('closes the dialog on Cancel without creating a line', async () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
@@ -197,9 +199,8 @@ describe('BudgetDetailPage add category', () => {
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    // The placeholder net figure is untouched — this PR doesn't wire a
-    // created line into anything on the page.
-    expect(screen.getByText('Net this month: —')).toBeDefined();
+    // Both columns (Earnings and Spending) show the empty state.
+    expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
   });
 
   // Regresses to a bug where `budget` (and the dialog's open state) stayed
@@ -234,5 +235,265 @@ describe('BudgetDetailPage add category', () => {
     // The new budget loads, and the dialog does NOT reappear open.
     await screen.findByText('Vacation Fund');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('BudgetDetailPage budget lines', () => {
+  it('splits fetched lines into Earnings and Spending columns', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_name: 'Paycheck', category_type: 'earning' }),
+      makeBudgetLine({ id: 2, category_name: 'Groceries', category_type: 'spending' }),
+    ]);
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    // Each BudgetColumn's title Typography and its table/empty-message are
+    // direct siblings under the same root Box, so the heading's own
+    // parentElement is exactly that column's container — scoping on it
+    // (rather than just checking document order, which both columns being
+    // on the same page would satisfy even if a line landed in the wrong
+    // one) actually verifies which column each line is inside of.
+    const earningsColumn = within((await screen.findByText('Earnings')).parentElement!);
+    const spendingColumn = within(screen.getByText('Spending').parentElement!);
+
+    expect(earningsColumn.getByText('Paycheck')).toBeDefined();
+    expect(earningsColumn.queryByText('Groceries')).toBeNull();
+    expect(spendingColumn.getByText('Groceries')).toBeDefined();
+    expect(spendingColumn.queryByText('Paycheck')).toBeNull();
+  });
+
+  it('shows a loading state while lines are being fetched', async () => {
+    const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    await waitFor(() => expect(screen.getByText('Loading categories…')).toBeDefined());
+
+    linesPromise.resolve([]);
+    await waitFor(() => expect(screen.queryByText('Loading categories…')).toBeNull());
+  });
+
+  // Regresses to a bug where "Add category" stayed enabled while the
+  // initial listBudgetLines GET was still in flight. Creating a line in
+  // that window appended it locally (onCreate), but the older GET then
+  // resolved afterward and setLines(result) overwrote that with its
+  // pre-create snapshot — the new line vanished even though it existed on
+  // the backend. Disabling the trigger while that fetch is in flight
+  // removes the race entirely, rather than reconciling the two results.
+  it('disables "Add category" while the initial lines fetch is in flight', async () => {
+    const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
+        true,
+      ),
+    );
+
+    linesPromise.resolve([]);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
+        false,
+      ),
+    );
+  });
+
+  it('shows an error with a retry button when lines fail to load', async () => {
+    const listBudgetLines = vi
+      .spyOn(budgetsService, 'listBudgetLines')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce([makeBudgetLine({ category_name: 'Groceries' })]);
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    await screen.findByText('Could not load categories.');
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    await screen.findByText('Groceries');
+    expect(listBudgetLines).toHaveBeenCalledTimes(2);
+  });
+
+  it('appends a newly-created line into the right column immediately', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
+    ]);
+    vi.spyOn(budgetsService, 'createBudgetLine').mockResolvedValue(
+      makeBudgetLine({
+        id: 3,
+        budget_id: 9,
+        category_id: 5,
+        category_name: 'Bonus',
+        category_type: 'earning',
+      }),
+    );
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    await screen.findByText('Bonus');
+    // The Spending column still shows its own empty state — the new line
+    // landed only in Earnings.
+    expect(screen.getByText('No categories yet.')).toBeDefined();
+  });
+
+  it('does not let an earlier lines-retry resolving late clear the loading state for a newer retry', async () => {
+    const firstRetry = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    const secondRetry = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockReturnValueOnce(firstRetry.promise)
+      .mockReturnValueOnce(secondRetry.promise);
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    await screen.findByText('Could not load categories.');
+
+    const retryButton = screen.getByRole('button', { name: /retry/i });
+    // Both retries fire before either settles — the ignore flag alone
+    // can't tell these two calls (from the same effect run) apart, only
+    // linesRequestIdRef can.
+    act(() => {
+      fireEvent.click(retryButton);
+      fireEvent.click(retryButton);
+    });
+
+    firstRetry.resolve([makeBudgetLine({ category_name: 'Stale Category' })]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Stale Category')).toBeNull();
+    expect(screen.getByText('Loading categories…')).toBeDefined();
+
+    secondRetry.resolve([makeBudgetLine({ category_name: 'Groceries' })]);
+    await screen.findByText('Groceries');
+  });
+
+  it('disables "Add category" while the lines list is in an error state', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockRejectedValue(new Error('boom'));
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    await screen.findByText('Could not load categories.');
+    expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  // Regresses to a bug where a create that started against budget 9 could
+  // still resolve after the route moved to budget 10 — CreateBudgetLineDialog
+  // unmounts the instant that happens, but its already-in-flight create
+  // keeps running and still calls the onCreate closure it was holding,
+  // which would otherwise append budget 9's line into whatever lines are
+  // on screen by then (budget 10's).
+  it('rejects a stale create that resolves after navigating to a different budget', async () => {
+    const budget10 = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET])
+      .mockReturnValueOnce(budget10.promise);
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
+    ]);
+    const createPromise = deferred<ReturnType<typeof makeBudgetLine>>();
+    vi.spyOn(budgetsService, 'createBudgetLine').mockReturnValue(createPromise.promise);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Navigate to a different budget before the create settles.
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    budget10.resolve([makeBudget({ id: 10, name: 'Vacation Fund' })]);
+    await screen.findByText('Vacation Fund');
+
+    // The stale create (for budget 9) resolves only now.
+    await act(async () => {
+      createPromise.resolve(
+        makeBudgetLine({
+          id: 3,
+          budget_id: 9,
+          category_id: 5,
+          category_name: 'Bonus',
+          category_type: 'earning',
+        }),
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByText('Bonus')).toBeNull();
+  });
+
+  // The budget_id guard above (from the previous finding) only tells two
+  // DIFFERENT budgets apart — it doesn't help for two separate visits to
+  // the SAME budget. Navigate 9 -> 10 -> back to 9 while a create for
+  // budget 9 is still in flight, and budget 9's second lines GET can
+  // already include that line (the backend had processed the create by
+  // then) before the stale create callback finally resolves — appending
+  // it again would duplicate the row (and its React key).
+  it('does not duplicate a line already present after navigating away and back to the same budget', async () => {
+    const createdLine = makeBudgetLine({
+      id: 3,
+      budget_id: 9,
+      category_id: 5,
+      category_name: 'Bonus',
+      category_type: 'earning',
+    });
+
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET]) // initial /budgets/9
+      .mockResolvedValueOnce([makeBudget({ id: 10, name: 'Vacation Fund' })]) // -> /budgets/10
+      .mockResolvedValueOnce([BUDGET]); // -> back to /budgets/9
+
+    vi.spyOn(budgetsService, 'listBudgetLines')
+      .mockResolvedValueOnce([]) // budget 9, first visit
+      .mockResolvedValueOnce([]) // budget 10
+      .mockResolvedValueOnce([createdLine]); // budget 9, second visit — already has it
+
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
+    ]);
+    const createPromise = deferred<ReturnType<typeof makeBudgetLine>>();
+    vi.spyOn(budgetsService, 'createBudgetLine').mockReturnValue(createPromise.promise);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Navigate away, then back to budget 9 — its second lines GET already
+    // includes the (by-now-persisted) created line.
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await screen.findByText('Vacation Fund');
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 9/i, hidden: true }));
+    await screen.findByText('Bonus');
+
+    // The original, now-stale create callback resolves only now.
+    await act(async () => {
+      createPromise.resolve(createdLine);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(screen.getAllByText('Bonus')).toHaveLength(1);
   });
 });
