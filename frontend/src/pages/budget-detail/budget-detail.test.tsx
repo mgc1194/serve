@@ -1,7 +1,8 @@
 // pages/budget-detail/budget-detail.test.tsx
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { Link, MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActiveHouseholdProvider } from '@context/active-household-context';
@@ -9,6 +10,14 @@ import { BudgetDetailPage } from '@pages/budget-detail';
 import { makeBudget } from '@serve/mocks';
 import type { Budget } from '@serve/types/global';
 import * as budgetsService from '@services/budgets';
+import * as categoriesService from '@services/categories';
+
+// Needs its own QueryClient — the page renders CreateBudgetLineDialog,
+// which reads categories via useCategories even while closed.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -49,9 +58,27 @@ function renderPage(id = '9') {
   );
 }
 
+// Same route element, different :id — React Router keeps BudgetDetailPage
+// mounted and just re-renders it with a new useParams() value, exactly the
+// "route moved to a different budget while this page (and anything open on
+// it) stayed mounted" scenario a plain renderPage() can't exercise.
+function renderPageWithNav(id = '9') {
+  return render(
+    <MemoryRouter initialEntries={[`/budgets/${id}`]}>
+      <ActiveHouseholdProvider>
+        <Link to="/budgets/10">Go to budget 10</Link>
+        <Routes>
+          <Route path="/budgets/:id" element={<BudgetDetailPage />} />
+        </Routes>
+      </ActiveHouseholdProvider>
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([BUDGET]);
+  vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
 });
 
 describe('BudgetDetailPage rendering', () => {
@@ -147,5 +174,65 @@ describe('BudgetDetailPage net this month placeholder', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
     expect(screen.getByText('Net this month: —')).toBeDefined();
+  });
+});
+
+describe('BudgetDetailPage add category', () => {
+  it('opens CreateBudgetLineDialog when "Add category" is clicked', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+
+    expect(await screen.findByText('Add category', { selector: 'h2' })).toBeDefined();
+  });
+
+  it('closes the dialog without rendering anything from the created line', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    await screen.findByText('Add category', { selector: 'h2' });
+
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // The placeholder net figure is untouched — this PR doesn't wire a
+    // created line into anything on the page.
+    expect(screen.getByText('Net this month: —')).toBeDefined();
+  });
+
+  // Regresses to a bug where `budget` (and the dialog's open state) stayed
+  // set to the OLD budget for the entire duration of the new fetch when
+  // the route moved to a different budget id while this dialog was open —
+  // a submit in that window could create a line on the wrong budget, and
+  // the dialog could reappear open once the new budget loaded, since
+  // lineDialogOpen was never reset either.
+  it('closes the dialog immediately when the route moves to a different budget, before the new budget loads', async () => {
+    const budget10 = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET])
+      .mockReturnValueOnce(budget10.promise);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    await screen.findByText('Add category', { selector: 'h2' });
+
+    // { hidden: true } — the open MUI Dialog marks the rest of the page
+    // aria-hidden, which getByRole otherwise filters out by default.
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+
+    // The dialog is gone immediately — before budget 10's fetch has even
+    // resolved — rather than staying open against the stale budget 9.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByText('Loading budget…')).toBeDefined();
+
+    budget10.resolve([makeBudget({ id: 10, name: 'Vacation Fund' })]);
+
+    // The new budget loads, and the dialog does NOT reappear open.
+    await screen.findByText('Vacation Fund');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

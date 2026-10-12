@@ -1,14 +1,16 @@
 // pages/budget-detail/index.tsx — Per-budget detail page. For now this is
-// just the budget's name and period, plus a placeholder net-this-month
-// section — the real net figure, the Earnings/Spending columns
-// (BudgetColumn/BudgetLineRow), the add-category control, and the sync
-// action are all intentionally deferred to their own follow-up PRs rather
-// than landing all at once. This first PR is UI only, no data wiring.
+// the budget's name and period, a placeholder net-this-month section, and
+// an "Add category" control that opens CreateBudgetLineDialog — the real
+// net figure and the Earnings/Spending columns (BudgetColumn/
+// BudgetLineRow) that would actually show a created line are still
+// deferred to their own follow-up PR, so creating one here has no visible
+// effect on the page yet beyond the dialog closing.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
 // the same listBudgets(householdId) response already used everywhere else.
 
+import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
@@ -16,6 +18,7 @@ import { useNavigate, useParams } from 'react-router';
 
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
+import { CreateBudgetLineDialog } from '@pages/budget-detail/create-budget-line-dialog';
 import type { Budget } from '@serve/types/global';
 import { listBudgets, ApiError } from '@services/budgets';
 
@@ -47,6 +50,7 @@ export function BudgetDetailPage() {
   const [budget, setBudget] = useState<Budget | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lineDialogOpen, setLineDialogOpen] = useState(false);
 
   // loadRef gives the retry button a stable reference to the latest fetch
   // without making it a useEffect dependency.
@@ -64,6 +68,18 @@ export function BudgetDetailPage() {
 
     function load() {
       const requestId = ++requestIdRef.current;
+
+      // Clears the previous scope's budget (and closes any open dialog
+      // reading budgetId/householdId off it) synchronously, before the new
+      // fetch even starts. Without this, a route change to a different
+      // budget — or the active household changing — left `budget` (and a
+      // still-open CreateBudgetLineDialog) pointing at the old scope for
+      // the whole duration of the new fetch: a submit in that window could
+      // create a line on the wrong budget, and the dialog could reappear
+      // open once the new budget loaded, since lineDialogOpen was never
+      // reset either.
+      setBudget(null);
+      setLineDialogOpen(false);
 
       if (householdId === undefined) {
         setIsLoading(false);
@@ -140,8 +156,32 @@ export function BudgetDetailPage() {
             <Box sx={{ mt: 1.5 }}>
               <Typography variant="h6">Net this month: —</Typography>
             </Box>
+
+            <Button
+              startIcon={<AddIcon />}
+              variant="outlined"
+              size="small"
+              onClick={() => setLineDialogOpen(true)}
+              sx={{ mt: 2 }}
+            >
+              Add category
+            </Button>
           </>
         ) : null}
+
+        {householdId !== undefined && budget && (
+          <CreateBudgetLineDialog
+            open={lineDialogOpen}
+            budgetId={budget.id}
+            householdId={householdId}
+            onClose={() => setLineDialogOpen(false)}
+            onCreate={() => {
+              // The created line has nowhere to render yet — the
+              // Earnings/Spending columns aren't wired into this page
+              // until a follow-up PR fetches the budget's lines.
+            }}
+          />
+        )}
       </Container>
     </Box>
   );
