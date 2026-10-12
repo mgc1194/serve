@@ -576,6 +576,36 @@ describe('TransactionsPage stale label_id', () => {
 // (previously only possible from the household card), since relabeling
 // transactions is exactly when a missing or wrong label tends to surface.
 describe('TransactionsPage label management', () => {
+  // Regression: the page's own load() effect calls setLabels(lbls) when its
+  // Promise.all([listTransactions, listLabels]) resolves. If that fetch is
+  // still in flight when a dialog mutation's own setLabels lands first, the
+  // page's later setLabels(lbls) overwrites it with the pre-mutation list —
+  // the created/edited/deleted label vanishes from the filter bar until the
+  // next reload. Disabling the button while that fetch is in flight is the
+  // simplest fix (ruled out: tracking/cancelling the in-flight load).
+  it('disables "Manage labels" while the page\'s own load is in flight', async () => {
+    let resolveTransactions!: (value: PaginatedTransactions) => void;
+    vi.spyOn(transactionsService, 'listTransactions').mockReturnValue(
+      new Promise(resolve => {
+        resolveTransactions = resolve;
+      }),
+    );
+
+    renderPage();
+
+    expect(screen.getByRole('button', { name: /manage labels/i }).hasAttribute('disabled')).toBe(
+      true,
+    );
+
+    resolveTransactions(EMPTY_PAGE);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /manage labels/i }).hasAttribute('disabled')).toBe(
+        false,
+      ),
+    );
+  });
+
   it('opens the label management dialog when "Manage labels" is clicked', async () => {
     renderPage();
     await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));

@@ -389,10 +389,16 @@ export function TransactionsPage() {
 
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {activeHousehold && (
+              // Disabled while the page's own load() is in flight: that
+              // fetch's setLabels(lbls) (below) would otherwise land after
+              // a dialog mutation's setLabels and silently restore the
+              // pre-mutation list — the created/edited/deleted label would
+              // vanish from the filter bar until the next reload.
               <Button
                 variant="outlined"
                 startIcon={<LocalOfferOutlinedIcon />}
                 onClick={() => setLabelDialogOpen(true)}
+                disabled={isLoading}
               >
                 Manage labels
               </Button>
