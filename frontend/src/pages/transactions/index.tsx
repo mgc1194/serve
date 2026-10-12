@@ -8,12 +8,14 @@
 // Rendering is delegated to TransactionsTable and ImportCsvDialog.
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import { Alert, Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { CategoryManagementDialog } from '@components/category-management-dialog';
 import { LabelManagementDialog } from '@components/label-management-dialog';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
@@ -121,6 +123,7 @@ export function TransactionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   // Bumped to force a refetch (e.g. after a CSV import) even when none of
   // the URL-driven params below have changed.
   const [refreshToken, setRefreshToken] = useState(0);
@@ -389,19 +392,28 @@ export function TransactionsPage() {
 
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {activeHousehold && (
-              // Disabled while the page's own load() is in flight: that
-              // fetch's setLabels(lbls) (below) would otherwise land after
-              // a dialog mutation's setLabels and silently restore the
-              // pre-mutation list — the created/edited/deleted label would
-              // vanish from the filter bar until the next reload.
-              <Button
-                variant="outlined"
-                startIcon={<LocalOfferOutlinedIcon />}
-                onClick={() => setLabelDialogOpen(true)}
-                disabled={isLoading}
-              >
-                Manage labels
-              </Button>
+              <>
+                {/* Disabled while the page's own load() is in flight: that
+                    fetch's setLabels(lbls) (below) would otherwise land
+                    after a dialog mutation's setLabels and silently restore
+                    the pre-mutation list — the created/edited/deleted label
+                    would vanish from the filter bar until the next reload. */}
+                <Button
+                  variant="outlined"
+                  startIcon={<LocalOfferOutlinedIcon />}
+                  onClick={() => setLabelDialogOpen(true)}
+                  disabled={isLoading}
+                >
+                  Manage labels
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<CategoryOutlinedIcon />}
+                  onClick={() => setCategoryDialogOpen(true)}
+                >
+                  Manage categories
+                </Button>
+              </>
             )}
             <Button
               variant="outlined"
@@ -478,6 +490,15 @@ export function TransactionsPage() {
             householdName={activeHousehold?.name ?? ''}
             onClose={() => setLabelDialogOpen(false)}
             onLabelsChanged={setLabels}
+          />
+        )}
+
+        {householdId !== undefined && (
+          <CategoryManagementDialog
+            open={categoryDialogOpen}
+            householdId={householdId}
+            householdName={activeHousehold?.name ?? ''}
+            onClose={() => setCategoryDialogOpen(false)}
           />
         )}
       </Container>

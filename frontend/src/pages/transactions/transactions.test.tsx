@@ -641,6 +641,43 @@ describe('TransactionsPage label management', () => {
   });
 });
 
+// Mirrors the label management coverage above, for categories. Unlike
+// LabelManagementDialog, CategoryManagementDialog has no onChanged callback —
+// its mutations invalidate the shared ['categories', householdId] TanStack
+// Query key (queries/categories.ts), which is the exact key the page's own
+// categoriesQuery reads, so a created category reaches the page by that
+// query refetching rather than a prop callback.
+describe('TransactionsPage category management', () => {
+  it('opens the category management dialog when "Manage categories" is clicked', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage categories/i }));
+
+    expect(await screen.findByText('Categories — Test Household')).toBeDefined();
+  });
+
+  it('refetches the shared categories query after creating a category', async () => {
+    const created = { id: 42, name: 'Entertainment', type: 'spending' as const, is_active: true, household_id: 1 };
+    vi.spyOn(categoriesService, 'createCategory').mockResolvedValue(created);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage categories/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /new category/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'Entertainment');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(categoriesService.createCategory).toHaveBeenCalledOnce());
+    // The create mutation invalidates the shared query key, which the
+    // page's own categoriesQuery also reads — a second fetch confirms the
+    // page gets the fresh list without any callback wiring.
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledTimes(2));
+  });
+});
+
 // A failed categories fetch must not be silently presented as "no
 // categories" — that would render every categorized transaction's Category
 // cell as "—", indistinguishable from a genuinely uncategorized one.
