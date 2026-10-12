@@ -3,23 +3,7 @@
 import { Box, Typography } from '@mui/material';
 
 import type { Summary } from '@serve/types/global';
-
-function currency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    signDisplay: 'never',
-  }).format(Math.abs(value));
-}
-
-// Earnings/spending totals follow their bucket's category type, not sign
-// (see api/v1/summary.py::get_summary) — a spending category can still net
-// positive (a refund, a deposit), and an earning category can net negative
-// (a clawback). The sign shown here must reflect the actual total rather
-// than assume "Earnings is always +, Spending is always −".
-function signPrefix(value: number): string | undefined {
-  return value > 0 ? '+' : value < 0 ? '−' : undefined;
-}
+import { formatCurrency, signPrefix } from '@utils/currency';
 
 interface TotalItemProps {
   label: string;
@@ -35,7 +19,7 @@ function TotalItem({ label, value, color, prefix }: TotalItemProps) {
         {label}
       </Typography>
       <Typography variant="h6" fontWeight={700} color={color}>
-        {prefix}{currency(value)}
+        {prefix}{formatCurrency(value)}
       </Typography>
     </Box>
   );

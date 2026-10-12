@@ -132,3 +132,90 @@ describe('SummarySection category names', () => {
     expect(screen.getByText('Transport')).toBeDefined();
   });
 });
+
+// Regresses to a bug where category/label totals were always rendered via
+// Math.abs() with no sign at all, hiding whether a categorized total (whose
+// sign no longer has to match its tab — see api/v1/summary.py::get_summary)
+// was actually positive or negative.
+describe('SummarySection signed totals', () => {
+  it('shows + for a spending category that nets positive', () => {
+    setup(
+      makeSummary({
+        spending: [
+          {
+            category_id: 3,
+            category_name: 'Miscellaneous',
+            total: 500,
+            labels: [
+              {
+                label_id: 6,
+                label_name: 'Deposits & Transfers',
+                label_color: '#6B7280',
+                category_id: 3,
+                category_name: 'Miscellaneous',
+                total: 500,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // Both the category header row and its single label row show the same
+    // total here, by construction — assert there are two matches, not one.
+    expect(screen.getAllByText('+$500.00')).toHaveLength(2);
+  });
+
+  it('shows − for an earnings category that nets negative', () => {
+    setup(
+      makeSummary({
+        earnings: [
+          {
+            category_id: 4,
+            category_name: 'Bonus',
+            total: -100,
+            labels: [
+              {
+                label_id: 7,
+                label_name: 'Clawback',
+                label_color: '#dc2626',
+                category_id: 4,
+                category_name: 'Bonus',
+                total: -100,
+              },
+            ],
+          },
+        ],
+      }),
+      'earnings',
+    );
+
+    expect(screen.getAllByText('−$100.00')).toHaveLength(2);
+  });
+
+  it('still shows the expected sign for an ordinary spending category', () => {
+    setup(
+      makeSummary({
+        spending: [
+          {
+            category_id: 2,
+            category_name: 'Food',
+            total: -42.57,
+            labels: [
+              {
+                label_id: 2,
+                label_name: 'Groceries',
+                label_color: '#16a34a',
+                category_id: 2,
+                category_name: 'Food',
+                total: -42.57,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(screen.getAllByText('−$42.57')).toHaveLength(2);
+  });
+});
