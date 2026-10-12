@@ -1,7 +1,9 @@
 // pages/budget-detail/index.tsx — Per-budget detail page. For now this is
-// just the budget's name and period — the planned-vs-actual sections, the
-// add-category control, and the sync action are intentionally deferred to
-// their own follow-up PRs rather than landing all at once.
+// just the budget's name and period, plus a placeholder net-this-month
+// section — the real net figure, the Earnings/Spending columns
+// (BudgetColumn/BudgetLineRow), the add-category control, and the sync
+// action are all intentionally deferred to their own follow-up PRs rather
+// than landing all at once. This first PR is UI only, no data wiring.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
@@ -132,6 +134,12 @@ export function BudgetDetailPage() {
               {budget.name}
             </Typography>
             <Typography color="text.secondary">{formatPeriod(budget)}</Typography>
+
+            {/* Placeholder — the real net-this-month figure is wired up in
+                a follow-up PR, once it's sourced from the budget's lines. */}
+            <Box sx={{ mt: 1.5 }}>
+              <Typography variant="h6">Net this month: —</Typography>
+            </Box>
           </>
         ) : null}
       </Container>
