@@ -12,6 +12,15 @@ function currency(value: number): string {
   }).format(Math.abs(value));
 }
 
+// Earnings/spending totals follow their bucket's category type, not sign
+// (see api/v1/summary.py::get_summary) — a spending category can still net
+// positive (a refund, a deposit), and an earning category can net negative
+// (a clawback). The sign shown here must reflect the actual total rather
+// than assume "Earnings is always +, Spending is always −".
+function signPrefix(value: number): string | undefined {
+  return value > 0 ? '+' : value < 0 ? '−' : undefined;
+}
+
 interface TotalItemProps {
   label: string;
   value: number;
@@ -60,13 +69,13 @@ export function SummaryTotalsBar({ summary }: SummaryTotalsBarProps) {
         label="Earnings"
         value={totalEarnings}
         color="success.main"
-        prefix="+"
+        prefix={signPrefix(totalEarnings)}
       />
       <TotalItem
         label="Spending"
         value={totalSpending}
         color="error.main"
-        prefix="−"
+        prefix={signPrefix(totalSpending)}
       />
       <TotalItem
         label="Balance"
@@ -79,7 +88,7 @@ export function SummaryTotalsBar({ summary }: SummaryTotalsBarProps) {
           label="Unlabelled"
           value={summary.uncategorised_total}
           color="text.secondary"
-          prefix={summary.uncategorised_total > 0 ? '+' : summary.uncategorised_total < 0 ? '−' : undefined}
+          prefix={signPrefix(summary.uncategorised_total)}
         />
       )}
     </Box>

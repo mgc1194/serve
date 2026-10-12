@@ -28,8 +28,16 @@ class CategorySummarySchema(Schema):
 class SummarySchema(Schema):
     """Top-level summary response for a household / month combination.
 
-    earnings                  — labels whose net total is positive (credits)
-    spending                  — labels whose net total is negative (debits, stored as negative float)
+    earnings                  — labels whose assigned category is type EARNING. A label with no
+                                category instead falls back to the sign of its own net total
+                                (positive -> earnings), since there's no category type to defer
+                                to. Because the split follows category type rather than sign, a
+                                categorized label's total here can be negative (e.g. a clawback
+                                under an earning category) — this is not a labelled/display bug.
+    spending                  — labels whose assigned category is type SPENDING, with the same
+                                sign-based fallback for uncategorized labels (negative -> spending).
+                                A categorized label's total here can likewise be positive (e.g. a
+                                refund or deposit filed under a spending category).
     total                     — net of all transactions in the summary (labelled + uncategorised_total)
     balance                   — alias for total (kept for parity with the Detailed view in the UI)
     uncategorised_total       — sum of transactions with no label at all
