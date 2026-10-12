@@ -1,6 +1,7 @@
 // pages/budget-detail/budget-detail.test.tsx
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,14 @@ import { BudgetDetailPage } from '@pages/budget-detail';
 import { makeBudget } from '@serve/mocks';
 import type { Budget } from '@serve/types/global';
 import * as budgetsService from '@services/budgets';
+import * as categoriesService from '@services/categories';
+
+// Needs its own QueryClient — the page renders CreateBudgetLineDialog,
+// which reads categories via useCategories even while closed.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -52,6 +61,7 @@ function renderPage(id = '9') {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([BUDGET]);
+  vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
 });
 
 describe('BudgetDetailPage rendering', () => {
@@ -146,6 +156,32 @@ describe('BudgetDetailPage net this month placeholder', () => {
   it('shows the placeholder net section', async () => {
     renderPage();
     await screen.findByText('Monthly Budget');
+    expect(screen.getByText('Net this month: —')).toBeDefined();
+  });
+});
+
+describe('BudgetDetailPage add category', () => {
+  it('opens CreateBudgetLineDialog when "Add category" is clicked', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+
+    expect(await screen.findByText('Add category', { selector: 'h2' })).toBeDefined();
+  });
+
+  it('closes the dialog without rendering anything from the created line', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    await screen.findByText('Add category', { selector: 'h2' });
+
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // The placeholder net figure is untouched — this PR doesn't wire a
+    // created line into anything on the page.
     expect(screen.getByText('Net this month: —')).toBeDefined();
   });
 });
