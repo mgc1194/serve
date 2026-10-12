@@ -357,7 +357,16 @@ export function TransactionsPage() {
           Dashboard
         </Button>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           {activeHousehold ? (
             <Typography variant="h4">
               <SwitchHouseholdButton
@@ -377,13 +386,25 @@ export function TransactionsPage() {
           ) : (
             <Typography variant="h4">Transactions</Typography>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<FileUploadOutlinedIcon />}
-            onClick={() => setImportOpen(true)}
-          >
-            Import CSV
-          </Button>
+
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {activeHousehold && (
+              <Button
+                variant="outlined"
+                startIcon={<LocalOfferOutlinedIcon />}
+                onClick={() => setLabelDialogOpen(true)}
+              >
+                Manage labels
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<FileUploadOutlinedIcon />}
+              onClick={() => setImportOpen(true)}
+            >
+              Import CSV
+            </Button>
+          </Box>
         </Box>
 
         {categoriesQuery.isError && (
@@ -412,16 +433,6 @@ export function TransactionsPage() {
             onDateFromChange={handleDateFromChange}
             onDateToChange={handleDateToChange}
           />
-          {householdId !== undefined && (
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<LocalOfferOutlinedIcon />}
-              onClick={() => setLabelDialogOpen(true)}
-            >
-              Manage labels
-            </Button>
-          )}
         </Box>
 
         <TransactionsTable
