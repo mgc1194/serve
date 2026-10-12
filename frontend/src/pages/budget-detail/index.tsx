@@ -126,10 +126,21 @@ export function BudgetDetailPage() {
   // reference, same pattern as loadRef above.
   const linesLoadRef = useRef<() => void>(() => {});
 
+  // Same requestId guard as the budget fetch above, for the same reason:
+  // `ignore` alone only distinguishes "this effect run" from "a later one"
+  // (e.g. budget changing) — it does nothing for two overlapping calls to
+  // loadLines() from the SAME effect run, which Retry can produce (clicked
+  // again before the first attempt settles). Without this, the older
+  // response could overwrite the newer result and its .finally could clear
+  // isLoadingLines while the newer request was still pending.
+  const linesRequestIdRef = useRef(0);
+
   useEffect(() => {
     let ignore = false;
 
     function loadLines() {
+      const requestId = ++linesRequestIdRef.current;
+
       if (budget === null) {
         setLines([]);
         setLinesError(null);
@@ -142,15 +153,15 @@ export function BudgetDetailPage() {
 
       listBudgetLines(budget.id)
         .then(result => {
-          if (ignore) return;
+          if (ignore || requestId !== linesRequestIdRef.current) return;
           setLines(result);
         })
         .catch(err => {
-          if (ignore) return;
+          if (ignore || requestId !== linesRequestIdRef.current) return;
           setLinesError(err instanceof ApiError ? err.message : 'Could not load categories.');
         })
         .finally(() => {
-          if (!ignore) setIsLoadingLines(false);
+          if (!ignore && requestId === linesRequestIdRef.current) setIsLoadingLines(false);
         });
     }
 
@@ -160,6 +171,20 @@ export function BudgetDetailPage() {
     return () => {
       ignore = true;
     };
+  }, [budget]);
+
+  // Tracks the budget currently on screen by id, read (not captured) at
+  // the moment a create actually resolves — see onCreate below. A plain
+  // closure over `budget` wouldn't do: CreateBudgetLineDialog unmounts the
+  // instant the route/household changes (budget resets to null), but its
+  // already-in-flight create keeps running and still calls the onCreate
+  // closure it was holding at that point, which closed over the OLD
+  // budget — not whatever budget is on screen by the time the create
+  // settles. A ref's .current is read fresh at call time, so it reflects
+  // reality regardless of which stale closure is invoking it.
+  const currentBudgetIdRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    currentBudgetIdRef.current = budget?.id;
   }, [budget]);
 
   const earningLines = lines.filter(line => line.category_type === 'earning');
@@ -220,19 +245,19 @@ export function BudgetDetailPage() {
               </Box>
             )}
 
-            {/* Disabled while the lines GET is in flight: creating a line
-                during that window would append it locally (onCreate
-                below), only for the older GET to resolve afterward and
-                setLines(result) overwrite it with the pre-create snapshot
-                — the new line would disappear even though it exists on
-                the backend. Simpler to just wait for the one request this
-                page itself is already making than to reconcile the two. */}
+            {/* Disabled while the lines GET is in flight (creating a line
+                then would append it locally via onCreate, only for the
+                older GET to resolve afterward and setLines(result)
+                overwrite that with the pre-create snapshot) and while it's
+                in an error state (the columns aren't even rendered then,
+                so there'd be nowhere to show the new line appearing —
+                Retry first). */}
             <Button
               startIcon={<AddIcon />}
               variant="outlined"
               size="small"
               onClick={() => setLineDialogOpen(true)}
-              disabled={isLoadingLines}
+              disabled={isLoadingLines || linesError !== null}
               sx={{ mt: 2 }}
             >
               Add category
@@ -246,7 +271,14 @@ export function BudgetDetailPage() {
             budgetId={budget.id}
             householdId={householdId}
             onClose={() => setLineDialogOpen(false)}
-            onCreate={created => setLines(prev => [...prev, created])}
+            onCreate={created => {
+              // A create that started against this budget can still
+              // resolve after the route/household has since moved to a
+              // different budget. Reject it rather than appending a line
+              // from the old budget into whatever's currently on screen.
+              if (created.budget_id !== currentBudgetIdRef.current) return;
+              setLines(prev => [...prev, created]);
+            }}
           />
         )}
       </Container>

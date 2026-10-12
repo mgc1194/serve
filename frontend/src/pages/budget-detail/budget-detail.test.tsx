@@ -319,7 +319,13 @@ describe('BudgetDetailPage budget lines', () => {
       { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
     ]);
     vi.spyOn(budgetsService, 'createBudgetLine').mockResolvedValue(
-      makeBudgetLine({ id: 3, category_id: 5, category_name: 'Bonus', category_type: 'earning' }),
+      makeBudgetLine({
+        id: 3,
+        budget_id: 9,
+        category_id: 5,
+        category_name: 'Bonus',
+        category_type: 'earning',
+      }),
     );
 
     renderPage();
@@ -336,5 +342,96 @@ describe('BudgetDetailPage budget lines', () => {
     // The Spending column still shows its own empty state — the new line
     // landed only in Earnings.
     expect(screen.getByText('No categories yet.')).toBeDefined();
+  });
+
+  it('does not let an earlier lines-retry resolving late clear the loading state for a newer retry', async () => {
+    const firstRetry = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    const secondRetry = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockReturnValueOnce(firstRetry.promise)
+      .mockReturnValueOnce(secondRetry.promise);
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    await screen.findByText('Could not load categories.');
+
+    const retryButton = screen.getByRole('button', { name: /retry/i });
+    // Both retries fire before either settles — the ignore flag alone
+    // can't tell these two calls (from the same effect run) apart, only
+    // linesRequestIdRef can.
+    act(() => {
+      fireEvent.click(retryButton);
+      fireEvent.click(retryButton);
+    });
+
+    firstRetry.resolve([makeBudgetLine({ category_name: 'Stale Category' })]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Stale Category')).toBeNull();
+    expect(screen.getByText('Loading categories…')).toBeDefined();
+
+    secondRetry.resolve([makeBudgetLine({ category_name: 'Groceries' })]);
+    await screen.findByText('Groceries');
+  });
+
+  it('disables "Add category" while the lines list is in an error state', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockRejectedValue(new Error('boom'));
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    await screen.findByText('Could not load categories.');
+    expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
+      true,
+    );
+  });
+
+  // Regresses to a bug where a create that started against budget 9 could
+  // still resolve after the route moved to budget 10 — CreateBudgetLineDialog
+  // unmounts the instant that happens, but its already-in-flight create
+  // keeps running and still calls the onCreate closure it was holding,
+  // which would otherwise append budget 9's line into whatever lines are
+  // on screen by then (budget 10's).
+  it('rejects a stale create that resolves after navigating to a different budget', async () => {
+    const budget10 = deferred<Budget[]>();
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET])
+      .mockReturnValueOnce(budget10.promise);
+    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
+      { id: 5, name: 'Bonus', type: 'earning', is_active: true, household_id: 1 },
+    ]);
+    const createPromise = deferred<ReturnType<typeof makeBudgetLine>>();
+    vi.spyOn(budgetsService, 'createBudgetLine').mockReturnValue(createPromise.promise);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
+    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Navigate to a different budget before the create settles.
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    budget10.resolve([makeBudget({ id: 10, name: 'Vacation Fund' })]);
+    await screen.findByText('Vacation Fund');
+
+    // The stale create (for budget 9) resolves only now.
+    await act(async () => {
+      createPromise.resolve(
+        makeBudgetLine({
+          id: 3,
+          budget_id: 9,
+          category_id: 5,
+          category_name: 'Bonus',
+          category_type: 'earning',
+        }),
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByText('Bonus')).toBeNull();
   });
 });
