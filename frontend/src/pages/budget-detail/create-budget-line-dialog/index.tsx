@@ -72,17 +72,22 @@ export function CreateBudgetLineDialog({
 
   const parsedAmount = Number(amount);
   const isValidAmount = amount.trim() !== '' && Number.isInteger(parsedAmount) && parsedAmount >= 0;
-  // isFetching (not just isLoading) also covers a background refetch of
-  // already-cached data — e.g. the 30s staleTime (queries/categories.ts)
-  // expiring while this dialog sits open. Re-checking membership in
-  // activeCategories (rather than trusting categoryId alone) catches the
-  // case where that refetch's result deactivates the selected category:
-  // the backend doesn't reject an inactive category_id on its own, so
-  // without this a line could be added for a category the picker no
-  // longer even offers.
+  // One flag for "the category list is safe to submit against", instead of
+  // accumulating a separate check per fetch state (loading, erroring, a
+  // background refetch in flight, a background refetch that just failed —
+  // TanStack Query flips isSuccess to false for that last one too, even
+  // though it still exposes the previous data). isSuccess && !isFetching
+  // covers all of those in one place: categoriesQuery.isError alone isn't
+  // enough, since a failed *background* refetch keeps serving the old
+  // (possibly stale) `data` as isError flips true next to it.
+  const categoriesReady = categoriesQuery.isSuccess && !categoriesQuery.isFetching;
+  // Re-checking membership in activeCategories (rather than trusting
+  // categoryId alone) catches the case where a completed refetch
+  // deactivated the selected category: the backend doesn't reject an
+  // inactive category_id on its own, so without this a line could be
+  // added for a category the picker no longer even offers.
   const selectedCategoryStillActive = activeCategories.some(category => category.id === categoryId);
-  const canCreate =
-    selectedCategoryStillActive && isValidAmount && !isCreating && !categoriesQuery.isFetching;
+  const canCreate = categoriesReady && selectedCategoryStillActive && isValidAmount && !isCreating;
 
   function handleClose() {
     if (isCreating) return;

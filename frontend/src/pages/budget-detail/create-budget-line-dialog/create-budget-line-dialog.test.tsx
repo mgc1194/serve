@@ -185,6 +185,27 @@ describe('CreateBudgetLineDialog stale/refetching selection', () => {
       expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true),
     );
   });
+
+  // TanStack Query keeps serving the previous successful `data` when a
+  // background refetch fails — only `status` (and so isSuccess) flips to
+  // reflect the failure, isError sitting alongside stale data rather than
+  // replacing it. The picker UI switches to the error+retry Alert in this
+  // state, but without gating canCreate on isSuccess specifically, Add
+  // stayed enabled against the now-hidden, possibly-stale selection.
+  it('disables Add when a background refetch fails, even though stale data and the selection remain', async () => {
+    const { queryClient } = setup();
+
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
+
+    vi.spyOn(categoriesService, 'listCategories').mockRejectedValue(new Error('boom'));
+    await queryClient.refetchQueries({ queryKey: ['categories', 1] }).catch(() => {});
+
+    await screen.findByText('Could not load categories.');
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
+  });
 });
 
 describe('CreateBudgetLineDialog validation', () => {
