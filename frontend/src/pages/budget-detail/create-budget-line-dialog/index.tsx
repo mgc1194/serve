@@ -13,6 +13,7 @@
 
 import {
   Alert,
+  Box,
   Button,
   CircularProgress,
   Dialog,
@@ -24,6 +25,7 @@ import {
   MenuItem,
   Select,
   TextField,
+  Typography,
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 
@@ -46,27 +48,31 @@ export function CreateBudgetLineDialog({
   onClose,
   onCreate,
 }: CreateBudgetLineDialogProps) {
-  const { data: categories = [] } = useCategories(householdId, { enabled: open });
-  const activeCategories = categories.filter(category => category.is_active);
+  const categoriesQuery = useCategories(householdId, { enabled: open });
+  const activeCategories = (categoriesQuery.data ?? []).filter(category => category.is_active);
 
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [amount, setAmount] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Resets the form each time the dialog opens, so a half-filled attempt
-  // from a previous open doesn't carry over.
+  // Resets the form each time the dialog opens, and whenever the
+  // budget/household it's scoped to changes — e.g. the route moves to a
+  // different budget, or the active household changes, while this dialog
+  // stays mounted. Without budgetId/householdId here, a half-filled
+  // selection from the old scope would stick around and could be
+  // submitted against the new one.
   useEffect(() => {
     if (!open) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCategoryId('');
     setAmount('');
     setError(null);
-  }, [open]);
+  }, [open, budgetId, householdId]);
 
   const parsedAmount = Number(amount);
   const isValidAmount = amount.trim() !== '' && Number.isInteger(parsedAmount) && parsedAmount >= 0;
-  const canCreate = categoryId !== '' && isValidAmount && !isCreating;
+  const canCreate = categoryId !== '' && isValidAmount && !isCreating && !categoriesQuery.isLoading;
 
   function handleClose() {
     if (isCreating) return;
@@ -102,21 +108,41 @@ export function CreateBudgetLineDialog({
           </Alert>
         )}
 
-        <FormControl size="small" fullWidth disabled={isCreating}>
-          <InputLabel id="budget-line-category-select">Category</InputLabel>
-          <Select
-            labelId="budget-line-category-select"
-            label="Category"
-            value={categoryId}
-            onChange={e => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+        {categoriesQuery.isLoading ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="body2" color="text.secondary">
+              Loading categories…
+            </Typography>
+          </Box>
+        ) : categoriesQuery.isError ? (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" onClick={() => categoriesQuery.refetch()}>
+                Retry
+              </Button>
+            }
           >
-            {activeCategories.map(category => (
-              <MenuItem key={category.id} value={category.id}>
-                {category.name}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+            Could not load categories.
+          </Alert>
+        ) : (
+          <FormControl size="small" fullWidth disabled={isCreating}>
+            <InputLabel id="budget-line-category-select">Category</InputLabel>
+            <Select
+              labelId="budget-line-category-select"
+              label="Category"
+              value={categoryId}
+              onChange={e => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+            >
+              {activeCategories.map(category => (
+                <MenuItem key={category.id} value={category.id}>
+                  {category.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        )}
 
         <TextField
           label="Budgeted amount"

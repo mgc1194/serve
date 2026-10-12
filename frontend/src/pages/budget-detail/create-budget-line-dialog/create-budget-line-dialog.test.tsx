@@ -57,17 +57,51 @@ beforeEach(() => {
   vi.spyOn(categoriesService, 'listCategories').mockResolvedValue(CATEGORIES);
 });
 
+describe('CreateBudgetLineDialog category fetch state', () => {
+  it('shows a loading state instead of an empty picker while categories load', () => {
+    let resolveCategories!: (value: typeof CATEGORIES) => void;
+    vi.spyOn(categoriesService, 'listCategories').mockReturnValue(
+      new Promise(resolve => {
+        resolveCategories = resolve;
+      }),
+    );
+    setup();
+
+    expect(screen.getByText(/loading categories/i)).toBeDefined();
+    expect(screen.queryByRole('combobox', { name: /category/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
+
+    resolveCategories(CATEGORIES);
+  });
+
+  it('shows an error with a retry action instead of an empty picker on failure', async () => {
+    const listCategories = vi
+      .spyOn(categoriesService, 'listCategories')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(CATEGORIES);
+    setup();
+
+    await screen.findByText('Could not load categories.');
+    expect(screen.queryByRole('combobox', { name: /category/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    await screen.findByRole('combobox', { name: /category/i });
+    expect(listCategories).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('CreateBudgetLineDialog rendering', () => {
   it('renders the active categories as options', async () => {
     setup();
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     expect(await screen.findByRole('option', { name: 'Groceries' })).toBeDefined();
     expect(screen.getByRole('option', { name: 'Salary' })).toBeDefined();
   });
 
   it('does not offer an inactive category', async () => {
     setup();
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     await screen.findByRole('option', { name: 'Groceries' });
     expect(screen.queryByRole('option', { name: 'Old Hobby' })).toBeNull();
   });
@@ -78,7 +112,7 @@ describe('CreateBudgetLineDialog validation', () => {
     setup();
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
 
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
 
@@ -88,7 +122,7 @@ describe('CreateBudgetLineDialog validation', () => {
 
   it('keeps Add disabled for a negative amount', async () => {
     setup();
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '-5' } });
 
@@ -97,7 +131,7 @@ describe('CreateBudgetLineDialog validation', () => {
 
   it('keeps Add disabled for a non-integer amount', async () => {
     setup();
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '49.99' } });
 
@@ -107,7 +141,7 @@ describe('CreateBudgetLineDialog validation', () => {
 
 describe('CreateBudgetLineDialog create flow', () => {
   async function fillAndSubmit(categoryName: string, amount: string) {
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: /category/i }));
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: categoryName }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: amount } });
     await userEvent.click(screen.getByRole('button', { name: /^add$/i }));
@@ -171,6 +205,41 @@ describe('CreateBudgetLineDialog form reset', () => {
     );
     rerender(
       <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+    );
+
+    expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
+  });
+
+  // Regresses to a bug where the effect only depended on `open` — if the
+  // route moved to a different budget (or the active household changed)
+  // while this dialog stayed mounted and open, a half-filled selection
+  // from the old scope would stick around and could be submitted against
+  // the new budgetId/householdId.
+  it('resets the form when budgetId changes while the dialog stays open', () => {
+    const { rerender } = render(
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
+    expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('500');
+
+    rerender(
+      <CreateBudgetLineDialog open budgetId={10} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+    );
+
+    expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
+  });
+
+  it('resets the form when householdId changes while the dialog stays open', () => {
+    const { rerender } = render(
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
+    expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('500');
+
+    rerender(
+      <CreateBudgetLineDialog open budgetId={9} householdId={2} onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
