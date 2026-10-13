@@ -452,6 +452,77 @@ describe('BudgetDetailPage sync actuals', () => {
 
     expect(screen.queryByText('Could not sync budget.')).toBeNull();
   });
+
+  // The initial lines GET and a sync both ultimately call setLines — if
+  // that initial fetch is still in flight (or just slower) and resolves
+  // AFTER a sync, its now-stale response must not silently overwrite the
+  // sync's own freshly-computed lines, and isLoadingLines must not stay
+  // stuck true (hiding the already-synced columns) in the meantime.
+  it('does not let a slower initial lines fetch clobber a faster sync', async () => {
+    const initialLinesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(initialLinesPromise.promise);
+    vi.spyOn(budgetsService, 'syncBudget').mockResolvedValue({
+      budget: makeBudget({ id: 9, name: 'Monthly Budget', synced_at: '2026-03-05T14:30:00Z' }),
+      lines: [makeBudgetLine({ category_name: 'Groceries', actual_amount: '320.57' })],
+    });
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    await screen.findByText('Loading categories…');
+
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
+    await screen.findByText('$320.57');
+    expect(screen.queryByText('Loading categories…')).toBeNull();
+
+    // The slower initial fetch resolves only now, with DIFFERENT (by now
+    // stale) data — it must not overwrite what the sync already supplied.
+    await act(async () => {
+      initialLinesPromise.resolve([
+        makeBudgetLine({ category_name: 'Groceries', actual_amount: '0.00' }),
+      ]);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(screen.getByText('$320.57')).toBeDefined();
+    expect(screen.queryByText('$0.00')).toBeNull();
+    expect(screen.queryByText('Loading categories…')).toBeNull();
+  });
+
+  // A line created while a sync is in flight would exist only in `lines`,
+  // not in the sync's own in-flight snapshot (computed server-side before
+  // the create) — setLines(result.lines) on the sync's resolution would
+  // silently drop it. Disabling the "Add" buttons for the duration of a
+  // sync closes off that window entirely, rather than trying to reconcile
+  // the two writes after the fact.
+  it('disables both "Add" buttons while a sync is in flight', async () => {
+    const syncPromise = deferred<{ budget: Budget; lines: ReturnType<typeof makeBudgetLine>[] }>();
+    vi.spyOn(budgetsService, 'syncBudget').mockReturnValue(syncPromise.promise);
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /add earning category/i }).hasAttribute('disabled'),
+      ).toBe(true);
+      expect(
+        screen.getByRole('button', { name: /add spending category/i }).hasAttribute('disabled'),
+      ).toBe(true);
+    });
+
+    syncPromise.resolve({ budget: makeBudget({ id: 9, name: 'Monthly Budget' }), lines: [] });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /add earning category/i }).hasAttribute('disabled'),
+      ).toBe(false);
+      expect(
+        screen.getByRole('button', { name: /add spending category/i }).hasAttribute('disabled'),
+      ).toBe(false);
+    });
+  });
 });
 
 describe('BudgetDetailPage budget lines', () => {

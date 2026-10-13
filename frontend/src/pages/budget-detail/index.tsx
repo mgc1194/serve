@@ -269,9 +269,18 @@ export function BudgetDetailPage() {
       // still in flight, and an id-only check can't tell that revisit
       // apart from never having left.
       if (syncScope !== scopeGenerationRef.current) return;
+      // Invalidates any listBudgetLines call already in flight (the
+      // initial load, or a lines Retry) — without this, if it resolves
+      // AFTER this sync, its now-stale response would silently overwrite
+      // the lines this sync just supplied, and its own .finally would
+      // leave isLoadingLines stuck true in the meantime, hiding the
+      // freshly-synced columns behind "Loading categories…" until that
+      // older request finally settled.
+      linesRequestIdRef.current += 1;
       setBudget(result.budget);
       setLines(result.lines);
       setLinesError(null);
+      setIsLoadingLines(false);
     } catch (err) {
       if (syncScope !== scopeGenerationRef.current) return;
       setSyncError(err instanceof ApiError ? err.message : 'Could not sync budget.');
@@ -370,8 +379,12 @@ export function BudgetDetailPage() {
               // These buttons only ever render here, once lines have
               // loaded successfully — the loading/error branches above
               // hide them entirely (there's no column to add into while
-              // either one is showing), so there's no separate disabled
-              // state to track for either case.
+              // either one is showing). They're disabled (not hidden)
+              // while isSyncing, though: a line created in that window
+              // would exist only in `lines`, not in the sync's own
+              // in-flight snapshot (computed server-side before the
+              // create), and setLines(result.lines) on resolution would
+              // silently drop it the moment the sync completed.
               <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <BudgetColumn title="Earnings" lines={earningLines} />
@@ -380,6 +393,7 @@ export function BudgetDetailPage() {
                     variant="outlined"
                     size="small"
                     onClick={() => setLineDialogType('earning')}
+                    disabled={isSyncing}
                     sx={{ mt: 2 }}
                   >
                     Add earning category
@@ -392,6 +406,7 @@ export function BudgetDetailPage() {
                     variant="outlined"
                     size="small"
                     onClick={() => setLineDialogType('spending')}
+                    disabled={isSyncing}
                     sx={{ mt: 2 }}
                   >
                     Add spending category
