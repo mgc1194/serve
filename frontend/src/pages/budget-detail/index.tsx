@@ -197,7 +197,11 @@ export function BudgetDetailPage() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppHeader />
-      <Container maxWidth="md" sx={{ py: 6 }}>
+      {/* lg, not the original md — the Earnings/Spending columns sit side
+          by side inside this container, and md left each one too narrow
+          for a wide category name plus a large budgeted/total/diff amount
+          together on one row. */}
+      <Container maxWidth="lg" sx={{ py: 6 }}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/budgets')}
