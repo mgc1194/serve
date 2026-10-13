@@ -57,19 +57,43 @@ export default meta;
 type Story = StoryObj<typeof BudgetColumn>;
 
 export const Earnings: Story = {
-  args: { title: 'Earnings', lines: EARNING_LINES },
+  args: { title: 'Earnings', type: 'earning', lines: EARNING_LINES },
 };
 
 export const Spending: Story = {
-  args: { title: 'Spending', lines: SPENDING_LINES },
+  args: { title: 'Spending', type: 'spending', lines: SPENDING_LINES },
 };
 
 export const EmptyEarnings: Story = {
-  args: { title: 'Earnings', lines: [] },
+  args: { title: 'Earnings', type: 'earning', lines: [] },
 };
 
 export const EmptySpendingWithCustomMessage: Story = {
-  args: { title: 'Spending', lines: [], emptyMessage: 'No spending categories added yet.' },
+  args: {
+    title: 'Spending',
+    type: 'spending',
+    lines: [],
+    emptyMessage: 'No spending categories added yet.',
+  },
+};
+
+// The progress bar's color follows the same "positive is good" convention
+// as each row's own Diff — over budget reads as an error here, same as
+// under an earning goal would.
+export const OverBudgetSpending: Story = {
+  args: {
+    title: 'Spending',
+    type: 'spending',
+    lines: [
+      makeBudgetLine({
+        id: 6,
+        category_name: 'Groceries',
+        category_type: 'spending',
+        planned_amount: 400,
+        actual_amount: '550.00',
+      }),
+    ],
+  },
 };
 
 // Matches how the two columns will actually sit on the Budget detail page —
@@ -77,8 +101,8 @@ export const EmptySpendingWithCustomMessage: Story = {
 export const SideBySide: Story = {
   render: () => (
     <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      <BudgetColumn title="Earnings" lines={EARNING_LINES} />
-      <BudgetColumn title="Spending" lines={SPENDING_LINES} />
+      <BudgetColumn title="Earnings" type="earning" lines={EARNING_LINES} />
+      <BudgetColumn title="Spending" type="spending" lines={SPENDING_LINES} />
     </Box>
   ),
 };

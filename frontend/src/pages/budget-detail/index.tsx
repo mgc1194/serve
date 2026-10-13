@@ -262,7 +262,7 @@ export function BudgetDetailPage() {
               // state to track for either case.
               <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <BudgetColumn title="Earnings" lines={earningLines} />
+                  <BudgetColumn title="Earnings" type="earning" lines={earningLines} />
                   <Button
                     startIcon={<AddIcon />}
                     variant="outlined"
@@ -274,7 +274,7 @@ export function BudgetDetailPage() {
                   </Button>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <BudgetColumn title="Spending" lines={spendingLines} />
+                  <BudgetColumn title="Spending" type="spending" lines={spendingLines} />
                   <Button
                     startIcon={<AddIcon />}
                     variant="outlined"
