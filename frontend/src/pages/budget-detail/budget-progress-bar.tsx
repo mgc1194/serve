@@ -36,6 +36,7 @@ export function BudgetProgressBar({ type, totalPlanned, totalActual }: BudgetPro
         variant="determinate"
         value={progressValue}
         color={totalDiff >= 0 ? 'success' : 'error'}
+        aria-label={`${formatCurrency(totalActual)} actual of ${formatCurrency(totalPlanned)} planned`}
         sx={{ height: 8, borderRadius: 1 }}
       />
     </Box>

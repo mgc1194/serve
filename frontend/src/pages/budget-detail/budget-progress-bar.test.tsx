@@ -41,4 +41,13 @@ describe('BudgetProgressBar', () => {
     render(<BudgetProgressBar type="spending" totalPlanned={0} totalActual={0} />);
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
   });
+
+  // The adjacent "actual"/"planned" Typography text isn't programmatically
+  // associated with the bar, so without its own accessible name a screen
+  // reader would announce only a bare percentage with no indication of
+  // what it's a percentage OF.
+  it('has an accessible name stating the actual and planned amounts', () => {
+    render(<BudgetProgressBar type="spending" totalPlanned={700} totalActual={670} />);
+    expect(screen.getByRole('progressbar', { name: '$670.00 actual of $700.00 planned' })).toBeDefined();
+  });
 });
