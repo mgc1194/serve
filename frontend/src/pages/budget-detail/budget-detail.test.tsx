@@ -274,7 +274,7 @@ describe('BudgetDetailPage sync actuals', () => {
     await screen.findByText('Groceries');
     expect(screen.getByText('$0.00')).toBeDefined();
 
-    fireEvent.click(screen.getByRole('button', { name: /sync actuals/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
 
     expect(await screen.findByText('$320.57')).toBeDefined();
     // Not asserting the exact formatted timestamp — it renders in the
@@ -291,7 +291,7 @@ describe('BudgetDetailPage sync actuals', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    const syncButton = screen.getByRole('button', { name: /sync actuals/i });
+    const syncButton = screen.getByRole('button', { name: /sync budget/i });
     fireEvent.click(syncButton);
 
     await waitFor(() => expect(syncButton.hasAttribute('disabled')).toBe(true));
@@ -309,9 +309,9 @@ describe('BudgetDetailPage sync actuals', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /sync actuals/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
 
-    await screen.findByText('Could not sync actuals.');
+    await screen.findByText('Could not sync budget.');
     expect(screen.getByText('Groceries')).toBeDefined();
     expect(screen.getByText('Never synced')).toBeDefined();
   });
@@ -329,7 +329,7 @@ describe('BudgetDetailPage sync actuals', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /sync actuals/i }));
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
 
     fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
     await screen.findByText('Vacation Fund');

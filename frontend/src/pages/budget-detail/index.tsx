@@ -227,7 +227,7 @@ export function BudgetDetailPage() {
       setLinesError(null);
     } catch (err) {
       if (syncedBudgetId !== currentBudgetIdRef.current) return;
-      setSyncError(err instanceof ApiError ? err.message : 'Could not sync actuals.');
+      setSyncError(err instanceof ApiError ? err.message : 'Could not sync budget.');
     } finally {
       if (syncedBudgetId === currentBudgetIdRef.current) setIsSyncing(false);
     }
@@ -276,24 +276,27 @@ export function BudgetDetailPage() {
                 would render the OLD budget's columns, lines, and "Add"
                 buttons — pointed at the old budgetId — for one frame before
                 the effect catches up. */}
-            <Typography variant="h3" sx={{ mb: 0.5 }}>
-              {budget.name}
-            </Typography>
-            <Typography color="text.secondary">{formatPeriod(budget)}</Typography>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1.5 }}>
-              <Button
-                startIcon={isSyncing ? <CircularProgress size={14} color="inherit" /> : <SyncIcon />}
-                variant="outlined"
-                size="small"
-                onClick={handleSync}
-                disabled={isSyncing}
-              >
-                Sync actuals
-              </Button>
-              <Typography variant="body2" color="text.secondary">
-                {formatSyncedAt(budget.synced_at)}
-              </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+              <Box>
+                <Typography variant="h3" sx={{ mb: 0.5 }}>
+                  {budget.name}
+                </Typography>
+                <Typography color="text.secondary">{formatPeriod(budget)}</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
+                <Button
+                  startIcon={isSyncing ? <CircularProgress size={14} color="inherit" /> : <SyncIcon />}
+                  variant="outlined"
+                  size="small"
+                  onClick={handleSync}
+                  disabled={isSyncing}
+                >
+                  Sync budget
+                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  {formatSyncedAt(budget.synced_at)}
+                </Typography>
+              </Box>
             </Box>
             {syncError && (
               <Alert severity="error" onClose={() => setSyncError(null)} sx={{ mt: 1 }}>
