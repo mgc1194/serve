@@ -224,8 +224,16 @@ export function BudgetDetailPage() {
               Retry
             </Button>
           </Box>
-        ) : budget ? (
+        ) : budget && budget.id === budgetId && budget.household_id === householdId ? (
           <>
+            {/* budget.id === budgetId && budget.household_id === householdId
+                (not just a `budget` truthiness check) — on a route or
+                household change, `budget` is cleared to null by the effect
+                above, but only AFTER this render, since effects run after
+                render/paint. Without re-checking identity here, this branch
+                would render the OLD budget's columns, lines, and "Add"
+                buttons — pointed at the old budgetId — for one frame before
+                the effect catches up. */}
             <Typography variant="h3" sx={{ mb: 0.5 }}>
               {budget.name}
             </Typography>
@@ -282,33 +290,37 @@ export function BudgetDetailPage() {
           </>
         ) : null}
 
-        {householdId !== undefined && budget && lineDialogType !== null && (
-          <CreateBudgetLineDialog
-            open
-            budgetId={budget.id}
-            householdId={householdId}
-            categoryType={lineDialogType}
-            onClose={() => setLineDialogType(null)}
-            onCreate={created => {
-              // A create that started against this budget can still
-              // resolve after the route/household has since moved to a
-              // different budget. Reject it rather than appending a line
-              // from the old budget into whatever's currently on screen.
-              if (created.budget_id !== currentBudgetIdRef.current) return;
-              setLines(prev => {
-                // Budget ids alone don't distinguish two separate visits to
-                // the SAME budget: navigate 9 -> 10 -> back to 9 while this
-                // create is still in flight, and budget 9's lines GET (run
-                // again on the way back) can already include it by the
-                // time this stale callback finally resolves. Skip the
-                // append rather than adding a second row with a duplicate
-                // id (and a duplicate React key).
-                if (prev.some(line => line.id === created.id)) return prev;
-                return [...prev, created];
-              });
-            }}
-          />
-        )}
+        {householdId !== undefined &&
+          budget &&
+          budget.id === budgetId &&
+          budget.household_id === householdId &&
+          lineDialogType !== null && (
+            <CreateBudgetLineDialog
+              open
+              budgetId={budget.id}
+              householdId={householdId}
+              categoryType={lineDialogType}
+              onClose={() => setLineDialogType(null)}
+              onCreate={created => {
+                // A create that started against this budget can still
+                // resolve after the route/household has since moved to a
+                // different budget. Reject it rather than appending a line
+                // from the old budget into whatever's currently on screen.
+                if (created.budget_id !== currentBudgetIdRef.current) return;
+                setLines(prev => {
+                  // Budget ids alone don't distinguish two separate visits to
+                  // the SAME budget: navigate 9 -> 10 -> back to 9 while this
+                  // create is still in flight, and budget 9's lines GET (run
+                  // again on the way back) can already include it by the
+                  // time this stale callback finally resolves. Skip the
+                  // append rather than adding a second row with a duplicate
+                  // id (and a duplicate React key).
+                  if (prev.some(line => line.id === created.id)) return prev;
+                  return [...prev, created];
+                });
+              }}
+            />
+          )}
       </Container>
     </Box>
   );
