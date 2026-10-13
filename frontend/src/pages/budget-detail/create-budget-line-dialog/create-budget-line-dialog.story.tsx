@@ -12,6 +12,7 @@ const meta: Meta<typeof CreateBudgetLineDialog> = {
     open: true,
     budgetId: 1,
     householdId: 1,
+    categoryType: 'spending',
     onClose: () => {},
     onCreate: () => {},
   },
@@ -24,4 +25,8 @@ type Story = StoryObj<typeof CreateBudgetLineDialog>;
 // .storybook/preview.tsx) and falls through to a real, backend-less
 // fetch — same graceful degradation as LabelManagementDialog's own
 // default story: the category picker has no options to choose from.
-export const Default: Story = {};
+export const Spending: Story = {};
+
+export const Earning: Story = {
+  args: { categoryType: 'earning' },
+};

@@ -45,6 +45,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof CreateBudgetLineDi
       open
       budgetId={9}
       householdId={1}
+      categoryType="spending"
       onClose={onClose}
       onCreate={onCreate}
       {...overrides}
@@ -93,35 +94,34 @@ describe('CreateBudgetLineDialog category fetch state', () => {
 });
 
 describe('CreateBudgetLineDialog rendering', () => {
-  it('renders the active categories as options', async () => {
-    setup();
+  it('renders only categories matching categoryType (spending)', async () => {
+    setup({ categoryType: 'spending' });
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    expect(await screen.findByRole('option', { name: 'Groceries (Spending)' })).toBeDefined();
-    expect(screen.getByRole('option', { name: 'Salary (Earning)' })).toBeDefined();
+    expect(await screen.findByRole('option', { name: 'Groceries' })).toBeDefined();
+    expect(screen.queryByRole('option', { name: 'Salary' })).toBeNull();
+  });
+
+  it('renders only categories matching categoryType (earning)', async () => {
+    setup({ categoryType: 'earning' });
+    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
+    expect(await screen.findByRole('option', { name: 'Salary' })).toBeDefined();
+    expect(screen.queryByRole('option', { name: 'Groceries' })).toBeNull();
   });
 
   it('does not offer an inactive category', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    await screen.findByRole('option', { name: 'Groceries (Spending)' });
+    await screen.findByRole('option', { name: 'Groceries' });
     expect(screen.queryByRole('option', { name: 'Old Hobby' })).toBeNull();
   });
 
-  // A household can have both an earning and a spending category with the
-  // same name (Category's uniqueness includes type) — without the type
-  // suffix, picking between "Rent (Spending)" and a hypothetical
-  // "Rent (Earning)" would be impossible to tell apart.
-  it('disambiguates two categories that share a name but differ in type', async () => {
-    vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([
-      makeCategory({ id: 10, name: 'Rent', type: 'spending' }),
-      makeCategory({ id: 11, name: 'Rent', type: 'earning' }),
-    ]);
-    setup();
-
-    fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    expect(await screen.findByRole('option', { name: 'Rent (Spending)' })).toBeDefined();
-    expect(screen.getByRole('option', { name: 'Rent (Earning)' })).toBeDefined();
-  });
+  it.each(['earning', 'spending'] as const)(
+    'titles the dialog "Add %s category"',
+    categoryType => {
+      setup({ categoryType });
+      expect(screen.getByText(`Add ${categoryType} category`)).toBeDefined();
+    },
+  );
 });
 
 describe('CreateBudgetLineDialog stale/refetching selection', () => {
@@ -135,7 +135,7 @@ describe('CreateBudgetLineDialog stale/refetching selection', () => {
     const { queryClient } = setup();
 
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
 
@@ -171,7 +171,7 @@ describe('CreateBudgetLineDialog stale/refetching selection', () => {
     const { queryClient } = setup();
 
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
 
@@ -196,7 +196,7 @@ describe('CreateBudgetLineDialog stale/refetching selection', () => {
     const { queryClient } = setup();
 
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
 
@@ -214,7 +214,7 @@ describe('CreateBudgetLineDialog validation', () => {
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
 
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
@@ -224,7 +224,7 @@ describe('CreateBudgetLineDialog validation', () => {
   it('keeps Add disabled for a negative amount', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '-5' } });
 
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
@@ -233,7 +233,7 @@ describe('CreateBudgetLineDialog validation', () => {
   it('keeps Add disabled for a non-integer amount', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '49.99' } });
 
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
@@ -252,7 +252,7 @@ describe('CreateBudgetLineDialog validation', () => {
     async value => {
       setup();
       fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-      fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
       fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value } });
 
       expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(true);
@@ -262,7 +262,7 @@ describe('CreateBudgetLineDialog validation', () => {
   it('keeps Add disabled for a digit string too large to represent exactly', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), {
       target: { value: '99999999999999999999' },
     });
@@ -273,7 +273,7 @@ describe('CreateBudgetLineDialog validation', () => {
   it('allows a plain whole-dollar amount with leading zeros', async () => {
     setup();
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Groceries (Spending)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Groceries' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '0050' } });
 
     expect(screen.getByRole('button', { name: /^add$/i }).hasAttribute('disabled')).toBe(false);
@@ -292,7 +292,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     mockCreateBudgetLine.mockResolvedValueOnce(makeBudgetLine());
     setup();
 
-    await fillAndSubmit('Groceries (Spending)', '500');
+    await fillAndSubmit('Groceries', '500');
 
     await waitFor(() =>
       expect(mockCreateBudgetLine).toHaveBeenCalledWith(9, { category_id: 1, planned_amount: 500 }),
@@ -304,7 +304,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     mockCreateBudgetLine.mockResolvedValueOnce(created);
     const { onCreate, onClose } = setup();
 
-    await fillAndSubmit('Groceries (Spending)', '500');
+    await fillAndSubmit('Groceries', '500');
 
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(created));
     expect(onClose).toHaveBeenCalledOnce();
@@ -316,7 +316,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     );
     const { onClose } = setup();
 
-    await fillAndSubmit('Groceries (Spending)', '500');
+    await fillAndSubmit('Groceries', '500');
 
     await screen.findByText('"Groceries" is already part of this budget.');
     expect(onClose).not.toHaveBeenCalled();
@@ -326,7 +326,7 @@ describe('CreateBudgetLineDialog create flow', () => {
     mockCreateBudgetLine.mockRejectedValueOnce(new Error('network down'));
     setup();
 
-    await fillAndSubmit('Groceries (Spending)', '500');
+    await fillAndSubmit('Groceries', '500');
 
     await screen.findByText('Could not add category.');
   });
@@ -335,17 +335,17 @@ describe('CreateBudgetLineDialog create flow', () => {
 describe('CreateBudgetLineDialog form reset', () => {
   it('resets the form each time the dialog re-opens', () => {
     const { rerender } = render(
-      <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('500');
 
     rerender(
-      <CreateBudgetLineDialog open={false} budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open={false} budgetId={9} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
     rerender(
-      <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
@@ -358,14 +358,14 @@ describe('CreateBudgetLineDialog form reset', () => {
   // the new budgetId/householdId.
   it('resets the form when budgetId changes while the dialog stays open', () => {
     const { rerender } = render(
-      <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('500');
 
     rerender(
-      <CreateBudgetLineDialog open budgetId={10} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open budgetId={10} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
@@ -373,14 +373,34 @@ describe('CreateBudgetLineDialog form reset', () => {
 
   it('resets the form when householdId changes while the dialog stays open', () => {
     const { rerender } = render(
-      <CreateBudgetLineDialog open budgetId={9} householdId={1} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('500');
 
     rerender(
-      <CreateBudgetLineDialog open budgetId={9} householdId={2} onClose={vi.fn()} onCreate={vi.fn()} />,
+      <CreateBudgetLineDialog open budgetId={9} householdId={2} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
+    );
+
+    expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
+  });
+
+  // Each column's own "Add X category" button opens this same dialog
+  // instance with a different categoryType — a half-filled selection from
+  // the Earnings button shouldn't carry over if, for whatever reason, the
+  // dialog were re-opened for Spending instead without an intervening
+  // close/open of `open` itself.
+  it('resets the form when categoryType changes while the dialog stays open', () => {
+    const { rerender } = render(
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} categoryType="spending" onClose={vi.fn()} onCreate={vi.fn()} />,
+    );
+
+    fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '500' } });
+    expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('500');
+
+    rerender(
+      <CreateBudgetLineDialog open budgetId={9} householdId={1} categoryType="earning" onClose={vi.fn()} onCreate={vi.fn()} />,
     );
 
     expect((screen.getByLabelText(/budgeted amount/i) as HTMLInputElement).value).toBe('');
