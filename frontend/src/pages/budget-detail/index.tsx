@@ -1,11 +1,15 @@
 // pages/budget-detail/index.tsx — Per-budget detail page: the budget's
-// name and period, a placeholder net-this-month section (the real figure
-// is a separate follow-up — it needs the same lines fetched here, but
-// isn't wired up yet), the Earnings/Spending columns (BudgetColumn/
-// BudgetLineRow) built from the budget's own lines, and an "Add X
-// category" button under each column — a single shared button looked
-// like it only added earning categories (it sat right under the Earnings
-// column), so each column gets its own, pre-scoped to that column's type.
+// name and period, a Sync control that recomputes actual_amount for every
+// line from real transactions (actual_amount is a cache — see Budget's own
+// docstring — so without a sync the Actual/Diff columns just show whatever
+// was last computed, possibly nothing), a placeholder net-this-month
+// section (the real figure is a separate follow-up — it needs the same
+// lines fetched here, but isn't wired up yet), the Earnings/Spending
+// columns (BudgetColumn/BudgetLineRow) built from the budget's own lines,
+// and an "Add X category" button under each column — a single shared
+// button looked like it only added earning categories (it sat right under
+// the Earnings column), so each column gets its own, pre-scoped to that
+// column's type.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
@@ -13,7 +17,8 @@
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { Box, Button, Container, Typography } from '@mui/material';
+import SyncIcon from '@mui/icons-material/Sync';
+import { Alert, Box, Button, CircularProgress, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -22,7 +27,7 @@ import { AppHeader } from '@layout/app-header';
 import { BudgetColumn } from '@pages/budget-detail/budget-column';
 import { CreateBudgetLineDialog } from '@pages/budget-detail/create-budget-line-dialog';
 import type { Budget, BudgetLine } from '@serve/types/global';
-import { listBudgetLines, listBudgets, ApiError } from '@services/budgets';
+import { listBudgetLines, listBudgets, syncBudget, ApiError } from '@services/budgets';
 
 // Matches transaction-row.tsx's formatDate, for consistency across the
 // app. Appending T00:00:00 forces local-time parsing of the bare
@@ -40,6 +45,18 @@ function formatPeriod(budget: Budget): string {
   if (budget.type === 'project') return 'No fixed period';
   if (!budget.period_start || !budget.period_end) return '';
   return `${formatDate(budget.period_start)} – ${formatDate(budget.period_end)}`;
+}
+
+// synced_at is a full timestamp (not a bare date), so — unlike formatDate
+// above — it parses correctly as-is with no local-midnight workaround.
+function formatSyncedAt(syncedAt: string | null): string {
+  if (!syncedAt) return 'Never synced';
+  return `Synced ${new Date(syncedAt).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
 }
 
 export function BudgetDetailPage() {
@@ -191,6 +208,31 @@ export function BudgetDetailPage() {
     currentBudgetIdRef.current = budget?.id;
   }, [budget]);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  async function handleSync() {
+    if (!budget || isSyncing) return;
+    const syncedBudgetId = budget.id;
+
+    setIsSyncing(true);
+    setSyncError(null);
+    try {
+      const result = await syncBudget(syncedBudgetId);
+      // Same staleness guard as onCreate below: the route/household can
+      // move to a different budget while this request is still in flight.
+      if (syncedBudgetId !== currentBudgetIdRef.current) return;
+      setBudget(result.budget);
+      setLines(result.lines);
+      setLinesError(null);
+    } catch (err) {
+      if (syncedBudgetId !== currentBudgetIdRef.current) return;
+      setSyncError(err instanceof ApiError ? err.message : 'Could not sync actuals.');
+    } finally {
+      if (syncedBudgetId === currentBudgetIdRef.current) setIsSyncing(false);
+    }
+  }
+
   const earningLines = lines.filter(line => line.category_type === 'earning');
   const spendingLines = lines.filter(line => line.category_type === 'spending');
 
@@ -238,6 +280,26 @@ export function BudgetDetailPage() {
               {budget.name}
             </Typography>
             <Typography color="text.secondary">{formatPeriod(budget)}</Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 1.5 }}>
+              <Button
+                startIcon={isSyncing ? <CircularProgress size={14} color="inherit" /> : <SyncIcon />}
+                variant="outlined"
+                size="small"
+                onClick={handleSync}
+                disabled={isSyncing}
+              >
+                Sync actuals
+              </Button>
+              <Typography variant="body2" color="text.secondary">
+                {formatSyncedAt(budget.synced_at)}
+              </Typography>
+            </Box>
+            {syncError && (
+              <Alert severity="error" onClose={() => setSyncError(null)} sx={{ mt: 1 }}>
+                {syncError}
+              </Alert>
+            )}
 
             {/* Placeholder — the real net-this-month figure is wired up in
                 a follow-up PR, computed from the same lines fetched below. */}

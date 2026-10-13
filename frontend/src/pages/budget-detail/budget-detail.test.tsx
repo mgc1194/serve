@@ -247,6 +247,107 @@ describe('BudgetDetailPage add category', () => {
   });
 });
 
+describe('BudgetDetailPage sync actuals', () => {
+  beforeEach(() => {
+    vi.spyOn(budgetsService, 'syncBudget').mockResolvedValue({
+      budget: makeBudget({ id: 9, name: 'Monthly Budget', synced_at: '2026-03-05T14:30:00Z' }),
+      lines: [],
+    });
+  });
+
+  it('shows "Never synced" when the budget has never been synced', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+    expect(screen.getByText('Never synced')).toBeDefined();
+  });
+
+  it('syncs actuals and shows the updated amount and synced time', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ category_name: 'Groceries', actual_amount: '0.00' }),
+    ]);
+    vi.spyOn(budgetsService, 'syncBudget').mockResolvedValue({
+      budget: makeBudget({ id: 9, name: 'Monthly Budget', synced_at: '2026-03-05T14:30:00Z' }),
+      lines: [makeBudgetLine({ category_name: 'Groceries', actual_amount: '320.57' })],
+    });
+
+    renderPage();
+    await screen.findByText('Groceries');
+    expect(screen.getByText('$0.00')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /sync actuals/i }));
+
+    expect(await screen.findByText('$320.57')).toBeDefined();
+    // Not asserting the exact formatted timestamp — it renders in the
+    // viewer's local time zone, so just confirm it's no longer the
+    // never-synced placeholder.
+    expect(screen.queryByText('Never synced')).toBeNull();
+    expect(screen.getByText(/^Synced /)).toBeDefined();
+  });
+
+  it('disables the Sync button and shows a spinner while syncing', async () => {
+    const syncPromise = deferred<{ budget: Budget; lines: ReturnType<typeof makeBudgetLine>[] }>();
+    vi.spyOn(budgetsService, 'syncBudget').mockReturnValue(syncPromise.promise);
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    const syncButton = screen.getByRole('button', { name: /sync actuals/i });
+    fireEvent.click(syncButton);
+
+    await waitFor(() => expect(syncButton.hasAttribute('disabled')).toBe(true));
+
+    syncPromise.resolve({ budget: makeBudget({ id: 9, name: 'Monthly Budget' }), lines: [] });
+    await waitFor(() => expect(syncButton.hasAttribute('disabled')).toBe(false));
+  });
+
+  it('shows an error message when sync fails, without touching the lines', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ category_name: 'Groceries' }),
+    ]);
+    vi.spyOn(budgetsService, 'syncBudget').mockRejectedValue(new Error('boom'));
+
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /sync actuals/i }));
+
+    await screen.findByText('Could not sync actuals.');
+    expect(screen.getByText('Groceries')).toBeDefined();
+    expect(screen.getByText('Never synced')).toBeDefined();
+  });
+
+  // Same staleness concern as the "rejects a stale create" test below, for
+  // the sync request instead: it started against budget 9, but the route
+  // moved to budget 10 before it resolved.
+  it('ignores a stale sync that resolves after navigating to a different budget', async () => {
+    const syncPromise = deferred<{ budget: Budget; lines: ReturnType<typeof makeBudgetLine>[] }>();
+    vi.spyOn(budgetsService, 'syncBudget').mockReturnValue(syncPromise.promise);
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET])
+      .mockResolvedValueOnce([makeBudget({ id: 10, name: 'Vacation Fund' })]);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /sync actuals/i }));
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await screen.findByText('Vacation Fund');
+
+    await act(async () => {
+      syncPromise.resolve({
+        budget: makeBudget({ id: 9, name: 'Monthly Budget', synced_at: '2026-03-05T14:30:00Z' }),
+        lines: [],
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // Budget 10 is still on screen, unaffected by budget 9's stale sync.
+    expect(screen.getByText('Vacation Fund')).toBeDefined();
+    expect(screen.queryByText(/^Synced /)).toBeNull();
+  });
+});
+
 describe('BudgetDetailPage budget lines', () => {
   it('splits fetched lines into Earnings and Spending columns', async () => {
     vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
