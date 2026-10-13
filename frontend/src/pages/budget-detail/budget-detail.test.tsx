@@ -284,6 +284,32 @@ describe('BudgetDetailPage sync actuals', () => {
     expect(screen.getByText(/^Synced /)).toBeDefined();
   });
 
+  // Regresses to a bug where setBudget(result.budget) — a brand-new object,
+  // even though it's the same budget — retriggered the lines-loading
+  // effect (keyed off the whole `budget` object) into an entirely
+  // redundant GET /budgets/{id}/lines, racing with and liable to overwrite
+  // the lines the sync response had just supplied.
+  it('does not refetch lines after a sync (the response is already authoritative)', async () => {
+    const listBudgetLines = vi
+      .spyOn(budgetsService, 'listBudgetLines')
+      .mockResolvedValue([makeBudgetLine({ category_name: 'Groceries', actual_amount: '0.00' })]);
+    vi.spyOn(budgetsService, 'syncBudget').mockResolvedValue({
+      budget: makeBudget({ id: 9, name: 'Monthly Budget', synced_at: '2026-03-05T14:30:00Z' }),
+      lines: [makeBudgetLine({ category_name: 'Groceries', actual_amount: '320.57' })],
+    });
+
+    renderPage();
+    await screen.findByText('Groceries');
+    expect(listBudgetLines).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
+    await screen.findByText('$320.57');
+
+    // Give any (wrongly) re-triggered effect a turn to fire before asserting.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(listBudgetLines).toHaveBeenCalledTimes(1);
+  });
+
   it('disables the Sync button and shows a spinner while syncing', async () => {
     const syncPromise = deferred<{ budget: Budget; lines: ReturnType<typeof makeBudgetLine>[] }>();
     vi.spyOn(budgetsService, 'syncBudget').mockReturnValue(syncPromise.promise);

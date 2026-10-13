@@ -192,13 +192,23 @@ export function BudgetDetailPage() {
   // isLoadingLines while the newer request was still pending.
   const linesRequestIdRef = useRef(0);
 
+  // Keys the effect below by id, not by `budget` itself — handleSync's
+  // setBudget(result.budget) (and the budget-loading effect's own
+  // setBudget(found)) both construct a brand-new object, a different
+  // reference even when it's the SAME budget. Depending on `budget`
+  // directly would re-run this effect on every sync too, re-fetching
+  // lines that sync's own response just supplied — flashing the columns
+  // back to "Loading categories…" and letting that redundant GET
+  // overwrite the freshly-synced lines once it resolves.
+  const loadedBudgetId = budget?.id;
+
   useEffect(() => {
     let ignore = false;
 
     function loadLines() {
       const requestId = ++linesRequestIdRef.current;
 
-      if (budget === null) {
+      if (loadedBudgetId === undefined) {
         setLines([]);
         setLinesError(null);
         setIsLoadingLines(false);
@@ -208,7 +218,7 @@ export function BudgetDetailPage() {
       setIsLoadingLines(true);
       setLinesError(null);
 
-      listBudgetLines(budget.id)
+      listBudgetLines(loadedBudgetId)
         .then(result => {
           if (ignore || requestId !== linesRequestIdRef.current) return;
           setLines(result);
@@ -228,7 +238,7 @@ export function BudgetDetailPage() {
     return () => {
       ignore = true;
     };
-  }, [budget]);
+  }, [loadedBudgetId]);
 
   // Tracks the budget currently on screen by id, read (not captured) at
   // the moment a create actually resolves — see onCreate below. A plain
