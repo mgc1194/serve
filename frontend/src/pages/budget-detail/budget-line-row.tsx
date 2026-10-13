@@ -26,9 +26,18 @@ export function BudgetLineRow({ line }: BudgetLineRowProps) {
   return (
     <TableRow hover>
       <TableCell>{line.category_name}</TableCell>
-      <TableCell align="right">{formatCurrency(planned)}</TableCell>
-      <TableCell align="right">{formatCurrency(actual)}</TableCell>
-      <TableCell align="right">
+      {/* whiteSpace: 'nowrap' — a large amount (five digits and up) could
+          otherwise wrap onto a second line within the cell once the
+          category name on the same row pushes these columns narrow. The
+          table's own TableContainer already scrolls horizontally if a row
+          genuinely doesn't fit, which reads better than a broken amount. */}
+      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+        {formatCurrency(planned)}
+      </TableCell>
+      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+        {formatCurrency(actual)}
+      </TableCell>
+      <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
         <Typography component="span" color={diff >= 0 ? 'success.main' : 'error.main'}>
           {signPrefix(diff)}
           {formatCurrency(diff)}

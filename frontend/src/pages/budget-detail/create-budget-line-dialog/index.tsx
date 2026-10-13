@@ -1,9 +1,17 @@
 // pages/budget-detail/create-budget-line-dialog/index.tsx
 //
-// Opened from "Add category" on the Budget detail page. Picks one of the
-// household's active categories (reads from the same shared query
-// HouseholdCategoriesSection/CategoryManagementDialog/the label picker do —
-// see queries/categories.ts) and a whole-dollar planned amount.
+// Opened from the Budget detail page's own "Add earning category" /
+// "Add spending category" buttons — one per column, each passing its own
+// categoryType so this dialog only ever offers categories of that one
+// type. A single shared "Add category" trigger looked like it only added
+// earning categories (it sat right under the Earnings column), so the
+// type is now part of which button you click, not a choice inside the
+// dialog.
+//
+// Picks one of the household's active categories of that type (reads from
+// the same shared query HouseholdCategoriesSection/CategoryManagementDialog/
+// the label picker do — see queries/categories.ts) and a whole-dollar
+// planned amount.
 //
 // Doesn't pre-filter out categories already on this budget: the backend
 // already rejects a duplicate with a clear '"<category>" is already part
@@ -37,6 +45,7 @@ interface CreateBudgetLineDialogProps {
   open: boolean;
   budgetId: number;
   householdId: number;
+  categoryType: 'earning' | 'spending';
   onClose: () => void;
   onCreate: (line: BudgetLine) => void;
 }
@@ -45,11 +54,14 @@ export function CreateBudgetLineDialog({
   open,
   budgetId,
   householdId,
+  categoryType,
   onClose,
   onCreate,
 }: CreateBudgetLineDialogProps) {
   const categoriesQuery = useCategories(householdId, { enabled: open });
-  const activeCategories = (categoriesQuery.data ?? []).filter(category => category.is_active);
+  const activeCategories = (categoriesQuery.data ?? []).filter(
+    category => category.is_active && category.type === categoryType,
+  );
 
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [amount, setAmount] = useState('');
@@ -68,7 +80,7 @@ export function CreateBudgetLineDialog({
     setCategoryId('');
     setAmount('');
     setError(null);
-  }, [open, budgetId, householdId]);
+  }, [open, budgetId, householdId, categoryType]);
 
   // A strict digits-only match, not Number.isInteger(Number(amount)) — the
   // latter also accepts forms Number() happily parses but no one would
@@ -129,7 +141,9 @@ export function CreateBudgetLineDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 2 }}>Add category</DialogTitle>
+      <DialogTitle sx={{ pb: 2 }}>
+        Add {categoryType === 'earning' ? 'earning' : 'spending'} category
+      </DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {error && (
           <Alert severity="error" onClose={() => setError(null)}>
@@ -156,7 +170,10 @@ export function CreateBudgetLineDialog({
             Could not load categories.
           </Alert>
         ) : (
-          <FormControl size="small" fullWidth disabled={isCreating}>
+          // mt — extra clearance above the title: the Category label shifts
+          // up into the outlined border when the Select is focused/open,
+          // and sitting this close under the title made it look cropped.
+          <FormControl size="small" fullWidth disabled={isCreating} sx={{ mt: 1 }}>
             <InputLabel id="budget-line-category-select">Category</InputLabel>
             <Select
               labelId="budget-line-category-select"
@@ -166,13 +183,7 @@ export function CreateBudgetLineDialog({
             >
               {activeCategories.map(category => (
                 <MenuItem key={category.id} value={category.id}>
-                  {/* A household can have both an earning and a spending
-                      category with the same name (Category's uniqueness
-                      includes type) — the type suffix is the only thing
-                      that tells those two apart here, and it's what
-                      decides which Earnings/Spending column this line
-                      lands in later. */}
-                  {category.name} ({category.type === 'earning' ? 'Earning' : 'Spending'})
+                  {category.name}
                 </MenuItem>
               ))}
             </Select>

@@ -2,8 +2,10 @@
 // name and period, a placeholder net-this-month section (the real figure
 // is a separate follow-up — it needs the same lines fetched here, but
 // isn't wired up yet), the Earnings/Spending columns (BudgetColumn/
-// BudgetLineRow) built from the budget's own lines, and an "Add category"
-// control that appends a newly-created line straight into those columns.
+// BudgetLineRow) built from the budget's own lines, and an "Add X
+// category" button under each column — a single shared button looked
+// like it only added earning categories (it sat right under the Earnings
+// column), so each column gets its own, pre-scoped to that column's type.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
@@ -50,7 +52,9 @@ export function BudgetDetailPage() {
   const [budget, setBudget] = useState<Budget | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [lineDialogOpen, setLineDialogOpen] = useState(false);
+  // null = closed; otherwise which column's button opened it, and so
+  // which category type CreateBudgetLineDialog is scoped to.
+  const [lineDialogType, setLineDialogType] = useState<'earning' | 'spending' | null>(null);
 
   const [lines, setLines] = useState<BudgetLine[]>([]);
   const [isLoadingLines, setIsLoadingLines] = useState(false);
@@ -80,10 +84,10 @@ export function BudgetDetailPage() {
       // still-open CreateBudgetLineDialog) pointing at the old scope for
       // the whole duration of the new fetch: a submit in that window could
       // create a line on the wrong budget, and the dialog could reappear
-      // open once the new budget loaded, since lineDialogOpen was never
+      // open once the new budget loaded, since lineDialogType was never
       // reset either.
       setBudget(null);
-      setLineDialogOpen(false);
+      setLineDialogType(null);
 
       if (householdId === undefined) {
         setIsLoading(false);
@@ -193,7 +197,11 @@ export function BudgetDetailPage() {
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppHeader />
-      <Container maxWidth="md" sx={{ py: 6 }}>
+      {/* lg, not the original md — the Earnings/Spending columns sit side
+          by side inside this container, and md left each one too narrow
+          for a wide category name plus a large budgeted/total/diff amount
+          together on one row. */}
+      <Container maxWidth="lg" sx={{ py: 6 }}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/budgets')}
@@ -216,8 +224,16 @@ export function BudgetDetailPage() {
               Retry
             </Button>
           </Box>
-        ) : budget ? (
+        ) : budget && budget.id === budgetId && budget.household_id === householdId ? (
           <>
+            {/* budget.id === budgetId && budget.household_id === householdId
+                (not just a `budget` truthiness check) — on a route or
+                household change, `budget` is cleared to null by the effect
+                above, but only AFTER this render, since effects run after
+                render/paint. Without re-checking identity here, this branch
+                would render the OLD budget's columns, lines, and "Add"
+                buttons — pointed at the old budgetId — for one frame before
+                the effect catches up. */}
             <Typography variant="h3" sx={{ mb: 0.5 }}>
               {budget.name}
             </Typography>
@@ -239,58 +255,72 @@ export function BudgetDetailPage() {
                 </Button>
               </Box>
             ) : (
+              // These buttons only ever render here, once lines have
+              // loaded successfully — the loading/error branches above
+              // hide them entirely (there's no column to add into while
+              // either one is showing), so there's no separate disabled
+              // state to track for either case.
               <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                <BudgetColumn title="Earnings" lines={earningLines} />
-                <BudgetColumn title="Spending" lines={spendingLines} />
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <BudgetColumn title="Earnings" lines={earningLines} />
+                  <Button
+                    startIcon={<AddIcon />}
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setLineDialogType('earning')}
+                    sx={{ mt: 2 }}
+                  >
+                    Add earning category
+                  </Button>
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <BudgetColumn title="Spending" lines={spendingLines} />
+                  <Button
+                    startIcon={<AddIcon />}
+                    variant="outlined"
+                    size="small"
+                    onClick={() => setLineDialogType('spending')}
+                    sx={{ mt: 2 }}
+                  >
+                    Add spending category
+                  </Button>
+                </Box>
               </Box>
             )}
-
-            {/* Disabled while the lines GET is in flight (creating a line
-                then would append it locally via onCreate, only for the
-                older GET to resolve afterward and setLines(result)
-                overwrite that with the pre-create snapshot) and while it's
-                in an error state (the columns aren't even rendered then,
-                so there'd be nowhere to show the new line appearing —
-                Retry first). */}
-            <Button
-              startIcon={<AddIcon />}
-              variant="outlined"
-              size="small"
-              onClick={() => setLineDialogOpen(true)}
-              disabled={isLoadingLines || linesError !== null}
-              sx={{ mt: 2 }}
-            >
-              Add category
-            </Button>
           </>
         ) : null}
 
-        {householdId !== undefined && budget && (
-          <CreateBudgetLineDialog
-            open={lineDialogOpen}
-            budgetId={budget.id}
-            householdId={householdId}
-            onClose={() => setLineDialogOpen(false)}
-            onCreate={created => {
-              // A create that started against this budget can still
-              // resolve after the route/household has since moved to a
-              // different budget. Reject it rather than appending a line
-              // from the old budget into whatever's currently on screen.
-              if (created.budget_id !== currentBudgetIdRef.current) return;
-              setLines(prev => {
-                // Budget ids alone don't distinguish two separate visits to
-                // the SAME budget: navigate 9 -> 10 -> back to 9 while this
-                // create is still in flight, and budget 9's lines GET (run
-                // again on the way back) can already include it by the
-                // time this stale callback finally resolves. Skip the
-                // append rather than adding a second row with a duplicate
-                // id (and a duplicate React key).
-                if (prev.some(line => line.id === created.id)) return prev;
-                return [...prev, created];
-              });
-            }}
-          />
-        )}
+        {householdId !== undefined &&
+          budget &&
+          budget.id === budgetId &&
+          budget.household_id === householdId &&
+          lineDialogType !== null && (
+            <CreateBudgetLineDialog
+              open
+              budgetId={budget.id}
+              householdId={householdId}
+              categoryType={lineDialogType}
+              onClose={() => setLineDialogType(null)}
+              onCreate={created => {
+                // A create that started against this budget can still
+                // resolve after the route/household has since moved to a
+                // different budget. Reject it rather than appending a line
+                // from the old budget into whatever's currently on screen.
+                if (created.budget_id !== currentBudgetIdRef.current) return;
+                setLines(prev => {
+                  // Budget ids alone don't distinguish two separate visits to
+                  // the SAME budget: navigate 9 -> 10 -> back to 9 while this
+                  // create is still in flight, and budget 9's lines GET (run
+                  // again on the way back) can already include it by the
+                  // time this stale callback finally resolves. Skip the
+                  // append rather than adding a second row with a duplicate
+                  // id (and a duplicate React key).
+                  if (prev.some(line => line.id === created.id)) return prev;
+                  return [...prev, created];
+                });
+              }}
+            />
+          )}
       </Container>
     </Box>
   );

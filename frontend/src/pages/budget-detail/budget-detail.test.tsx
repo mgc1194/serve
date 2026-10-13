@@ -180,21 +180,30 @@ describe('BudgetDetailPage net this month placeholder', () => {
 });
 
 describe('BudgetDetailPage add category', () => {
-  it('opens CreateBudgetLineDialog when "Add category" is clicked', async () => {
+  it('opens CreateBudgetLineDialog scoped to earning when "Add earning category" is clicked', async () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
 
-    expect(await screen.findByText('Add category', { selector: 'h2' })).toBeDefined();
+    expect(await screen.findByText('Add earning category', { selector: 'h2' })).toBeDefined();
+  });
+
+  it('opens CreateBudgetLineDialog scoped to spending when "Add spending category" is clicked', async () => {
+    renderPage();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /add spending category/i }));
+
+    expect(await screen.findByText('Add spending category', { selector: 'h2' })).toBeDefined();
   });
 
   it('closes the dialog on Cancel without creating a line', async () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
-    await screen.findByText('Add category', { selector: 'h2' });
+    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    await screen.findByText('Add earning category', { selector: 'h2' });
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
 
@@ -208,7 +217,7 @@ describe('BudgetDetailPage add category', () => {
   // the route moved to a different budget id while this dialog was open —
   // a submit in that window could create a line on the wrong budget, and
   // the dialog could reappear open once the new budget loaded, since
-  // lineDialogOpen was never reset either.
+  // lineDialogType was never reset either.
   it('closes the dialog immediately when the route moves to a different budget, before the new budget loads', async () => {
     const budget10 = deferred<Budget[]>();
     vi.spyOn(budgetsService, 'listBudgets')
@@ -218,8 +227,8 @@ describe('BudgetDetailPage add category', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
-    await screen.findByText('Add category', { selector: 'h2' });
+    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    await screen.findByText('Add earning category', { selector: 'h2' });
 
     // { hidden: true } — the open MUI Dialog marks the rest of the page
     // aria-hidden, which getByRole otherwise filters out by default.
@@ -281,25 +290,23 @@ describe('BudgetDetailPage budget lines', () => {
   // pre-create snapshot — the new line vanished even though it existed on
   // the backend. Disabling the trigger while that fetch is in flight
   // removes the race entirely, rather than reconciling the two results.
-  it('disables "Add category" while the initial lines fetch is in flight', async () => {
+  it('hides both "Add" buttons while the initial lines fetch is in flight', async () => {
     const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
     vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
-        true,
-      ),
-    );
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /add earning category/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /add spending category/i })).toBeNull();
+    });
 
     linesPromise.resolve([]);
 
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
-        false,
-      ),
-    );
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /add earning category/i })).toBeDefined();
+      expect(screen.getByRole('button', { name: /add spending category/i })).toBeDefined();
+    });
   });
 
   it('shows an error with a retry button when lines fail to load', async () => {
@@ -336,9 +343,9 @@ describe('BudgetDetailPage budget lines', () => {
     await screen.findByText('Monthly Budget');
     expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
@@ -378,15 +385,17 @@ describe('BudgetDetailPage budget lines', () => {
     await screen.findByText('Groceries');
   });
 
-  it('disables "Add category" while the lines list is in an error state', async () => {
+  it('hides both "Add" buttons while the lines list is in an error state', async () => {
     vi.spyOn(budgetsService, 'listBudgetLines').mockRejectedValue(new Error('boom'));
     renderPage();
     await screen.findByText('Monthly Budget');
 
     await screen.findByText('Could not load categories.');
-    expect(screen.getByRole('button', { name: /add category/i }).hasAttribute('disabled')).toBe(
-      true,
-    );
+    // Nowhere to show a successfully-created line while the columns
+    // themselves aren't rendered — the controls disappear rather than
+    // sitting there disabled.
+    expect(screen.queryByRole('button', { name: /add earning category/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /add spending category/i })).toBeNull();
   });
 
   // Regresses to a bug where a create that started against budget 9 could
@@ -409,9 +418,9 @@ describe('BudgetDetailPage budget lines', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 
@@ -474,9 +483,9 @@ describe('BudgetDetailPage budget lines', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add category/i }));
+    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Bonus (Earning)' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
     fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
 

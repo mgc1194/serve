@@ -57,3 +57,27 @@ describe('BudgetLineRow diff — spending category (planned - actual)', () => {
     expect(screen.getByText('−$80.00')).toBeDefined();
   });
 });
+
+// A large amount (five digits and up) could otherwise wrap onto a second
+// line within the cell once a category name on the same row pushes these
+// columns narrow — nowrap keeps it on one line, letting the table's own
+// TableContainer scroll horizontally instead if it genuinely doesn't fit.
+describe('BudgetLineRow does not wrap large amounts', () => {
+  it('keeps the budgeted amount on one line', () => {
+    setup({ planned_amount: 12345 });
+    expect(getComputedStyle(screen.getByText('$12,345.00')).whiteSpace).toBe('nowrap');
+  });
+
+  it('keeps the actual total on one line', () => {
+    setup({ actual_amount: '12345.00' });
+    expect(getComputedStyle(screen.getByText('$12,345.00')).whiteSpace).toBe('nowrap');
+  });
+
+  it('keeps the diff on one line', () => {
+    setup({ category_type: 'spending', planned_amount: 20000, actual_amount: '7655.00' });
+    // The diff text sits in a nested <span> (Typography) — the nowrap
+    // style is on the <td> itself, so check via the cell, not the span.
+    const diffCell = screen.getByText('+$12,345.00').closest('td');
+    expect(getComputedStyle(diffCell!).whiteSpace).toBe('nowrap');
+  });
+});
