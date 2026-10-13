@@ -50,47 +50,13 @@ describe('BudgetColumn rendering', () => {
   });
 });
 
-describe('BudgetColumn progress bar', () => {
-  it('shows the total planned and total actual amounts', () => {
+// Only presence and totals delegation — BudgetProgressBar's own behavior
+// (color, 100% cap, zero-planned handling) is covered by its own test file.
+describe('BudgetColumn progress bar delegation', () => {
+  it('shows a progress bar reflecting the totals of all its lines', () => {
     render(<BudgetColumn title="Spending" type="spending" lines={LINES} />);
     // LINES: planned 500 + 200 = 700; actual 420 + 250 = 670.
     expect(screen.getByText('$670.00 actual')).toBeDefined();
     expect(screen.getByText('$700.00 planned')).toBeDefined();
-  });
-
-  it('shows success color when under budget (spending)', () => {
-    const lines = [makeBudgetLine({ planned_amount: 500, actual_amount: '400.00' })];
-    render(<BudgetColumn title="Spending" type="spending" lines={lines} />);
-    expect(screen.getByRole('progressbar').className).toMatch(/colorSuccess/);
-  });
-
-  it('shows error color when over budget (spending)', () => {
-    const lines = [makeBudgetLine({ planned_amount: 500, actual_amount: '600.00' })];
-    render(<BudgetColumn title="Spending" type="spending" lines={lines} />);
-    expect(screen.getByRole('progressbar').className).toMatch(/colorError/);
-  });
-
-  it('shows success color when exceeding an earning goal', () => {
-    const lines = [makeBudgetLine({ planned_amount: 500, actual_amount: '600.00' })];
-    render(<BudgetColumn title="Earnings" type="earning" lines={lines} />);
-    expect(screen.getByRole('progressbar').className).toMatch(/colorSuccess/);
-  });
-
-  it('shows error color when falling short of an earning goal', () => {
-    const lines = [makeBudgetLine({ planned_amount: 500, actual_amount: '400.00' })];
-    render(<BudgetColumn title="Earnings" type="earning" lines={lines} />);
-    expect(screen.getByRole('progressbar').className).toMatch(/colorError/);
-  });
-
-  it('caps the bar value at 100% when actual exceeds planned', () => {
-    const lines = [makeBudgetLine({ planned_amount: 500, actual_amount: '600.00' })];
-    render(<BudgetColumn title="Spending" type="spending" lines={lines} />);
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('100');
-  });
-
-  it('shows a 0% bar without dividing by zero when nothing is planned', () => {
-    const lines = [makeBudgetLine({ planned_amount: 0, actual_amount: '0.00' })];
-    render(<BudgetColumn title="Spending" type="spending" lines={lines} />);
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
   });
 });

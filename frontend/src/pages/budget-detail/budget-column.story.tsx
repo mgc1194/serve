@@ -77,25 +77,6 @@ export const EmptySpendingWithCustomMessage: Story = {
   },
 };
 
-// The progress bar's color follows the same "positive is good" convention
-// as each row's own Diff — over budget reads as an error here, same as
-// under an earning goal would.
-export const OverBudgetSpending: Story = {
-  args: {
-    title: 'Spending',
-    type: 'spending',
-    lines: [
-      makeBudgetLine({
-        id: 6,
-        category_name: 'Groceries',
-        category_type: 'spending',
-        planned_amount: 400,
-        actual_amount: '550.00',
-      }),
-    ],
-  },
-};
-
 // Matches how the two columns will actually sit on the Budget detail page —
 // side by side, right below the net-this-month figure.
 export const SideBySide: Story = {
