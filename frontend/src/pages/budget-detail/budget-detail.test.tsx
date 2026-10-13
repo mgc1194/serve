@@ -345,6 +345,38 @@ describe('BudgetDetailPage sync actuals', () => {
     // Budget 10 is still on screen, unaffected by budget 9's stale sync.
     expect(screen.getByText('Vacation Fund')).toBeDefined();
     expect(screen.queryByText(/^Synced /)).toBeNull();
+    // Regresses to a bug where the stale sync's `finally` skipped
+    // setIsSyncing(false) (its own staleness guard caught it too, since
+    // isSyncing is page-global, not re-derived from `budget`) — leaving
+    // budget 10's own Sync button disabled forever, with no sync of its
+    // own ever started.
+    expect(screen.getByRole('button', { name: /sync budget/i }).hasAttribute('disabled')).toBe(
+      false,
+    );
+  });
+
+  // Different leak than the stale-sync test above: here the sync for
+  // budget 9 fails and settles WHILE budget 9 is still on screen (so its
+  // error Alert is already showing), and only then does the route move to
+  // budget 10 — syncError is page-global state with nothing to clear it
+  // on navigation, so without the fix budget 9's error Alert would still
+  // be sitting there under budget 10's own header.
+  it("does not carry a previous budget's sync error into a newly navigated budget", async () => {
+    vi.spyOn(budgetsService, 'syncBudget').mockRejectedValue(new Error('boom'));
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET])
+      .mockResolvedValueOnce([makeBudget({ id: 10, name: 'Vacation Fund' })]);
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
+    await screen.findByText('Could not sync budget.');
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await screen.findByText('Vacation Fund');
+
+    expect(screen.queryByText('Could not sync budget.')).toBeNull();
   });
 });
 

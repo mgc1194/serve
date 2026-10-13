@@ -77,6 +77,12 @@ export function BudgetDetailPage() {
   const [isLoadingLines, setIsLoadingLines] = useState(false);
   const [linesError, setLinesError] = useState<string | null>(null);
 
+  // Declared up here (rather than next to handleSync, below) so the
+  // budget-loading effect's load() can reset them on a scope change — see
+  // the comment inside it.
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
   // loadRef gives the retry button a stable reference to the latest fetch
   // without making it a useEffect dependency.
   const loadRef = useRef<() => void>(() => {});
@@ -105,6 +111,21 @@ export function BudgetDetailPage() {
       // reset either.
       setBudget(null);
       setLineDialogType(null);
+      // Same reasoning for the Sync button's own state: it's keyed off
+      // currentBudgetIdRef the same way onCreate is below, but that guard
+      // only protects against OVERWRITING the new scope with a stale
+      // result — it does nothing for isSyncing/syncError themselves. A
+      // sync started against the old budget, still in flight when the
+      // scope changes, hits that guard on resolution and skips
+      // setIsSyncing(false) entirely — since this state is page-global,
+      // not re-derived from `budget`, the NEW budget's Sync button would
+      // otherwise stay disabled forever, and a previous budget's error
+      // could carry over into the new scope. Resetting here — on
+      // budgetId/householdId actually changing — rather than every time
+      // `budget` itself refreshes (e.g. a successful sync replacing it)
+      // is what keeps this from firing on every sync.
+      setIsSyncing(false);
+      setSyncError(null);
 
       if (householdId === undefined) {
         setIsLoading(false);
@@ -207,9 +228,6 @@ export function BudgetDetailPage() {
   useEffect(() => {
     currentBudgetIdRef.current = budget?.id;
   }, [budget]);
-
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
 
   async function handleSync() {
     if (!budget || isSyncing) return;
