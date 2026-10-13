@@ -23,6 +23,7 @@ import {
 import { BudgetLineRow } from '@pages/budget-detail/budget-line-row';
 import { BudgetProgressBar } from '@pages/budget-detail/budget-progress-bar';
 import type { BudgetLine } from '@serve/types/global';
+import { sumCurrency } from '@utils/currency';
 
 const HEADER_CELL_SX = { fontWeight: 700, textTransform: 'uppercase', fontSize: '0.75rem' } as const;
 
@@ -39,8 +40,12 @@ export function BudgetColumn({
   lines,
   emptyMessage = 'No categories yet.',
 }: BudgetColumnProps) {
-  const totalPlanned = lines.reduce((sum, line) => sum + line.planned_amount, 0);
-  const totalActual = lines.reduce((sum, line) => sum + Number(line.actual_amount), 0);
+  // sumCurrency, not a plain reduce — floating-point addition drifts
+  // across repeated sums (e.g. 0.1 + 0.2 !== 0.3), which can flip
+  // BudgetProgressBar's over/under color at the exact-equal boundary even
+  // when the true totals match. See sumCurrency's own comment.
+  const totalPlanned = sumCurrency(lines.map(line => line.planned_amount));
+  const totalActual = sumCurrency(lines.map(line => Number(line.actual_amount)));
 
   return (
     <Box sx={{ flex: 1, minWidth: 0 }}>

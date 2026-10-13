@@ -59,4 +59,19 @@ describe('BudgetColumn progress bar delegation', () => {
     expect(screen.getByText('$670.00 actual')).toBeDefined();
     expect(screen.getByText('$700.00 planned')).toBeDefined();
   });
+
+  // Plain floating-point addition of these particular amounts puts
+  // totalPlanned at 0.3 and totalActual at 0.30000000000000004 — equal in
+  // dollars, but (planned - actual) lands a hair below zero, which used to
+  // flip the bar to the "over budget" color even though actual exactly
+  // equals planned. Summing via cents (sumCurrency) keeps them exactly
+  // equal instead.
+  it('does not let floating-point summation drift flip the over/under color for equal totals', () => {
+    const lines = [
+      makeBudgetLine({ id: 1, planned_amount: 0.3, actual_amount: '0.10' }),
+      makeBudgetLine({ id: 2, planned_amount: 0, actual_amount: '0.20' }),
+    ];
+    render(<BudgetColumn title="Spending" type="spending" lines={lines} />);
+    expect(screen.getByRole('progressbar').className).toMatch(/colorSuccess/);
+  });
 });
