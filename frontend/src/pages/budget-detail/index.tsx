@@ -94,8 +94,23 @@ export function BudgetDetailPage() {
   // under it. Same pattern as BudgetsPage.
   const requestIdRef = useRef(0);
 
+  // Identifies the current route+household "visit", for handleSync's own
+  // staleness guard below — deliberately a generation counter, not a
+  // budget-id comparison like currentBudgetIdRef (used for onCreate's
+  // guard, further down). Comparing ids alone can't tell two separate
+  // visits to the SAME budget apart: navigate 9 -> 10 -> back to 9 while a
+  // sync from the FIRST visit to 9 is still in flight, and a budget-id-only
+  // check would see id 9 both times and wrongly let that stale response
+  // overwrite the second visit's budget/lines. Bumped here, in the effect
+  // body itself rather than inside load(), so a manual Retry click on the
+  // SAME scope (which also calls load(), via loadRef) doesn't bump it —
+  // only an actual budgetId/householdId change should invalidate an
+  // in-flight sync.
+  const scopeGenerationRef = useRef(0);
+
   useEffect(() => {
     let ignore = false;
+    scopeGenerationRef.current += 1;
 
     function load() {
       const requestId = ++requestIdRef.current;
@@ -232,22 +247,26 @@ export function BudgetDetailPage() {
   async function handleSync() {
     if (!budget || isSyncing) return;
     const syncedBudgetId = budget.id;
+    const syncScope = scopeGenerationRef.current;
 
     setIsSyncing(true);
     setSyncError(null);
     try {
       const result = await syncBudget(syncedBudgetId);
-      // Same staleness guard as onCreate below: the route/household can
-      // move to a different budget while this request is still in flight.
-      if (syncedBudgetId !== currentBudgetIdRef.current) return;
+      // scopeGenerationRef, not a budget-id comparison — see the comment
+      // where it's declared above: the route/household can move to a
+      // different budget and back to this same one while this request is
+      // still in flight, and an id-only check can't tell that revisit
+      // apart from never having left.
+      if (syncScope !== scopeGenerationRef.current) return;
       setBudget(result.budget);
       setLines(result.lines);
       setLinesError(null);
     } catch (err) {
-      if (syncedBudgetId !== currentBudgetIdRef.current) return;
+      if (syncScope !== scopeGenerationRef.current) return;
       setSyncError(err instanceof ApiError ? err.message : 'Could not sync budget.');
     } finally {
-      if (syncedBudgetId === currentBudgetIdRef.current) setIsSyncing(false);
+      if (syncScope === scopeGenerationRef.current) setIsSyncing(false);
     }
   }
 

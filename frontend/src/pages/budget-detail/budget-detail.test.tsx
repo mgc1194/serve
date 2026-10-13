@@ -355,6 +355,54 @@ describe('BudgetDetailPage sync actuals', () => {
     );
   });
 
+  // A budget-id-only staleness check can't tell two separate visits to the
+  // SAME budget apart: navigate 9 -> 10 -> back to 9 while a sync from the
+  // FIRST visit to 9 is still in flight, and an id-only guard would see id
+  // 9 both times and wrongly let that stale response overwrite the second
+  // visit's already-fresher budget/lines.
+  it('ignores a stale sync that resolves after navigating away and back to the same budget', async () => {
+    const staleSyncPromise = deferred<{ budget: Budget; lines: ReturnType<typeof makeBudgetLine>[] }>();
+    vi.spyOn(budgetsService, 'syncBudget').mockReturnValue(staleSyncPromise.promise);
+
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET]) // first visit to budget 9
+      .mockResolvedValueOnce([makeBudget({ id: 10, name: 'Vacation Fund' })]) // -> budget 10
+      .mockResolvedValueOnce([BUDGET]); // -> back to budget 9, second visit
+    vi.spyOn(budgetsService, 'listBudgetLines')
+      .mockResolvedValueOnce([]) // budget 9, first visit
+      .mockResolvedValueOnce([]) // budget 10
+      .mockResolvedValueOnce([makeBudgetLine({ category_name: 'Fresh Line' })]); // budget 9, second visit
+
+    renderPageWithNav();
+    await screen.findByText('Monthly Budget');
+
+    // Starts a sync during the FIRST visit to budget 9; it never resolves
+    // until well after the page has moved on.
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await screen.findByText('Vacation Fund');
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 9/i, hidden: true }));
+    await screen.findByText('Fresh Line');
+
+    await act(async () => {
+      staleSyncPromise.resolve({
+        budget: makeBudget({ id: 9, name: 'Monthly Budget', synced_at: '2020-01-01T00:00:00Z' }),
+        lines: [makeBudgetLine({ id: 999, category_name: 'Stale Line' })],
+      });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    // Still showing the second visit's fresh data, not the stale sync's.
+    expect(screen.getByText('Fresh Line')).toBeDefined();
+    expect(screen.queryByText('Stale Line')).toBeNull();
+    expect(screen.getByText('Never synced')).toBeDefined();
+    expect(screen.getByRole('button', { name: /sync budget/i }).hasAttribute('disabled')).toBe(
+      false,
+    );
+  });
+
   // Different leak than the stale-sync test above: here the sync for
   // budget 9 fails and settles WHILE budget 9 is still on screen (so its
   // error Alert is already showing), and only then does the route move to
