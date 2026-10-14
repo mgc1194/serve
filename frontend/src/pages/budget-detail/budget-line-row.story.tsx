@@ -83,3 +83,45 @@ export const RightOnPlan: Story = {
     }),
   },
 };
+
+export const EditMode: Story = {
+  args: {
+    line: makeBudgetLine({
+      category_name: 'Groceries',
+      category_type: 'spending',
+      planned_amount: 500,
+      actual_amount: '420.00',
+    }),
+    isEditMode: true,
+    plannedAmountInput: '500',
+  },
+};
+
+// A draft that fails the whole-dollar-digits rule — the field shows error
+// state, same as a blank one would (nothing has been typed into it yet).
+export const EditModeInvalidDraft: Story = {
+  args: {
+    line: makeBudgetLine({
+      category_name: 'Groceries',
+      category_type: 'spending',
+      planned_amount: 500,
+      actual_amount: '420.00',
+    }),
+    isEditMode: true,
+    plannedAmountInput: '420.50',
+  },
+};
+
+export const EditModeDisabled: Story = {
+  args: {
+    line: makeBudgetLine({
+      category_name: 'Groceries',
+      category_type: 'spending',
+      planned_amount: 500,
+      actual_amount: '420.00',
+    }),
+    isEditMode: true,
+    plannedAmountInput: '500',
+    disabled: true,
+  },
+};

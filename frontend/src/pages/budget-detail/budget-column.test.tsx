@@ -1,7 +1,7 @@
 // pages/budget-detail/budget-column.test.tsx
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BudgetColumn } from '@pages/budget-detail/budget-column';
 import { makeBudgetLine } from '@serve/mocks';
@@ -73,5 +73,74 @@ describe('BudgetColumn progress bar delegation', () => {
     ];
     render(<BudgetColumn title="Spending" type="spending" lines={lines} />);
     expect(screen.getByRole('progressbar').className).toMatch(/colorSuccess/);
+  });
+});
+
+// Only presence, defaulting, and prop passthrough — each BudgetLineRow's
+// own edit-mode behavior (field value, validity, delete) is covered by
+// its own test file.
+describe('BudgetColumn edit mode delegation', () => {
+  it("shows a delete button per row and defaults an untouched line's field to its committed amount", () => {
+    render(<BudgetColumn title="Spending" type="spending" lines={LINES} isEditMode />);
+    expect(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i })).toHaveProperty(
+      'value',
+      '500',
+    );
+    expect(screen.getByRole('button', { name: /delete groceries/i })).toBeDefined();
+  });
+
+  it('does not show editable fields or delete buttons outside edit mode', () => {
+    render(<BudgetColumn title="Spending" type="spending" lines={LINES} />);
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    expect(screen.queryByRole('button', { name: /delete groceries/i })).toBeNull();
+  });
+
+  it("passes a line's own draft text through instead of its committed amount", () => {
+    render(
+      <BudgetColumn
+        title="Spending"
+        type="spending"
+        lines={LINES}
+        isEditMode
+        plannedAmountInputs={{ 1: '750' }}
+      />,
+    );
+    expect(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i })).toHaveProperty(
+      'value',
+      '750',
+    );
+  });
+
+  it('forwards onPlannedAmountChange and onDelete with the right line id', () => {
+    const onPlannedAmountChange = vi.fn();
+    const onDelete = vi.fn();
+    render(
+      <BudgetColumn
+        title="Spending"
+        type="spending"
+        lines={LINES}
+        isEditMode
+        onPlannedAmountChange={onPlannedAmountChange}
+        onDelete={onDelete}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i }), {
+      target: { value: '750' },
+    });
+    expect(onPlannedAmountChange).toHaveBeenCalledWith(1, '750');
+
+    fireEvent.click(screen.getByRole('button', { name: /delete groceries/i }));
+    expect(onDelete).toHaveBeenCalledWith(1);
+  });
+
+  it('disables every row while disabled is true', () => {
+    render(<BudgetColumn title="Spending" type="spending" lines={LINES} isEditMode disabled />);
+    expect(
+      screen.getByRole('spinbutton', { name: /groceries budgeted amount/i }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(screen.getByRole('button', { name: /delete groceries/i }).hasAttribute('disabled')).toBe(
+      true,
+    );
   });
 });

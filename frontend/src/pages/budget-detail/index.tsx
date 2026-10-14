@@ -3,13 +3,16 @@
 // line from real transactions (actual_amount is a cache — see Budget's own
 // docstring — so without a sync the Actual/Diff columns, and the Net
 // figure below, just show whatever was last computed, possibly nothing),
-// a Net headline (total earnings actual minus total spending actual,
-// across every line already fetched here — no separate endpoint needed),
-// the Earnings/Spending columns (BudgetColumn/BudgetLineRow) built from
-// the budget's own lines, and an "Add X category" button under each
-// column — a single shared button looked like it only added earning
-// categories (it sat right under the Earnings column), so each column
-// gets its own, pre-scoped to that column's type.
+// an Edit control that stages planned-amount changes and deletions
+// locally until "Confirm changes" — see the edit-mode state below — a
+// Net headline (total earnings actual minus total spending actual,
+// across every line already fetched here — no separate endpoint needed,
+// and live-previewing any deletion staged in edit mode the same way the
+// columns below do), the Earnings/Spending columns (BudgetColumn/
+// BudgetLineRow) built from the budget's own lines, and an "Add X
+// category" button under each column — a single shared button looked
+// like it only added earning categories (it sat right under the Earnings
+// column), so each column gets its own, pre-scoped to that column's type.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
@@ -17,6 +20,7 @@
 
 import AddIcon from '@mui/icons-material/Add';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import EditIcon from '@mui/icons-material/Edit';
 import SyncIcon from '@mui/icons-material/Sync';
 import { Alert, Box, Button, CircularProgress, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
@@ -27,8 +31,15 @@ import { AppHeader } from '@layout/app-header';
 import { BudgetColumn } from '@pages/budget-detail/budget-column';
 import { CreateBudgetLineDialog } from '@pages/budget-detail/create-budget-line-dialog';
 import type { Budget, BudgetLine } from '@serve/types/global';
-import { listBudgetLines, listBudgets, syncBudget, ApiError } from '@services/budgets';
-import { formatCurrency, signPrefix, sumCurrency } from '@utils/currency';
+import {
+  listBudgetLines,
+  listBudgets,
+  syncBudget,
+  updateBudgetLine,
+  deleteBudgetLine,
+  ApiError,
+} from '@services/budgets';
+import { formatCurrency, isWholeDollarAmount, signPrefix, sumCurrency } from '@utils/currency';
 
 // Matches transaction-row.tsx's formatDate, for consistency across the
 // app. Appending T00:00:00 forces local-time parsing of the bare
@@ -60,6 +71,14 @@ function formatSyncedAt(syncedAt: string | null): string {
   })}`;
 }
 
+// isWholeDollarAmount applied to a staged edit of an existing line's
+// planned_amount. Returns null for anything that isn't exactly that —
+// including an empty string, mid-edit — so callers can tell "not editable
+// yet" apart from "edited to a real number".
+function parsePlannedAmountDraft(raw: string): number | null {
+  return isWholeDollarAmount(raw) ? Number(raw) : null;
+}
+
 export function BudgetDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -83,6 +102,20 @@ export function BudgetDetailPage() {
   // the comment inside it.
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Edit mode stages planned-amount changes and deletions locally —
+  // nothing reaches the backend until "Confirm changes" — rather than
+  // saving each one immediately. plannedEdits holds the raw TextField
+  // text per line id (not yet parsed/validated; see
+  // parsePlannedAmountDraft), so a line with no entry here hasn't been
+  // touched this edit session. Declared up here for the same reason as
+  // isSyncing/syncError above: load() resets all of this on an actual
+  // scope change.
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [plannedEdits, setPlannedEdits] = useState<Record<number, string>>({});
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<number>>(new Set());
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // loadRef gives the retry button a stable reference to the latest fetch
   // without making it a useEffect dependency.
@@ -142,6 +175,14 @@ export function BudgetDetailPage() {
       // is what keeps this from firing on every sync.
       setIsSyncing(false);
       setSyncError(null);
+      // Same reasoning again, for edit mode: a route/household change
+      // while mid-edit would otherwise leave stale drafts (and a stuck
+      // "Confirm changes") pointed at a budget no longer on screen.
+      setIsEditMode(false);
+      setPlannedEdits({});
+      setPendingDeleteIds(new Set());
+      setIsConfirming(false);
+      setConfirmError(null);
 
       if (householdId === undefined) {
         setIsLoading(false);
@@ -290,15 +331,163 @@ export function BudgetDetailPage() {
     }
   }
 
-  const earningLines = lines.filter(line => line.category_type === 'earning');
-  const spendingLines = lines.filter(line => line.category_type === 'spending');
+  function handleEnterEditMode() {
+    if (isSyncing) return;
+    setIsEditMode(true);
+  }
+
+  function handleCancelEdit() {
+    if (isConfirming) return;
+    setIsEditMode(false);
+    setPlannedEdits({});
+    setPendingDeleteIds(new Set());
+    setConfirmError(null);
+  }
+
+  function handlePlannedAmountChange(lineId: number, value: string) {
+    setPlannedEdits(prev => ({ ...prev, [lineId]: value }));
+  }
+
+  function handleDeleteDraft(lineId: number) {
+    setPendingDeleteIds(prev => new Set(prev).add(lineId));
+    // A pending edit for a line that's now being deleted is moot — drop
+    // it so confirm doesn't also fire a pointless PATCH right before the
+    // DELETE for the same line.
+    setPlannedEdits(prev => {
+      if (!(lineId in prev)) return prev;
+      const next = { ...prev };
+      delete next[lineId];
+      return next;
+    });
+  }
+
+  async function handleConfirmChanges() {
+    if (isConfirming) return;
+    const confirmScope = scopeGenerationRef.current;
+
+    const edits = Object.entries(plannedEdits)
+      .filter(([idStr]) => !pendingDeleteIds.has(Number(idStr)))
+      .map(([idStr, raw]) => ({ id: Number(idStr), plannedAmount: parsePlannedAmountDraft(raw) }))
+      // Confirm is disabled while any draft is invalid (see hasInvalidDraft
+      // below), so this filters out only edits with nothing to send —
+      // e.g. a line whose draft matches its already-committed value.
+      .filter((edit): edit is { id: number; plannedAmount: number } => edit.plannedAmount !== null);
+    const deletes = [...pendingDeleteIds];
+
+    if (edits.length === 0 && deletes.length === 0) {
+      setIsEditMode(false);
+      return;
+    }
+
+    setIsConfirming(true);
+    setConfirmError(null);
+
+    const results = await Promise.allSettled([
+      ...edits.map(({ id, plannedAmount }) => updateBudgetLine(id, { planned_amount: plannedAmount })),
+      ...deletes.map(id => deleteBudgetLine(id)),
+    ]);
+
+    // Same staleness guard as handleSync/onCreate: the route/household can
+    // move to a different budget while this batch is still in flight. The
+    // writes above still happened against the OLD budget (correctly —
+    // that's what was asked for); this only stops their result from
+    // touching whatever's now on screen.
+    if (confirmScope !== scopeGenerationRef.current) return;
+
+    const succeededEditIds = new Set<number>();
+    const succeededDeleteIds = new Set<number>();
+    let failedCount = 0;
+    results.forEach((result, i) => {
+      const isEdit = i < edits.length;
+      if (result.status === 'rejected') {
+        failedCount += 1;
+        return;
+      }
+      if (isEdit) succeededEditIds.add(edits[i].id);
+      else succeededDeleteIds.add(deletes[i - edits.length]);
+    });
+
+    if (succeededEditIds.size > 0 || succeededDeleteIds.size > 0) {
+      setLines(prev =>
+        prev
+          .filter(line => !succeededDeleteIds.has(line.id))
+          .map(line => {
+            if (!succeededEditIds.has(line.id)) return line;
+            const plannedAmount = edits.find(edit => edit.id === line.id)?.plannedAmount;
+            return plannedAmount === undefined ? line : { ...line, planned_amount: plannedAmount };
+          }),
+      );
+    }
+
+// Clears a succeeded EDIT's draft. A failed edit stays staged
+    // (and visible/editable) so the user can see it and retry.
+    setPlannedEdits(prev => {
+      const next = { ...prev };
+      succeededEditIds.forEach(id => delete next[id]);
+      return next;
+    });
+    // Every ATTEMPTED delete clears here, succeeded or not — not just
+    // succeededDeleteIds. visibleLines (below) filters by pendingDeleteIds
+    // alone, so leaving a failed delete's id in this set would keep
+    // hiding that row forever, with no way to see it, undo it, or retry
+    // it — exactly backwards from what the error message says ("stays
+    // staged", implying it's still there to act on). Reverting it to
+    // "not marked for deletion" instead makes the row visible again; if
+    // the user still wants it gone, clicking Delete starts a fresh attempt.
+    setPendingDeleteIds(prev => {
+      const next = new Set(prev);
+      deletes.forEach(id => next.delete(id));
+      return next;
+    });
+
+    if (failedCount > 0) {
+      setConfirmError(
+        `${failedCount} change${failedCount === 1 ? '' : 's'} could not be saved. Please try again.`,
+      );
+    } else {
+      setIsEditMode(false);
+    }
+    setIsConfirming(false);
+  }
+
+  // hasInvalidDraft gates the Confirm button — rather than silently
+  // dropping an invalid edit at confirm time (which would have no visible
+  // effect and no error, since nothing was ever sent for it), the user
+  // has to resolve it before confirming at all. The TextField itself
+  // flags which one via the same parsePlannedAmountDraft check.
+  const hasInvalidDraft = Object.values(plannedEdits).some(
+    raw => parsePlannedAmountDraft(raw) === null,
+  );
+
+  // Drafts applied to a display copy of `lines` — not `lines` itself,
+  // which stays the last-confirmed server state until Confirm actually
+  // succeeds. A line with an invalid (or not-yet-edited) draft keeps
+  // showing its last-committed planned_amount here; the TextField showing
+  // the raw, possibly-invalid text is a separate concern (plannedEdits
+  // itself, passed straight through to BudgetColumn below).
+  const visibleLines = lines
+    .filter(line => !pendingDeleteIds.has(line.id))
+    .map(line => {
+      const raw = plannedEdits[line.id];
+      if (raw === undefined) return line;
+      const plannedAmount = parsePlannedAmountDraft(raw);
+      return plannedAmount === null ? line : { ...line, planned_amount: plannedAmount };
+    });
+
+  const earningLines = visibleLines.filter(line => line.category_type === 'earning');
+  const spendingLines = visibleLines.filter(line => line.category_type === 'spending');
   // sumCurrency over every line in one pass (not a separate subtraction of
   // two already-summed totals) — avoids a second opportunity for
   // floating-point drift on top of summing each side. See sumCurrency's
   // own comment for why this matters at all: display always rounds to
   // cents regardless, but a diff's sign (the color below) doesn't.
+  // visibleLines, not `lines` — a line staged for deletion in edit mode
+  // already disappears from the columns/progress bars below, so Net
+  // should stop counting its actual_amount too, for the same live-preview
+  // consistency (editing a planned_amount doesn't affect Net either way,
+  // since that only touches actual_amount).
   const net = sumCurrency(
-    lines.map(line => (line.category_type === 'earning' ? 1 : -1) * Number(line.actual_amount)),
+    visibleLines.map(line => (line.category_type === 'earning' ? 1 : -1) * Number(line.actual_amount)),
   );
 
   return (
@@ -349,15 +538,53 @@ export function BudgetDetailPage() {
                 <Typography color="text.secondary">{formatPeriod(budget)}</Typography>
               </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.5 }}>
-                <Button
-                  startIcon={isSyncing ? <CircularProgress size={14} color="inherit" /> : <SyncIcon />}
-                  variant="outlined"
-                  size="small"
-                  onClick={handleSync}
-                  disabled={isSyncing}
-                >
-                  Sync budget
-                </Button>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    startIcon={isSyncing ? <CircularProgress size={14} color="inherit" /> : <SyncIcon />}
+                    variant="outlined"
+                    size="small"
+                    onClick={handleSync}
+                    // Also disabled by isEditMode — a sync's response
+                    // replaces `lines` wholesale, which would wipe out
+                    // whatever's staged but not yet confirmed.
+                    disabled={isSyncing || isEditMode}
+                  >
+                    Sync budget
+                  </Button>
+                  {isEditMode ? (
+                    <>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleCancelEdit}
+                        disabled={isConfirming}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleConfirmChanges}
+                        disabled={isConfirming || hasInvalidDraft}
+                        startIcon={
+                          isConfirming ? <CircularProgress size={14} color="inherit" /> : undefined
+                        }
+                      >
+                        Confirm changes
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      startIcon={<EditIcon />}
+                      variant="outlined"
+                      size="small"
+                      onClick={handleEnterEditMode}
+                      disabled={isSyncing}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </Box>
                 <Typography variant="body2" color="text.secondary">
                   {formatSyncedAt(budget.synced_at)}
                 </Typography>
@@ -366,6 +593,11 @@ export function BudgetDetailPage() {
             {syncError && (
               <Alert severity="error" onClose={() => setSyncError(null)} sx={{ mt: 1 }}>
                 {syncError}
+              </Alert>
+            )}
+            {confirmError && (
+              <Alert severity="error" onClose={() => setConfirmError(null)} sx={{ mt: 1 }}>
+                {confirmError}
               </Alert>
             )}
 
@@ -412,33 +644,53 @@ export function BudgetDetailPage() {
               // loaded successfully — the loading/error branches above
               // hide them entirely (there's no column to add into while
               // either one is showing). They're disabled (not hidden)
-              // while isSyncing, though: a line created in that window
+              // while isSyncing or isEditMode: a line created mid-sync
               // would exist only in `lines`, not in the sync's own
-              // in-flight snapshot (computed server-side before the
-              // create), and setLines(result.lines) on resolution would
-              // silently drop it the moment the sync completed.
+              // in-flight snapshot, and setLines(result.lines) on
+              // resolution would silently drop it; a line created
+              // mid-edit would have no staged draft of its own and would
+              // just add an unrelated complication to what edit mode is
+              // meant to be reconciling.
               <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <BudgetColumn title="Earnings" type="earning" lines={earningLines} />
+                  <BudgetColumn
+                    title="Earnings"
+                    type="earning"
+                    lines={earningLines}
+                    isEditMode={isEditMode}
+                    plannedAmountInputs={plannedEdits}
+                    onPlannedAmountChange={handlePlannedAmountChange}
+                    onDelete={handleDeleteDraft}
+                    disabled={isConfirming}
+                  />
                   <Button
                     startIcon={<AddIcon />}
                     variant="outlined"
                     size="small"
                     onClick={() => setLineDialogType('earning')}
-                    disabled={isSyncing}
+                    disabled={isSyncing || isEditMode}
                     sx={{ mt: 2 }}
                   >
                     Add earning category
                   </Button>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <BudgetColumn title="Spending" type="spending" lines={spendingLines} />
+                  <BudgetColumn
+                    title="Spending"
+                    type="spending"
+                    lines={spendingLines}
+                    isEditMode={isEditMode}
+                    plannedAmountInputs={plannedEdits}
+                    onPlannedAmountChange={handlePlannedAmountChange}
+                    onDelete={handleDeleteDraft}
+                    disabled={isConfirming}
+                  />
                   <Button
                     startIcon={<AddIcon />}
                     variant="outlined"
                     size="small"
                     onClick={() => setLineDialogType('spending')}
-                    disabled={isSyncing}
+                    disabled={isSyncing || isEditMode}
                     sx={{ mt: 2 }}
                   >
                     Add spending category
