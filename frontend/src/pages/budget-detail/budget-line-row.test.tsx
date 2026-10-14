@@ -112,6 +112,16 @@ describe('BudgetLineRow edit mode', () => {
     expect(screen.getByRole('spinbutton').getAttribute('aria-invalid')).toBe('true');
   });
 
+  // Digits-only alone isn't enough — a digit string past
+  // Number.MAX_SAFE_INTEGER loses precision when parsed, same as
+  // parsePlannedAmountDraft (index.tsx) already guards against for
+  // Confirm's own validity gate. Without the same check here, this field
+  // would show no error for a draft that gate would still reject.
+  it('flags the field as invalid when the draft is too large to represent exactly', () => {
+    setup({ planned_amount: 500 }, { isEditMode: true, plannedAmountInput: '99999999999999999999' });
+    expect(screen.getByRole('spinbutton').getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('shows a delete button that calls onDelete with the line id', () => {
     const onDelete = vi.fn();
     setup({ id: 9, category_name: 'Groceries' }, { isEditMode: true, onDelete });

@@ -16,7 +16,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { IconButton, TableCell, TableRow, TextField, Typography } from '@mui/material';
 
 import type { BudgetLine } from '@serve/types/global';
-import { formatCurrency, signPrefix } from '@utils/currency';
+import { formatCurrency, isWholeDollarAmount, signPrefix } from '@utils/currency';
 
 interface BudgetLineRowProps {
   line: BudgetLine;
@@ -48,9 +48,7 @@ export function BudgetLineRow({
   const actual = Number(line.actual_amount);
   const planned = line.planned_amount;
   const diff = line.category_type === 'earning' ? actual - planned : planned - actual;
-  // Same whole-dollar-digits rule create-budget-line-dialog enforces for
-  // a new line's amount, applied here to an edit of an existing one too.
-  const isAmountInvalid = isEditMode && !/^\d+$/.test(plannedAmountInput ?? '');
+  const isAmountInvalid = isEditMode && !isWholeDollarAmount(plannedAmountInput ?? '');
 
   return (
     <TableRow hover>

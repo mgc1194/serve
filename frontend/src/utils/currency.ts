@@ -31,3 +31,15 @@ export function sumCurrency(values: number[]): number {
   const totalCents = values.reduce((sum, value) => sum + Math.round(value * 100), 0);
   return totalCents / 100;
 }
+
+// A whole-dollar amount: digits only (so no sign, decimal point, or
+// scientific/hex notation Number() would otherwise accept), and not so
+// large that Number() loses precision representing it. One shared
+// definition for every place a budget-line amount is typed in and
+// validated — create-budget-line-dialog's own new-line amount field, and
+// budget-detail's edit-mode field and its parent's validity check — so
+// those three can't drift apart from each other the way two of them once
+// did (one had the digits-only check but not the safe-integer one).
+export function isWholeDollarAmount(raw: string): boolean {
+  return /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw));
+}

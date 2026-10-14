@@ -882,6 +882,31 @@ describe('BudgetDetailPage edit mode', () => {
     expect(screen.queryByText('Groceries')).toBeNull();
   });
 
+  // Regresses to a bug where a FAILED delete's id stayed in
+  // pendingDeleteIds (only succeeded ones were cleared), which kept
+  // hiding the row forever — contradicting the error message's own
+  // "stays staged" framing, since there was no remaining way to see it,
+  // undo it, or retry deleting it. Reverting a failed delete's id (not
+  // just a succeeded one) makes the row reappear instead.
+  it('makes a failed delete reappear, visible and undeleted, rather than hiding it forever', async () => {
+    vi.spyOn(budgetsService, 'deleteBudgetLine').mockRejectedValue(new Error('boom'));
+
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete groceries/i }));
+    expect(screen.queryByText('Groceries')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm changes/i }));
+
+    await screen.findByText('1 change could not be saved. Please try again.');
+    expect(screen.getByText('Groceries')).toBeDefined();
+    // Reappeared as a normal, undeleted row — not still marked for
+    // deletion — so its own delete button is available to retry with.
+    expect(screen.getByRole('button', { name: /delete groceries/i })).toBeDefined();
+  });
+
   it('cancel discards staged edits and deletes without calling the API', async () => {
     const updateBudgetLine = vi.spyOn(budgetsService, 'updateBudgetLine');
     const deleteBudgetLine = vi.spyOn(budgetsService, 'deleteBudgetLine');

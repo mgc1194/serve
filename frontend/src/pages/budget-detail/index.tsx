@@ -38,6 +38,7 @@ import {
   deleteBudgetLine,
   ApiError,
 } from '@services/budgets';
+import { isWholeDollarAmount } from '@utils/currency';
 
 // Matches transaction-row.tsx's formatDate, for consistency across the
 // app. Appending T00:00:00 forces local-time parsing of the bare
@@ -69,13 +70,12 @@ function formatSyncedAt(syncedAt: string | null): string {
   })}`;
 }
 
-// Same whole-dollar-digits rule as create-budget-line-dialog's own amount
-// field, applied here to a staged edit of an existing line's
+// isWholeDollarAmount applied to a staged edit of an existing line's
 // planned_amount. Returns null for anything that isn't exactly that —
 // including an empty string, mid-edit — so callers can tell "not editable
 // yet" apart from "edited to a real number".
 function parsePlannedAmountDraft(raw: string): number | null {
-  return /^\d+$/.test(raw) && Number.isSafeInteger(Number(raw)) ? Number(raw) : null;
+  return isWholeDollarAmount(raw) ? Number(raw) : null;
 }
 
 export function BudgetDetailPage() {
@@ -418,16 +418,25 @@ export function BudgetDetailPage() {
       );
     }
 
-    // Clears drafts only for what succeeded — a failed edit/delete stays
-    // staged (and visible/editable) so the user can see it and retry.
+    // Clears a failed EDIT's draft too — different from a failed delete,
+    // below — a failed edit stays staged (and visible/editable) so the
+    // user can see it and retry.
     setPlannedEdits(prev => {
       const next = { ...prev };
       succeededEditIds.forEach(id => delete next[id]);
       return next;
     });
+    // Every ATTEMPTED delete clears here, succeeded or not — not just
+    // succeededDeleteIds. visibleLines (below) filters by pendingDeleteIds
+    // alone, so leaving a failed delete's id in this set would keep
+    // hiding that row forever, with no way to see it, undo it, or retry
+    // it — exactly backwards from what the error message says ("stays
+    // staged", implying it's still there to act on). Reverting it to
+    // "not marked for deletion" instead makes the row visible again; if
+    // the user still wants it gone, clicking Delete starts a fresh attempt.
     setPendingDeleteIds(prev => {
       const next = new Set(prev);
-      succeededDeleteIds.forEach(id => next.delete(id));
+      deletes.forEach(id => next.delete(id));
       return next;
     });
 
