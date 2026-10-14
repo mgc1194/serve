@@ -202,7 +202,22 @@ export function BudgetDetailPage() {
           if (ignore || requestId !== requestIdRef.current) return;
           const found = budgets.find(b => b.id === budgetId) ?? null;
           setBudget(found);
-          if (!found) setError('Budget not found.');
+          if (found) {
+            // Batched with setBudget above (React 18 batches state
+            // updates inside a promise callback), so the very first
+            // render that shows this new budget already reflects "lines
+            // not loaded yet" too. Without this, that render would still
+            // show isLoadingLines from the OLD scope — false, since the
+            // lines effect's own budget-is-null branch had just set it
+            // that way — letting Net (gated on isLoadingLines below)
+            // briefly show a stray $0.00 instead of its loading
+            // placeholder, for the one render before the lines effect
+            // (also keyed off this same budget, but effects run AFTER
+            // commit) catches up and sets it true itself.
+            setIsLoadingLines(true);
+          } else {
+            setError('Budget not found.');
+          }
         })
         .catch(err => {
           if (ignore || requestId !== requestIdRef.current) return;

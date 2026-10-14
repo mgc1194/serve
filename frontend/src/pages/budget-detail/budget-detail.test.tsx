@@ -209,7 +209,17 @@ describe('BudgetDetailPage net this month', () => {
 
   it('shows $0.00 with no sign when nothing has been synced yet', async () => {
     renderPage();
-    expect((await screen.findByText(/^Net this month:/)).textContent).toBe('Net this month: $0.00');
+    // waitFor, not findByText(/^Net this month:/) — the value sits in a
+    // nested span (so no single element's OWN text is ever "Net this
+    // month: $0.00" for a plain findByText to match), and findByText
+    // only waits for an element to first APPEAR, not for it to settle:
+    // the loading placeholder ("Net this month: —") matches the same
+    // regex the label text does, so it could resolve there instead of
+    // waiting for the lines fetch to actually finish. waitFor keeps
+    // re-checking the full textContent until it reaches its final value.
+    await waitFor(() =>
+      expect(screen.getByText(/^Net this month:/).textContent).toBe('Net this month: $0.00'),
+    );
   });
 
   // `lines` is [] during both the initial lines fetch and after it fails
@@ -277,7 +287,7 @@ describe('BudgetDetailPage add category', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
 
     expect(await screen.findByText('Add earning category', { selector: 'h2' })).toBeDefined();
   });
@@ -286,7 +296,7 @@ describe('BudgetDetailPage add category', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add spending category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add spending category/i }));
 
     expect(await screen.findByText('Add spending category', { selector: 'h2' })).toBeDefined();
   });
@@ -295,7 +305,7 @@ describe('BudgetDetailPage add category', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     await screen.findByText('Add earning category', { selector: 'h2' });
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
@@ -320,7 +330,7 @@ describe('BudgetDetailPage add category', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     await screen.findByText('Add earning category', { selector: 'h2' });
 
     // { hidden: true } — the open MUI Dialog marks the rest of the page
@@ -715,9 +725,9 @@ describe('BudgetDetailPage budget lines', () => {
 
     renderPage();
     await screen.findByText('Monthly Budget');
-    expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
+    expect(await screen.findAllByText('No categories yet.')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
@@ -792,7 +802,7 @@ describe('BudgetDetailPage budget lines', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
@@ -857,7 +867,7 @@ describe('BudgetDetailPage budget lines', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
