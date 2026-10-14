@@ -168,14 +168,49 @@ describe('BudgetDetailPage rendering', () => {
   });
 });
 
-describe('BudgetDetailPage net this month placeholder', () => {
-  // No real figure yet — wiring the actual net (sourced from the budget's
-  // lines) is deferred to a follow-up PR. This just confirms the section
-  // itself is present.
-  it('shows the placeholder net section', async () => {
+describe('BudgetDetailPage net this month', () => {
+  // Awaits the net figure itself (via findByText, which retries), not just
+  // 'Monthly Budget' followed by a synchronous check — the budget and the
+  // lines load via two separate effects, and asserting right after only
+  // the first settles is a real race: 'Monthly Budget' can (and, as
+  // written originally, reliably did) render before the lines fetch's own
+  // .then() has run, catching the page in its pre-lines-loaded state.
+  it('shows total earnings actual minus total spending actual, across both columns', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_type: 'earning', actual_amount: '2000.00' }),
+      makeBudgetLine({ id: 2, category_type: 'spending', actual_amount: '650.00' }),
+    ]);
     renderPage();
-    await screen.findByText('Monthly Budget');
-    expect(screen.getByText('Net this month: —')).toBeDefined();
+    expect(await screen.findByText('+$1,350.00')).toBeDefined();
+  });
+
+  it('shows a negative net in red when spending actual exceeds earnings actual', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_type: 'earning', planned_amount: 0, actual_amount: '500.00' }),
+      // planned_amount: 0 on the spending line too — its own Diff would
+      // otherwise also read "−$150.00" (500 planned - 650 actual),
+      // colliding with the Net headline's text and making it ambiguous
+      // which one this test is actually checking.
+      makeBudgetLine({ id: 2, category_type: 'spending', planned_amount: 0, actual_amount: '650.00' }),
+    ]);
+    renderPage();
+    const net = await screen.findByText('−$150.00');
+    expect(getComputedStyle(net).color).not.toBe('');
+    expect(net.closest('h6')?.textContent).toBe('Net this month: −$150.00');
+  });
+
+  it('shows $0.00 with no sign when nothing has been synced yet', async () => {
+    renderPage();
+    expect((await screen.findByText(/^Net this month:/)).textContent).toBe('Net this month: $0.00');
+  });
+
+  it('says "Net" instead of "Net this month" for a project budget', async () => {
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([
+      makeBudget({ id: 9, name: 'Iceland Trip', type: 'project', period_start: null, period_end: null }),
+    ]);
+    renderPage();
+    expect(await screen.findByText(/^Net:/)).toBeDefined();
+    expect(screen.queryByText(/^Net this month:/)).toBeNull();
   });
 });
 
@@ -272,7 +307,10 @@ describe('BudgetDetailPage sync actuals', () => {
 
     renderPage();
     await screen.findByText('Groceries');
-    expect(screen.getByText('$0.00')).toBeDefined();
+    // Scoped to the table — the Net headline also reads "$0.00" at this
+    // point (no sign shown for an exactly-zero net), so an unscoped query
+    // would match both.
+    expect(within(screen.getByRole('table')).getByText('$0.00')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
 

@@ -1,15 +1,15 @@
 // pages/budget-detail/index.tsx — Per-budget detail page: the budget's
 // name and period, a Sync control that recomputes actual_amount for every
 // line from real transactions (actual_amount is a cache — see Budget's own
-// docstring — so without a sync the Actual/Diff columns just show whatever
-// was last computed, possibly nothing), a placeholder net-this-month
-// section (the real figure is a separate follow-up — it needs the same
-// lines fetched here, but isn't wired up yet), the Earnings/Spending
-// columns (BudgetColumn/BudgetLineRow) built from the budget's own lines,
-// and an "Add X category" button under each column — a single shared
-// button looked like it only added earning categories (it sat right under
-// the Earnings column), so each column gets its own, pre-scoped to that
-// column's type.
+// docstring — so without a sync the Actual/Diff columns, and the Net
+// figure below, just show whatever was last computed, possibly nothing),
+// a Net headline (total earnings actual minus total spending actual,
+// across every line already fetched here — no separate endpoint needed),
+// the Earnings/Spending columns (BudgetColumn/BudgetLineRow) built from
+// the budget's own lines, and an "Add X category" button under each
+// column — a single shared button looked like it only added earning
+// categories (it sat right under the Earnings column), so each column
+// gets its own, pre-scoped to that column's type.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
@@ -28,6 +28,7 @@ import { BudgetColumn } from '@pages/budget-detail/budget-column';
 import { CreateBudgetLineDialog } from '@pages/budget-detail/create-budget-line-dialog';
 import type { Budget, BudgetLine } from '@serve/types/global';
 import { listBudgetLines, listBudgets, syncBudget, ApiError } from '@services/budgets';
+import { formatCurrency, signPrefix, sumCurrency } from '@utils/currency';
 
 // Matches transaction-row.tsx's formatDate, for consistency across the
 // app. Appending T00:00:00 forces local-time parsing of the bare
@@ -291,6 +292,14 @@ export function BudgetDetailPage() {
 
   const earningLines = lines.filter(line => line.category_type === 'earning');
   const spendingLines = lines.filter(line => line.category_type === 'spending');
+  // sumCurrency over every line in one pass (not a separate subtraction of
+  // two already-summed totals) — avoids a second opportunity for
+  // floating-point drift on top of summing each side. See sumCurrency's
+  // own comment for why this matters at all: display always rounds to
+  // cents regardless, but a diff's sign (the color below) doesn't.
+  const net = sumCurrency(
+    lines.map(line => (line.category_type === 'earning' ? 1 : -1) * Number(line.actual_amount)),
+  );
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -360,10 +369,19 @@ export function BudgetDetailPage() {
               </Alert>
             )}
 
-            {/* Placeholder — the real net-this-month figure is wired up in
-                a follow-up PR, computed from the same lines fetched below. */}
+            {/* "this month" assumes the common case — a period budget is
+                usually monthly, but could in principle be weekly or any
+                other range; not worth a truer-but-fussier label for that
+                edge case. A project budget has no period at all, so it
+                drops the phrase entirely rather than implying one. */}
             <Box sx={{ mt: 1.5, mb: 3 }}>
-              <Typography variant="h6">Net this month: —</Typography>
+              <Typography variant="h6">
+                {budget.type === 'project' ? 'Net' : 'Net this month'}:{' '}
+                <Typography component="span" variant="h6" color={net >= 0 ? 'success.main' : 'error.main'}>
+                  {signPrefix(net)}
+                  {formatCurrency(net)}
+                </Typography>
+              </Typography>
             </Box>
 
             {isLoadingLines ? (
