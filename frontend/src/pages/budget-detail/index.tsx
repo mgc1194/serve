@@ -418,9 +418,8 @@ export function BudgetDetailPage() {
       );
     }
 
-    // Clears a failed EDIT's draft too — different from a failed delete,
-    // below — a failed edit stays staged (and visible/editable) so the
-    // user can see it and retry.
+// Clears a succeeded EDIT's draft. A failed edit stays staged
+    // (and visible/editable) so the user can see it and retry.
     setPlannedEdits(prev => {
       const next = { ...prev };
       succeededEditIds.forEach(id => delete next[id]);
