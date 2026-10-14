@@ -2,12 +2,15 @@
 // Spending) of the budget detail page's planned-vs-actual view: a header
 // naming the section, a BudgetProgressBar comparing the section's total
 // actual against its total planned, and a table of its BudgetLines
-// (Category, Budgeted, Total, Diff), one row per line via BudgetLineRow.
+// (Category, Budgeted, Total, Diff), one row per line via BudgetLineRow —
+// plus, in edit mode, a trailing Delete column.
 //
 // Otherwise presentational — takes whatever lines it's given as-is; which
 // lines belong to this column (by category_type) is still the caller's
 // job, not this component's. `type` exists only to pass through to
-// BudgetProgressBar.
+// BudgetProgressBar. The edit-mode props are plain passthroughs to each
+// BudgetLineRow — this component doesn't interpret them itself, beyond
+// showing or hiding the Delete header cell.
 
 import {
   Box,
@@ -32,6 +35,11 @@ interface BudgetColumnProps {
   type: 'earning' | 'spending';
   lines: BudgetLine[];
   emptyMessage?: string;
+  isEditMode?: boolean;
+  plannedAmountInputs?: Record<number, string>;
+  onPlannedAmountChange?: (lineId: number, value: string) => void;
+  onDelete?: (lineId: number) => void;
+  disabled?: boolean;
 }
 
 export function BudgetColumn({
@@ -39,6 +47,11 @@ export function BudgetColumn({
   type,
   lines,
   emptyMessage = 'No categories yet.',
+  isEditMode = false,
+  plannedAmountInputs,
+  onPlannedAmountChange,
+  onDelete,
+  disabled = false,
 }: BudgetColumnProps) {
   // sumCurrency, not a plain reduce — floating-point addition drifts
   // across repeated sums (e.g. 0.1 + 0.2 !== 0.3), which can flip
@@ -76,11 +89,20 @@ export function BudgetColumn({
                 <TableCell align="right" sx={HEADER_CELL_SX}>
                   Diff
                 </TableCell>
+                {isEditMode && <TableCell align="right" sx={HEADER_CELL_SX} />}
               </TableRow>
             </TableHead>
             <TableBody>
               {lines.map(line => (
-                <BudgetLineRow key={line.id} line={line} />
+                <BudgetLineRow
+                  key={line.id}
+                  line={line}
+                  isEditMode={isEditMode}
+                  plannedAmountInput={plannedAmountInputs?.[line.id] ?? String(line.planned_amount)}
+                  onPlannedAmountChange={onPlannedAmountChange}
+                  onDelete={onDelete}
+                  disabled={disabled}
+                />
               ))}
             </TableBody>
           </Table>

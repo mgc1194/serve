@@ -784,3 +784,234 @@ describe('BudgetDetailPage budget lines', () => {
     expect(screen.getAllByText('Bonus')).toHaveLength(1);
   });
 });
+
+describe('BudgetDetailPage edit mode', () => {
+  beforeEach(() => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_name: 'Groceries', category_type: 'spending', planned_amount: 500 }),
+    ]);
+  });
+
+  it('enters edit mode, replacing Edit with Cancel and Confirm changes', async () => {
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+
+    expect(screen.queryByRole('button', { name: /^edit$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeDefined();
+    expect(screen.getByRole('button', { name: /confirm changes/i })).toBeDefined();
+  });
+
+  it('disables Sync budget while edit mode is active', async () => {
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+
+    expect(screen.getByRole('button', { name: /sync budget/i }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('disables Edit while a sync is in flight', async () => {
+    const syncPromise = deferred<{ budget: Budget; lines: ReturnType<typeof makeBudgetLine>[] }>();
+    vi.spyOn(budgetsService, 'syncBudget').mockReturnValue(syncPromise.promise);
+
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
+    expect(screen.getByRole('button', { name: /^edit$/i }).hasAttribute('disabled')).toBe(true);
+
+    syncPromise.resolve({ budget: makeBudget({ id: 9, name: 'Monthly Budget' }), lines: [] });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^edit$/i }).hasAttribute('disabled')).toBe(false),
+    );
+  });
+
+  it('disables both "Add" buttons while edit mode is active', async () => {
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+
+    expect(
+      screen.getByRole('button', { name: /add earning category/i }).hasAttribute('disabled'),
+    ).toBe(true);
+    expect(
+      screen.getByRole('button', { name: /add spending category/i }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('edits a planned amount and confirms, saving it and leaving edit mode', async () => {
+    const updateBudgetLine = vi
+      .spyOn(budgetsService, 'updateBudgetLine')
+      .mockResolvedValue(
+        makeBudgetLine({ id: 1, category_name: 'Groceries', category_type: 'spending', planned_amount: 750 }),
+      );
+
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i }), {
+      target: { value: '750' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm changes/i }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^cancel$/i })).toBeNull());
+    expect(updateBudgetLine).toHaveBeenCalledWith(1, { planned_amount: 750 });
+    expect(screen.getByText('$750.00')).toBeDefined();
+  });
+
+  it('deletes a line and confirms, removing it and calling deleteBudgetLine', async () => {
+    const deleteBudgetLine = vi.spyOn(budgetsService, 'deleteBudgetLine').mockResolvedValue(undefined);
+
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete groceries/i }));
+
+    // Staged deletes disappear from view immediately, before confirming.
+    expect(screen.queryByText('Groceries')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm changes/i }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^cancel$/i })).toBeNull());
+    expect(deleteBudgetLine).toHaveBeenCalledWith(1);
+    expect(screen.queryByText('Groceries')).toBeNull();
+  });
+
+  it('cancel discards staged edits and deletes without calling the API', async () => {
+    const updateBudgetLine = vi.spyOn(budgetsService, 'updateBudgetLine');
+    const deleteBudgetLine = vi.spyOn(budgetsService, 'deleteBudgetLine');
+
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i }), {
+      target: { value: '999' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    expect(updateBudgetLine).not.toHaveBeenCalled();
+    expect(deleteBudgetLine).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /^cancel$/i })).toBeNull();
+    expect(screen.getByText('$500.00')).toBeDefined();
+  });
+
+  it('disables Confirm changes while a staged edit is not a valid whole-dollar amount', async () => {
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    const field = screen.getByRole('spinbutton', { name: /groceries budgeted amount/i });
+
+    fireEvent.change(field, { target: { value: '420.50' } });
+    expect(screen.getByRole('button', { name: /confirm changes/i }).hasAttribute('disabled')).toBe(
+      true,
+    );
+
+    fireEvent.change(field, { target: { value: '420' } });
+    expect(screen.getByRole('button', { name: /confirm changes/i }).hasAttribute('disabled')).toBe(
+      false,
+    );
+  });
+
+  // The partial-failure case: one line's edit saves, another's fails. The
+  // succeeded one applies and clears; the failed one stays staged (still
+  // editable) and edit mode doesn't exit, so the user can see it and retry.
+  it('keeps a failed edit staged and in edit mode, while a succeeded one applies', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_name: 'Groceries', category_type: 'spending', planned_amount: 500 }),
+      makeBudgetLine({ id: 2, category_name: 'Transport', category_type: 'spending', planned_amount: 200 }),
+    ]);
+    vi.spyOn(budgetsService, 'updateBudgetLine').mockImplementation((id, payload) =>
+      id === 1
+        ? Promise.resolve(
+            makeBudgetLine({
+              id: 1,
+              category_name: 'Groceries',
+              category_type: 'spending',
+              planned_amount: payload.planned_amount,
+            }),
+          )
+        : Promise.reject(new Error('boom')),
+    );
+
+    renderPage();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i }), {
+      target: { value: '750' },
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: /transport budgeted amount/i }), {
+      target: { value: '300' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm changes/i }));
+
+    await screen.findByText('1 change could not be saved. Please try again.');
+    // Still in edit mode — Confirm changes/Cancel are still showing.
+    expect(screen.getByRole('button', { name: /confirm changes/i })).toBeDefined();
+    // Groceries' edit succeeded and its draft cleared — still in edit mode
+    // (Transport's failure kept it open), so its field now defaults to the
+    // newly-committed 750, not the pre-edit 500.
+    expect(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i })).toHaveProperty(
+      'value',
+      '750',
+    );
+    // ...Transport's failed edit is still staged in its field.
+    expect(screen.getByRole('spinbutton', { name: /transport budgeted amount/i })).toHaveProperty(
+      'value',
+      '300',
+    );
+  });
+
+  // Same staleness concern as handleSync/onCreate: a confirm that resolves
+  // after the route has moved to a different budget must not touch
+  // whatever's now on screen.
+  it('ignores a stale confirm that resolves after navigating to a different budget', async () => {
+    const updatePromise = deferred<ReturnType<typeof makeBudgetLine>>();
+    vi.spyOn(budgetsService, 'updateBudgetLine').mockReturnValue(updatePromise.promise);
+    vi.spyOn(budgetsService, 'listBudgets')
+      .mockResolvedValueOnce([BUDGET])
+      .mockResolvedValueOnce([makeBudget({ id: 10, name: 'Vacation Fund' })]);
+    vi.spyOn(budgetsService, 'listBudgetLines')
+      .mockResolvedValueOnce([
+        makeBudgetLine({ id: 1, category_name: 'Groceries', category_type: 'spending', planned_amount: 500 }),
+      ])
+      // Budget 10 happens to have a line with the SAME id (ids aren't
+      // scoped to a budget) — if the stale confirm's guard didn't catch
+      // this, its succeeded edit would incorrectly land on this line
+      // instead, since setLines matches by id alone.
+      .mockResolvedValueOnce([
+        makeBudgetLine({ id: 1, category_name: 'Rent', category_type: 'spending', planned_amount: 1200 }),
+      ]);
+
+    renderPageWithNav();
+    await screen.findByText('Groceries');
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /groceries budgeted amount/i }), {
+      target: { value: '750' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm changes/i }));
+
+    fireEvent.click(screen.getByRole('link', { name: /go to budget 10/i, hidden: true }));
+    await screen.findByText('Vacation Fund');
+
+    await act(async () => {
+      updatePromise.resolve(
+        makeBudgetLine({ id: 1, category_name: 'Groceries', category_type: 'spending', planned_amount: 750 }),
+      );
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(screen.getByText('Vacation Fund')).toBeDefined();
+    expect(screen.queryByText('Groceries')).toBeNull();
+    // Budget 10's own "Rent" line (also id 1) is unaffected.
+    expect(screen.getByText('$1,200.00')).toBeDefined();
+  });
+});

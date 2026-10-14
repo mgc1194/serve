@@ -77,6 +77,16 @@ export const EmptySpendingWithCustomMessage: Story = {
   },
 };
 
+export const EditMode: Story = {
+  args: {
+    title: 'Spending',
+    type: 'spending',
+    lines: SPENDING_LINES,
+    isEditMode: true,
+    plannedAmountInputs: { 3: '500', 4: '200', 5: '45' },
+  },
+};
+
 // Matches how the two columns will actually sit on the Budget detail page —
 // side by side, right below the net-this-month figure.
 export const SideBySide: Story = {
