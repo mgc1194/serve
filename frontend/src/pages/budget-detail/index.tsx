@@ -377,10 +377,24 @@ export function BudgetDetailPage() {
             <Box sx={{ mt: 1.5, mb: 3 }}>
               <Typography variant="h6">
                 {budget.type === 'project' ? 'Net' : 'Net this month'}:{' '}
-                <Typography component="span" variant="h6" color={net >= 0 ? 'success.main' : 'error.main'}>
-                  {signPrefix(net)}
-                  {formatCurrency(net)}
-                </Typography>
+                {isLoadingLines || linesError ? (
+                  // `lines` is [] in both the loading and error states
+                  // (it's only ever set from a successful fetch), so net
+                  // computed from it would read as a valid $0.00 here —
+                  // indistinguishable from an actually-zero net. Showing
+                  // this placeholder instead of the loading/error
+                  // branches below have their own messaging for why.
+                  '—'
+                ) : (
+                  <Typography
+                    component="span"
+                    variant="h6"
+                    color={net >= 0 ? 'success.main' : 'error.main'}
+                  >
+                    {signPrefix(net)}
+                    {formatCurrency(net)}
+                  </Typography>
+                )}
               </Typography>
             </Box>
 

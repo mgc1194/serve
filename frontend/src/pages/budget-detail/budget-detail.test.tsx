@@ -195,13 +195,51 @@ describe('BudgetDetailPage net this month', () => {
     ]);
     renderPage();
     const net = await screen.findByText('−$150.00');
-    expect(getComputedStyle(net).color).not.toBe('');
+    // Compares against the spending line's own Diff cell ("−$650.00"),
+    // which uses the identical color="error.main" mechanism, rather than
+    // a hardcoded theme color (fragile) or just checking *some* computed
+    // color is set (passes even for the default/inherited text color,
+    // which was the actual gap here — this failed to catch green or
+    // unstyled text).
+    const errorReference = screen.getByText('−$650.00');
+    expect(getComputedStyle(net).color).toBe(getComputedStyle(errorReference).color);
+    expect(getComputedStyle(net).color).not.toBe(getComputedStyle(screen.getByText('Monthly Budget')).color);
     expect(net.closest('h6')?.textContent).toBe('Net this month: −$150.00');
   });
 
   it('shows $0.00 with no sign when nothing has been synced yet', async () => {
     renderPage();
     expect((await screen.findByText(/^Net this month:/)).textContent).toBe('Net this month: $0.00');
+  });
+
+  // `lines` is [] during both the initial lines fetch and after it fails
+  // — net computed from it would read as a valid-looking $0.00 in either
+  // case, making a network failure (or just the loading frame) look like
+  // an actually-zero net rather than an unknown one.
+  it('shows a placeholder, not $0.00, while lines are still loading', async () => {
+    const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
+
+    renderPage();
+    await screen.findByText('Loading categories…');
+
+    expect((await screen.findByText(/^Net this month:/)).textContent).toBe('Net this month: —');
+    expect(screen.queryByText('Net this month: $0.00')).toBeNull();
+
+    linesPromise.resolve([]);
+    await waitFor(() =>
+      expect(screen.getByText(/^Net this month:/).textContent).toBe('Net this month: $0.00'),
+    );
+  });
+
+  it('shows a placeholder, not $0.00, when lines fail to load', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockRejectedValue(new Error('boom'));
+
+    renderPage();
+    await screen.findByText('Could not load categories.');
+
+    expect(screen.getByText(/^Net this month:/).textContent).toBe('Net this month: —');
+    expect(screen.queryByText('Net this month: $0.00')).toBeNull();
   });
 
   it('says "Net" instead of "Net this month" for a project budget', async () => {
