@@ -168,14 +168,117 @@ describe('BudgetDetailPage rendering', () => {
   });
 });
 
-describe('BudgetDetailPage net this month placeholder', () => {
-  // No real figure yet — wiring the actual net (sourced from the budget's
-  // lines) is deferred to a follow-up PR. This just confirms the section
-  // itself is present.
-  it('shows the placeholder net section', async () => {
+describe('BudgetDetailPage net this month', () => {
+  // Awaits the net figure itself (via findByText, which retries), not just
+  // 'Monthly Budget' followed by a synchronous check — the budget and the
+  // lines load via two separate effects, and asserting right after only
+  // the first settles is a real race: 'Monthly Budget' can (and, as
+  // written originally, reliably did) render before the lines fetch's own
+  // .then() has run, catching the page in its pre-lines-loaded state.
+  it('shows total earnings actual minus total spending actual, across both columns', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_type: 'earning', actual_amount: '2000.00' }),
+      makeBudgetLine({ id: 2, category_type: 'spending', actual_amount: '650.00' }),
+    ]);
     renderPage();
-    await screen.findByText('Monthly Budget');
-    expect(screen.getByText('Net this month: —')).toBeDefined();
+    expect(await screen.findByText('+$1,350.00')).toBeDefined();
+  });
+
+  it('shows a negative net in red when spending actual exceeds earnings actual', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_type: 'earning', planned_amount: 0, actual_amount: '500.00' }),
+      // planned_amount: 0 on the spending line too — its own Diff would
+      // otherwise also read "−$150.00" (500 planned - 650 actual),
+      // colliding with the Net headline's text and making it ambiguous
+      // which one this test is actually checking.
+      makeBudgetLine({ id: 2, category_type: 'spending', planned_amount: 0, actual_amount: '650.00' }),
+    ]);
+    renderPage();
+    const net = await screen.findByText('−$150.00');
+    // Compares against the spending line's own Diff cell ("−$650.00"),
+    // which uses the identical color="error.main" mechanism, rather than
+    // a hardcoded theme color (fragile) or just checking *some* computed
+    // color is set (passes even for the default/inherited text color,
+    // which was the actual gap here — this failed to catch green or
+    // unstyled text).
+    const errorReference = screen.getByText('−$650.00');
+    expect(getComputedStyle(net).color).toBe(getComputedStyle(errorReference).color);
+    expect(getComputedStyle(net).color).not.toBe(getComputedStyle(screen.getByText('Monthly Budget')).color);
+    expect(net.closest('h6')?.textContent).toBe('Net this month: −$150.00');
+  });
+
+  it('shows $0.00 with no sign when nothing has been synced yet', async () => {
+    renderPage();
+    // waitFor, not findByText(/^Net this month:/) — the value sits in a
+    // nested span (so no single element's OWN text is ever "Net this
+    // month: $0.00" for a plain findByText to match), and findByText
+    // only waits for an element to first APPEAR, not for it to settle:
+    // the loading placeholder ("Net this month: —") matches the same
+    // regex the label text does, so it could resolve there instead of
+    // waiting for the lines fetch to actually finish. waitFor keeps
+    // re-checking the full textContent until it reaches its final value.
+    await waitFor(() =>
+      expect(screen.getByText(/^Net this month:/).textContent).toBe('Net this month: $0.00'),
+    );
+  });
+
+  // `lines` is [] during both the initial lines fetch and after it fails
+  // — net computed from it would read as a valid-looking $0.00 in either
+  // case, making a network failure (or just the loading frame) look like
+  // an actually-zero net rather than an unknown one.
+  it('shows a placeholder, not $0.00, while lines are still loading', async () => {
+    const linesPromise = deferred<ReturnType<typeof makeBudgetLine>[]>();
+    vi.spyOn(budgetsService, 'listBudgetLines').mockReturnValue(linesPromise.promise);
+
+    renderPage();
+    await screen.findByText('Loading categories…');
+
+    expect((await screen.findByText(/^Net this month:/)).textContent).toBe('Net this month: —');
+    expect(screen.queryByText('Net this month: $0.00')).toBeNull();
+
+    linesPromise.resolve([]);
+    await waitFor(() =>
+      expect(screen.getByText(/^Net this month:/).textContent).toBe('Net this month: $0.00'),
+    );
+  });
+
+  it('shows a placeholder, not $0.00, when lines fail to load', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockRejectedValue(new Error('boom'));
+
+    renderPage();
+    await screen.findByText('Could not load categories.');
+
+    expect(screen.getByText(/^Net this month:/).textContent).toBe('Net this month: —');
+    expect(screen.queryByText('Net this month: $0.00')).toBeNull();
+  });
+
+  it('says "Net" instead of "Net this month" for a project budget', async () => {
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([
+      makeBudget({ id: 9, name: 'Iceland Trip', type: 'project', period_start: null, period_end: null }),
+    ]);
+    renderPage();
+    expect(await screen.findByText(/^Net:/)).toBeDefined();
+    expect(screen.queryByText(/^Net this month:/)).toBeNull();
+  });
+
+  // Net is computed from visibleLines, not `lines` directly — a line
+  // staged for deletion in edit mode already disappears from the columns
+  // and progress bars below, so Net should stop counting its
+  // actual_amount too, for the same live-preview consistency.
+  it('excludes a staged (not yet confirmed) delete from the net figure', async () => {
+    vi.spyOn(budgetsService, 'listBudgetLines').mockResolvedValue([
+      makeBudgetLine({ id: 1, category_name: 'Paycheck', category_type: 'earning', actual_amount: '2000.00' }),
+      makeBudgetLine({ id: 2, category_name: 'Groceries', category_type: 'spending', actual_amount: '650.00' }),
+    ]);
+    renderPage();
+    expect(await screen.findByText('+$1,350.00')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /delete groceries/i }));
+
+    // Groceries' −$650.00 no longer counts against Paycheck's +$2,000.00.
+    expect(screen.getByText('+$2,000.00')).toBeDefined();
+    expect(screen.queryByText('+$1,350.00')).toBeNull();
   });
 });
 
@@ -184,7 +287,7 @@ describe('BudgetDetailPage add category', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
 
     expect(await screen.findByText('Add earning category', { selector: 'h2' })).toBeDefined();
   });
@@ -193,7 +296,7 @@ describe('BudgetDetailPage add category', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add spending category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add spending category/i }));
 
     expect(await screen.findByText('Add spending category', { selector: 'h2' })).toBeDefined();
   });
@@ -202,7 +305,7 @@ describe('BudgetDetailPage add category', () => {
     renderPage();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     await screen.findByText('Add earning category', { selector: 'h2' });
 
     fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
@@ -227,7 +330,7 @@ describe('BudgetDetailPage add category', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     await screen.findByText('Add earning category', { selector: 'h2' });
 
     // { hidden: true } — the open MUI Dialog marks the rest of the page
@@ -272,7 +375,10 @@ describe('BudgetDetailPage sync actuals', () => {
 
     renderPage();
     await screen.findByText('Groceries');
-    expect(screen.getByText('$0.00')).toBeDefined();
+    // Scoped to the table — the Net headline also reads "$0.00" at this
+    // point (no sign shown for an exactly-zero net), so an unscoped query
+    // would match both.
+    expect(within(screen.getByRole('table')).getByText('$0.00')).toBeDefined();
 
     fireEvent.click(screen.getByRole('button', { name: /sync budget/i }));
 
@@ -619,9 +725,9 @@ describe('BudgetDetailPage budget lines', () => {
 
     renderPage();
     await screen.findByText('Monthly Budget');
-    expect(screen.getAllByText('No categories yet.')).toHaveLength(2);
+    expect(await screen.findAllByText('No categories yet.')).toHaveLength(2);
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
@@ -696,7 +802,7 @@ describe('BudgetDetailPage budget lines', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });
@@ -761,7 +867,7 @@ describe('BudgetDetailPage budget lines', () => {
     renderPageWithNav();
     await screen.findByText('Monthly Budget');
 
-    fireEvent.click(screen.getByRole('button', { name: /add earning category/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add earning category/i }));
     fireEvent.mouseDown(await screen.findByRole('combobox', { name: /category/i }));
     fireEvent.click(await screen.findByRole('option', { name: 'Bonus' }));
     fireEvent.change(screen.getByLabelText(/budgeted amount/i), { target: { value: '200' } });

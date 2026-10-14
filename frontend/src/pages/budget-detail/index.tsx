@@ -1,17 +1,18 @@
 // pages/budget-detail/index.tsx — Per-budget detail page: the budget's
 // name and period, a Sync control that recomputes actual_amount for every
 // line from real transactions (actual_amount is a cache — see Budget's own
-// docstring — so without a sync the Actual/Diff columns just show whatever
-// was last computed, possibly nothing), an Edit control that stages
-// planned-amount changes and deletions locally until "Confirm changes" —
-// see the edit-mode state below — a placeholder net-this-month section
-// (the real figure is a separate follow-up — it needs the same lines
-// fetched here, but isn't wired up yet), the Earnings/Spending columns
-// (BudgetColumn/BudgetLineRow) built from the budget's own lines, and an
-// "Add X category" button under each column — a single shared button
-// looked like it only added earning categories (it sat right under the
-// Earnings column), so each column gets its own, pre-scoped to that
-// column's type.
+// docstring — so without a sync the Actual/Diff columns, and the Net
+// figure below, just show whatever was last computed, possibly nothing),
+// an Edit control that stages planned-amount changes and deletions
+// locally until "Confirm changes" — see the edit-mode state below — a
+// Net headline (total earnings actual minus total spending actual,
+// across every line already fetched here — no separate endpoint needed,
+// and live-previewing any deletion staged in edit mode the same way the
+// columns below do), the Earnings/Spending columns (BudgetColumn/
+// BudgetLineRow) built from the budget's own lines, and an "Add X
+// category" button under each column — a single shared button looked
+// like it only added earning categories (it sat right under the Earnings
+// column), so each column gets its own, pre-scoped to that column's type.
 //
 // No GET /budgets/{id} single-fetch endpoint exists (or is needed) for one
 // budget among a household's handful — the budget itself is found by id in
@@ -38,7 +39,7 @@ import {
   deleteBudgetLine,
   ApiError,
 } from '@services/budgets';
-import { isWholeDollarAmount } from '@utils/currency';
+import { formatCurrency, isWholeDollarAmount, signPrefix, sumCurrency } from '@utils/currency';
 
 // Matches transaction-row.tsx's formatDate, for consistency across the
 // app. Appending T00:00:00 forces local-time parsing of the bare
@@ -201,7 +202,22 @@ export function BudgetDetailPage() {
           if (ignore || requestId !== requestIdRef.current) return;
           const found = budgets.find(b => b.id === budgetId) ?? null;
           setBudget(found);
-          if (!found) setError('Budget not found.');
+          if (found) {
+            // Batched with setBudget above (React 18 batches state
+            // updates inside a promise callback), so the very first
+            // render that shows this new budget already reflects "lines
+            // not loaded yet" too. Without this, that render would still
+            // show isLoadingLines from the OLD scope — false, since the
+            // lines effect's own budget-is-null branch had just set it
+            // that way — letting Net (gated on isLoadingLines below)
+            // briefly show a stray $0.00 instead of its loading
+            // placeholder, for the one render before the lines effect
+            // (also keyed off this same budget, but effects run AFTER
+            // commit) catches up and sets it true itself.
+            setIsLoadingLines(true);
+          } else {
+            setError('Budget not found.');
+          }
         })
         .catch(err => {
           if (ignore || requestId !== requestIdRef.current) return;
@@ -475,6 +491,19 @@ export function BudgetDetailPage() {
 
   const earningLines = visibleLines.filter(line => line.category_type === 'earning');
   const spendingLines = visibleLines.filter(line => line.category_type === 'spending');
+  // sumCurrency over every line in one pass (not a separate subtraction of
+  // two already-summed totals) — avoids a second opportunity for
+  // floating-point drift on top of summing each side. See sumCurrency's
+  // own comment for why this matters at all: display always rounds to
+  // cents regardless, but a diff's sign (the color below) doesn't.
+  // visibleLines, not `lines` — a line staged for deletion in edit mode
+  // already disappears from the columns/progress bars below, so Net
+  // should stop counting its actual_amount too, for the same live-preview
+  // consistency (editing a planned_amount doesn't affect Net either way,
+  // since that only touches actual_amount).
+  const net = sumCurrency(
+    visibleLines.map(line => (line.category_type === 'earning' ? 1 : -1) * Number(line.actual_amount)),
+  );
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -587,10 +616,33 @@ export function BudgetDetailPage() {
               </Alert>
             )}
 
-            {/* Placeholder — the real net-this-month figure is wired up in
-                a follow-up PR, computed from the same lines fetched below. */}
+            {/* "this month" assumes the common case — a period budget is
+                usually monthly, but could in principle be weekly or any
+                other range; not worth a truer-but-fussier label for that
+                edge case. A project budget has no period at all, so it
+                drops the phrase entirely rather than implying one. */}
             <Box sx={{ mt: 1.5, mb: 3 }}>
-              <Typography variant="h6">Net this month: —</Typography>
+              <Typography variant="h6">
+                {budget.type === 'project' ? 'Net' : 'Net this month'}:{' '}
+                {isLoadingLines || linesError ? (
+                  // `lines` is [] in both the loading and error states
+                  // (it's only ever set from a successful fetch), so net
+                  // computed from it would read as a valid $0.00 here —
+                  // indistinguishable from an actually-zero net. Showing
+                  // this placeholder instead of the loading/error
+                  // branches below have their own messaging for why.
+                  '—'
+                ) : (
+                  <Typography
+                    component="span"
+                    variant="h6"
+                    color={net >= 0 ? 'success.main' : 'error.main'}
+                  >
+                    {signPrefix(net)}
+                    {formatCurrency(net)}
+                  </Typography>
+                )}
+              </Typography>
             </Box>
 
             {isLoadingLines ? (
