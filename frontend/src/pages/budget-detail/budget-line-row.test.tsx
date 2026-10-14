@@ -1,17 +1,20 @@
 // pages/budget-detail/budget-line-row.test.tsx
 
 import { Table, TableBody } from '@mui/material';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { BudgetLineRow } from '@pages/budget-detail/budget-line-row';
 import { makeBudgetLine } from '@serve/mocks';
 
-function setup(overrides: Partial<React.ComponentProps<typeof BudgetLineRow>['line']> = {}) {
+function setup(
+  overrides: Partial<React.ComponentProps<typeof BudgetLineRow>['line']> = {},
+  rowProps: Partial<Omit<React.ComponentProps<typeof BudgetLineRow>, 'line'>> = {},
+) {
   render(
     <Table>
       <TableBody>
-        <BudgetLineRow line={makeBudgetLine(overrides)} />
+        <BudgetLineRow line={makeBudgetLine(overrides)} {...rowProps} />
       </TableBody>
     </Table>,
   );
@@ -79,5 +82,68 @@ describe('BudgetLineRow does not wrap large amounts', () => {
     // style is on the <td> itself, so check via the cell, not the span.
     const diffCell = screen.getByText('+$12,345.00').closest('td');
     expect(getComputedStyle(diffCell!).whiteSpace).toBe('nowrap');
+  });
+});
+
+describe('BudgetLineRow edit mode', () => {
+  it('shows an editable field with the current draft text instead of the formatted amount', () => {
+    setup({ category_name: 'Groceries', planned_amount: 500 }, { isEditMode: true, plannedAmountInput: '750' });
+    expect(screen.getByRole('spinbutton')).toHaveProperty('value', '750');
+    expect(screen.queryByText('$500.00')).toBeNull();
+  });
+
+  it('calls onPlannedAmountChange with the raw typed text on every change', () => {
+    const onPlannedAmountChange = vi.fn();
+    setup(
+      { id: 7, planned_amount: 500 },
+      { isEditMode: true, plannedAmountInput: '500', onPlannedAmountChange },
+    );
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '750' } });
+    expect(onPlannedAmountChange).toHaveBeenCalledWith(7, '750');
+  });
+
+  it('flags the field as invalid when the draft is not a whole-dollar amount', () => {
+    setup({ planned_amount: 500 }, { isEditMode: true, plannedAmountInput: '420.50' });
+    expect(screen.getByRole('spinbutton').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('flags the field as invalid when the draft is empty', () => {
+    setup({ planned_amount: 500 }, { isEditMode: true, plannedAmountInput: '' });
+    expect(screen.getByRole('spinbutton').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  // Digits-only alone isn't enough — a digit string past
+  // Number.MAX_SAFE_INTEGER loses precision when parsed, same as
+  // parsePlannedAmountDraft (index.tsx) already guards against for
+  // Confirm's own validity gate. Without the same check here, this field
+  // would show no error for a draft that gate would still reject.
+  it('flags the field as invalid when the draft is too large to represent exactly', () => {
+    setup({ planned_amount: 500 }, { isEditMode: true, plannedAmountInput: '99999999999999999999' });
+    expect(screen.getByRole('spinbutton').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('shows a delete button that calls onDelete with the line id', () => {
+    const onDelete = vi.fn();
+    setup({ id: 9, category_name: 'Groceries' }, { isEditMode: true, onDelete });
+    fireEvent.click(screen.getByRole('button', { name: /delete groceries/i }));
+    expect(onDelete).toHaveBeenCalledWith(9);
+  });
+
+  it('disables the field and delete button when disabled is true', () => {
+    setup(
+      { category_name: 'Groceries' },
+      { isEditMode: true, plannedAmountInput: '500', disabled: true },
+    );
+    expect(screen.getByRole('spinbutton').hasAttribute('disabled')).toBe(true);
+    expect(
+      screen.getByRole('button', { name: /delete groceries/i }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('does not show the editable field or delete button outside edit mode', () => {
+    setup({ category_name: 'Groceries', planned_amount: 500 });
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    expect(screen.queryByRole('button', { name: /delete groceries/i })).toBeNull();
+    expect(screen.getByText('$500.00')).toBeDefined();
   });
 });
