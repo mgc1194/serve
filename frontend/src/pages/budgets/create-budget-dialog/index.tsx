@@ -43,6 +43,14 @@ import { createBudget, ApiError } from '@services/budgets';
 
 const DATE_FORMAT = 'YYYY-MM-DD';
 
+// Mirrors Budget.name's max_length (backend/budgets/models.py) — the
+// duplicate-project default below must respect it too, not just manual
+// typing: a source name already near the limit would otherwise overflow
+// once " copy" is appended, and canCreate only checks non-emptiness, so
+// that overflowing default would submit as-is and the backend would
+// reject it.
+const NAME_MAX_LENGTH = 100;
+
 /**
  * "August 2026" for Monthly, "Aug 15, 2026 – Sep 15, 2026" for Period —
  * both derived purely from the picked dates. A name only makes sense for a
@@ -86,7 +94,11 @@ interface DuplicateDefaults {
  * not a value the user has to type from scratch.
  */
 function deriveDuplicateDefaults(source: Budget): DuplicateDefaults {
-  if (source.type === 'project') return { uiType: 'project', projectName: `${source.name} copy` };
+  if (source.type === 'project') {
+    const suffix = ' copy';
+    const truncatedName = source.name.slice(0, NAME_MAX_LENGTH - suffix.length);
+    return { uiType: 'project', projectName: `${truncatedName}${suffix}` };
+  }
 
   const start = source.period_start ? dayjs(source.period_start, DATE_FORMAT, true) : null;
   const end = source.period_end ? dayjs(source.period_end, DATE_FORMAT, true) : null;

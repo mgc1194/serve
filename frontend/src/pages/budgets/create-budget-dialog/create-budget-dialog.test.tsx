@@ -269,6 +269,16 @@ describe('CreateBudgetDialog duplicate mode', () => {
     expect(screen.getByDisplayValue('Iceland Trip copy')).toBeDefined();
   });
 
+  it('truncates the source name so a maximum-length project stays within the 100-character limit', () => {
+    const maxLengthName = 'X'.repeat(100);
+    setup({ copyFromBudget: makeBudget({ name: maxLengthName, type: 'project' }) });
+
+    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement;
+    expect(input.value).toHaveLength(100);
+    expect(input.value.endsWith(' copy')).toBe(true);
+    expect(input.value).toBe(`${'X'.repeat(95)} copy`);
+  });
+
   it('includes copy_lines_from_budget_id in the create payload', async () => {
     mockCreateBudget.mockResolvedValueOnce(makeBudget({ name: 'September 2026' }));
     setup({
