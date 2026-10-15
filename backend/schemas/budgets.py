@@ -39,6 +39,11 @@ class BudgetCreateRequest(Schema):
     period_start/period_end are required for a period budget and must be
     omitted for a project budget — enforced in the endpoint, not here, since
     that check depends on `type`.
+
+    copy_lines_from_budget_id optionally seeds the new budget's lines
+    (category, planned_amount, notes — not actual_amount) from an existing
+    budget in the same household, so a recurring budget doesn't have to be
+    rebuilt category-by-category each period.
     """
 
     name: str
@@ -46,6 +51,7 @@ class BudgetCreateRequest(Schema):
     household_id: int
     period_start: date | None = None
     period_end: date | None = None
+    copy_lines_from_budget_id: int | None = None
 
 
 class BudgetRenameRequest(Schema):

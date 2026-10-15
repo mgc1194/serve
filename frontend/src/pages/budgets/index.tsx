@@ -48,6 +48,12 @@ export function BudgetsPage() {
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
+  // Set by a card's "Duplicate" action, read by CreateBudgetDialog to
+  // prefill itself and, on success below, to navigate straight to the new
+  // budget instead of staying on this list — duplicating is done so the
+  // next thing the household wants to do is edit the copied amounts, not
+  // look at the list they just left.
+  const [duplicateFrom, setDuplicateFrom] = useState<Budget | null>(null);
 
   const householdId = activeHousehold?.id;
 
@@ -158,6 +164,10 @@ export function BudgetsPage() {
     setIsLoading(false);
     setError(null);
     setCreateOpen(false);
+    if (duplicateFrom) {
+      setDuplicateFrom(null);
+      navigate(`/budgets/${budget.id}`);
+    }
   }
 
   function handleUpdated(budget: Budget) {
@@ -262,6 +272,10 @@ export function BudgetsPage() {
                       budget={budget}
                       onUpdated={handleUpdated}
                       onDeactivated={handleDeactivated}
+                      onDuplicate={source => {
+                        setDuplicateFrom(source);
+                        setCreateOpen(true);
+                      }}
                     />
                   ))
                 ) : !error ? (
@@ -279,7 +293,11 @@ export function BudgetsPage() {
         <CreateBudgetDialog
           open={createOpen}
           householdId={activeHousehold.id}
-          onClose={() => setCreateOpen(false)}
+          copyFromBudget={duplicateFrom}
+          onClose={() => {
+            setCreateOpen(false);
+            setDuplicateFrom(null);
+          }}
           onCreate={handleCreated}
         />
       )}

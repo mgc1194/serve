@@ -230,3 +230,110 @@ describe('CreateBudgetDialog interactions', () => {
     await waitFor(() => expect(screen.getByText(/already exists/i)).toBeDefined());
   });
 });
+
+describe('CreateBudgetDialog duplicate mode', () => {
+  it('titles itself after the source budget and explains the copy, with a Duplicate button', () => {
+    setup({ copyFromBudget: makeBudget({ name: 'August 2026', type: 'project' }) });
+    expect(screen.getByText('Duplicate "August 2026"')).toBeDefined();
+    expect(screen.getByText(/copied from "August 2026"/i)).toBeDefined();
+    expect(screen.getByRole('button', { name: /^duplicate$/i })).toBeDefined();
+    expect(screen.queryByRole('button', { name: /^create$/i })).toBeNull();
+  });
+
+  it('defaults to the next calendar month for a whole-month source', () => {
+    setup({
+      copyFromBudget: makeBudget({
+        type: 'period',
+        period_start: '2026-08-01',
+        period_end: '2026-08-31',
+      }),
+    });
+    expect(screen.getByText('Will be named "September 2026"')).toBeDefined();
+  });
+
+  it('defaults to the next equal-length window for a non-month-aligned period source', () => {
+    setup({
+      copyFromBudget: makeBudget({
+        type: 'period',
+        period_start: '2026-08-15',
+        period_end: '2026-08-21',
+      }),
+    });
+    // Source is a 7-day window (Aug 15-21); the next one starts the day
+    // after it ends and keeps the same 7-day length.
+    expect(screen.getByText('Will be named "Aug 22, 2026 – Aug 28, 2026"')).toBeDefined();
+  });
+
+  it('prefills a "<name> copy" starting point for a project source', () => {
+    setup({ copyFromBudget: makeBudget({ name: 'Iceland Trip', type: 'project' }) });
+    expect(screen.getByDisplayValue('Iceland Trip copy')).toBeDefined();
+  });
+
+  it('truncates the source name so a maximum-length project stays within the 100-character limit', () => {
+    const maxLengthName = 'X'.repeat(100);
+    setup({ copyFromBudget: makeBudget({ name: maxLengthName, type: 'project' }) });
+
+    const input = screen.getByLabelText(/^name$/i) as HTMLInputElement;
+    expect(input.value).toHaveLength(100);
+    expect(input.value.endsWith(' copy')).toBe(true);
+    expect(input.value).toBe(`${'X'.repeat(95)} copy`);
+  });
+
+  it('includes copy_lines_from_budget_id in the create payload', async () => {
+    mockCreateBudget.mockResolvedValueOnce(makeBudget({ name: 'September 2026' }));
+    setup({
+      copyFromBudget: makeBudget({
+        id: 7,
+        type: 'period',
+        period_start: '2026-08-01',
+        period_end: '2026-08-31',
+      }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateBudget).toHaveBeenCalledWith(
+        expect.objectContaining({ copy_lines_from_budget_id: 7 }),
+      ),
+    );
+  });
+
+  it('does not set copy_lines_from_budget_id for a plain (non-duplicate) create', async () => {
+    mockCreateBudget.mockResolvedValueOnce(makeBudget({ name: 'August 2026' }));
+    setup();
+
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '2026-08' } });
+    fireEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateBudget).toHaveBeenCalledWith(
+        expect.objectContaining({ copy_lines_from_budget_id: undefined }),
+      ),
+    );
+  });
+
+  it('re-derives defaults if the source budget changes while the dialog stays open', () => {
+    const { rerender } = render(
+      <CreateBudgetDialog
+        open
+        householdId={1}
+        copyFromBudget={makeBudget({ name: 'Iceland Trip', type: 'project' })}
+        onClose={vi.fn()}
+        onCreate={vi.fn()}
+      />,
+    );
+    expect(screen.getByDisplayValue('Iceland Trip copy')).toBeDefined();
+
+    rerender(
+      <CreateBudgetDialog
+        open
+        householdId={1}
+        copyFromBudget={makeBudget({ name: 'Kitchen Remodel', type: 'project' })}
+        onClose={vi.fn()}
+        onCreate={vi.fn()}
+      />,
+    );
+    expect(screen.getByDisplayValue('Kitchen Remodel copy')).toBeDefined();
+  });
+});

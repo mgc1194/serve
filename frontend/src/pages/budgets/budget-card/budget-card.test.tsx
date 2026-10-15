@@ -26,10 +26,17 @@ const BUDGET = makeBudget({ id: 1, name: 'January 2026' });
 function setup(overrides: Partial<React.ComponentProps<typeof BudgetCard>> = {}) {
   const onUpdated = vi.fn();
   const onDeactivated = vi.fn();
+  const onDuplicate = vi.fn();
   render(
-    <BudgetCard budget={BUDGET} onUpdated={onUpdated} onDeactivated={onDeactivated} {...overrides} />,
+    <BudgetCard
+      budget={BUDGET}
+      onUpdated={onUpdated}
+      onDeactivated={onDeactivated}
+      onDuplicate={onDuplicate}
+      {...overrides}
+    />,
   );
-  return { onUpdated, onDeactivated };
+  return { onUpdated, onDeactivated, onDuplicate };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -178,5 +185,13 @@ describe('BudgetCard view budget', () => {
     setup();
     fireEvent.click(screen.getByRole('button', { name: /view budget/i }));
     expect(mockNavigate).toHaveBeenCalledWith('/budgets/1');
+  });
+});
+
+describe('BudgetCard duplicate', () => {
+  it('calls onDuplicate with this budget when Duplicate is clicked', () => {
+    const { onDuplicate } = setup();
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    expect(onDuplicate).toHaveBeenCalledWith(BUDGET);
   });
 });
