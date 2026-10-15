@@ -101,6 +101,16 @@ describe('TableHeaderCell rendering', () => {
     const handle = screen.getByRole('button', { name: /reorder description column/i });
     expect(handle.getAttribute('aria-pressed')).toBe('false');
   });
+
+  it('shows a pointer cursor for a sortable column', () => {
+    setup({ columnKey: 'concept' });
+    expect(getComputedStyle(screen.getByRole('columnheader')).cursor).toBe('pointer');
+  });
+
+  it('shows a default cursor for the non-sortable category column', () => {
+    setup({ columnKey: 'category' });
+    expect(getComputedStyle(screen.getByRole('columnheader')).cursor).toBe('default');
+  });
 });
 
 // ── Interactions ──────────────────────────────────────────────────────────────

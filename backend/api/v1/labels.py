@@ -11,14 +11,16 @@ Endpoints:
 import logging
 
 from django.db import IntegrityError
+from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from ninja import Router
 from ninja.errors import HttpError
 from ninja.security import django_auth
 
 from budgets.models import Category
 from schemas.labels import LabelCreateRequest, LabelSchema, LabelUpdateRequest
-from transactions.models import Label
+from transactions.models import Label, Transaction
 from users.models import Household
 
 logger = logging.getLogger(__name__)
@@ -181,6 +183,15 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
     something actually changed. Setting ``category_id`` to null explicitly
     clears the label's category.
 
+    Summary aggregation groups transactions by ``label__category_id`` —
+    reassigning or clearing this label's category changes which budget
+    category every transaction using it counts toward, without saving any
+    of those Transaction rows. When ``category`` is among the fields
+    changed, their ``updated_at`` is bumped explicitly (same
+    relation-scoped, pre-save pattern as ``delete_label``'s SET_NULL
+    case), inside the same atomic block as the label's own save so a
+    failed save (e.g. a duplicate name) rolls back the bump too.
+
     Args:
         request: The HTTP request object. Must be authenticated.
         label_id: Primary key of the label to update.
@@ -227,7 +238,10 @@ def update_label(request, label_id: int, payload: LabelUpdateRequest):
         raise HttpError(400, 'At least one field must be provided.')
 
     try:
-        label.save(update_fields=[*update_fields, 'updated_at'])
+        with atomic():
+            if 'category' in update_fields:
+                Transaction.objects.filter(label=label).update(updated_at=timezone.now())
+            label.save(update_fields=[*update_fields, 'updated_at'])
     except IntegrityError:
         raise HttpError(
             400, f'A label named "{label.name}" already exists in this household.'
@@ -249,7 +263,18 @@ def delete_label(request, label_id: int):
     """Deletes a label.
 
     Transactions that reference this label will have their label field set
-    to NULL — they are never deleted.
+    to NULL — they are never deleted. That SET_NULL happens via Django's
+    deletion collector as a bulk UPDATE, which — like any bulk update —
+    never touches auto_now fields, so those transactions' updated_at would
+    otherwise stay exactly as it was before this delete even though their
+    label (and so which budget category they count toward) just changed.
+    Bumped here via the same label=label filter the SET_NULL cascade
+    itself resolves — not by materializing every matching id into an
+    id__in list first, which would scale the request with how many
+    transactions use this label and risk MySQL's query-size limits for a
+    heavily used one. Must run before label.delete(), in the same atomic
+    block: label.pk is cleared once the delete completes, so label=label
+    would no longer resolve to anything afterward.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -263,7 +288,10 @@ def delete_label(request, label_id: int):
         HttpError: 404 if the label does not exist.
     """
     label = _get_label_for_member(label_id, request.user)
-    label.delete()
+
+    with atomic():
+        Transaction.objects.filter(label=label).update(updated_at=timezone.now())
+        label.delete()
 
     logger.info(f'User {request.user.email} deleted label (id={label_id}).')
 

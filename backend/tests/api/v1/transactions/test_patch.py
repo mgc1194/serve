@@ -9,7 +9,12 @@ transaction, labeled_transaction.
 transactions/conftest.py provides: client.
 """
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
+
+from transactions.models import Transaction
 
 
 @pytest.mark.django_db
@@ -73,6 +78,23 @@ class TestUpdateTransaction:
         )
         assert response.status_code == 200
         assert response.json()['exclude_from_summary'] is False
+
+    def test_bumps_updated_at_even_with_only_one_field_changed(self, client, alice, transaction):
+        # save(update_fields=...) silently skips auto_now fields unless
+        # they're explicitly listed — exercise a single-field edit (the
+        # narrowest update_fields list) to catch a regression there.
+        yesterday = timezone.now() - timedelta(days=1)
+        Transaction.objects.filter(pk=transaction.id).update(updated_at=yesterday)
+
+        response = client.patch(
+            f'/transactions/{transaction.id}/',
+            json={'exclude_from_summary': True},
+            user=alice,
+        )
+        assert response.status_code == 200
+
+        transaction.refresh_from_db()
+        assert transaction.updated_at > yesterday
 
     def test_returns_400_when_no_fields_provided(self, client, alice, transaction):
         response = client.patch(f'/transactions/{transaction.id}/', json={}, user=alice)

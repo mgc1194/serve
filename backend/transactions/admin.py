@@ -13,8 +13,8 @@ class LabelAdmin(admin.ModelAdmin):
 
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'date', 'concept', 'amount', 'account', 'category', 'label')
-    list_filter = ('date', 'category', 'label', 'account__household')
+    list_display = ('id', 'date', 'concept', 'amount', 'account', 'label')
+    list_filter = ('date', 'label', 'account__household')
     search_fields = ('concept', 'id')
     raw_id_fields = ('account',)
     readonly_fields = ('id', 'imported_at')

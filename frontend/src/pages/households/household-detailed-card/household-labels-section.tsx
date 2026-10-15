@@ -7,7 +7,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { Box, Button, Chip, Typography } from '@mui/material';
 import { useState } from 'react';
 
-import { LabelManagementDialog } from '@pages/households/label-management-dialog';
+import { LabelManagementDialog } from '@components/label-management-dialog';
 import type { Label } from '@serve/types/global';
 import { contrastTextColor } from '@utils/contrast-text-color';
 

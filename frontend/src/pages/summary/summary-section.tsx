@@ -15,16 +15,7 @@ import {
 } from '@mui/material';
 
 import type { CategorySummary, Summary } from '@serve/types/global';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function currency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    signDisplay: 'never',
-  }).format(Math.abs(value));
-}
+import { formatCurrency, signPrefix } from '@utils/currency';
 
 // ── CategoryRow ───────────────────────────────────────────────────────────────
 
@@ -33,7 +24,7 @@ interface CategoryRowProps {
 }
 
 function CategoryRow({ row }: CategoryRowProps) {
-  const categoryLabel = row.category || 'Uncategorised';
+  const categoryLabel = row.category_name || 'Uncategorised';
 
   return (
     <>
@@ -44,7 +35,14 @@ function CategoryRow({ row }: CategoryRowProps) {
         }}
       >
         <TableCell>{categoryLabel}</TableCell>
-        <TableCell align="right">{currency(row.total)}</TableCell>
+        {/* A category's total follows its own type (see
+            api/v1/summary.py::get_summary) — a spending category can still
+            net positive (a refund, a deposit) and vice versa, so its sign
+            here must reflect the actual total, not just "every row under
+            Spending is a cost". */}
+        <TableCell align="right">
+          {signPrefix(row.total)}{formatCurrency(row.total)}
+        </TableCell>
       </TableRow>
 
       {row.labels.map(label => (
@@ -64,7 +62,7 @@ function CategoryRow({ row }: CategoryRowProps) {
             </Box>
           </TableCell>
           <TableCell align="right" sx={{ color: 'text.secondary' }}>
-            {currency(label.total)}
+            {signPrefix(label.total)}{formatCurrency(label.total)}
           </TableCell>
         </TableRow>
       ))}
@@ -106,7 +104,7 @@ function CategoryTable({ categories, emptyMessage }: CategoryTableProps) {
         </TableHead>
         <TableBody>
           {categories.map(cat => (
-            <CategoryRow key={cat.category} row={cat} />
+            <CategoryRow key={cat.category_id ?? 'uncategorised'} row={cat} />
           ))}
         </TableBody>
       </Table>

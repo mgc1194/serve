@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Decorator } from '@storybook/react-vite';
 import { CssBaseline } from '@mui/material';
 import { ThemeProvider } from '@mui/material/styles';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router';
 
 // Relative imports here, per prior experience in this repo that the
@@ -20,6 +21,24 @@ export const themeDecorator: Decorator = (Story) => (
     <Story />
   </ThemeProvider>
 );
+
+// A fresh QueryClient per story — no cache shared across stories, and
+// retries off so a mocked/unhandled rejection surfaces immediately
+// instead of after React Query's default backoff.
+export const queryClientDecorator: Decorator = (Story) => {
+  function QueryClientDecorator() {
+    const [queryClient] = useState(
+      () => new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } }),
+    );
+    return (
+      <QueryClientProvider client={queryClient}>
+        <Story />
+      </QueryClientProvider>
+    );
+  }
+
+  return <QueryClientDecorator />;
+};
 
 export const routerDecorator: Decorator = (Story, { parameters }) => {
   if (!parameters.router) return <Story />;

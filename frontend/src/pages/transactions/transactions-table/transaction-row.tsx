@@ -10,12 +10,13 @@ import { type ColumnKey } from '@pages/transactions/transactions-table/columns';
 import { TransactionActionsCell } from '@pages/transactions/transactions-table/transaction-actions-cell';
 import { TransactionConceptCell } from '@pages/transactions/transactions-table/transaction-concept-cell';
 import { TransactionLabelCell } from '@pages/transactions/transactions-table/transaction-label-cell';
-import type { Label, Transaction } from '@serve/types/global';
+import type { Category, Label, Transaction } from '@serve/types/global';
 
 interface TransactionRowProps {
   transaction: Transaction;
   columnOrder: ColumnKey[];
   labels?: Label[];
+  categories?: Category[];
   onUpdated: (transaction: Transaction) => void;
   onDeleted: (id: number) => void;
 }
@@ -41,6 +42,7 @@ export function TransactionRow({
   transaction,
   columnOrder,
   labels = [],
+  categories = [],
   onUpdated,
   onDeleted,
 }: TransactionRowProps) {
@@ -115,16 +117,25 @@ export function TransactionRow({
           />
         );
 
-      case 'category':
+      case 'category': {
+        // Derived, not stored: a transaction's category is whatever
+        // category its assigned label currently belongs to — looked up
+        // live through labels/categories (both already fetched for other
+        // reasons), the same way api/v1/summary.py derives it server-side.
+        // Reassigning a label's category changes what every transaction
+        // using that label shows here, immediately, with nothing to sync.
+        const label = labels.find(l => l.id === transaction.label_id);
+        const category = label ? categories.find(c => c.id === label.category_id) : undefined;
         return (
           <TableCell key="category" sx={{ py: 1.5 }}>
-            {transaction.category ? (
-              <Chip label={transaction.category} size="small" variant="outlined" />
+            {category ? (
+              <Chip label={category.name} size="small" variant="outlined" />
             ) : (
               <Typography variant="body2" color="text.disabled">—</Typography>
             )}
           </TableCell>
         );
+      }
     }
   }
 

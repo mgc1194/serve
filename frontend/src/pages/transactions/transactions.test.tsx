@@ -10,7 +10,8 @@
 // on the default URL, completes an import via a stubbed ImportCsvDialog, and
 // asserts listTransactions is called again and the dialog stays open.
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useSearchParams } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,8 +20,15 @@ import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { TransactionsPage } from '@pages/transactions';
 import { makeTransaction } from '@serve/mocks';
 import type { FileImportResult, PaginatedTransactions } from '@serve/types/global';
+import * as categoriesService from '@services/categories';
 import * as labelsService from '@services/labels';
 import * as transactionsService from '@services/transactions';
+
+// Needs its own QueryClient — the page reads categories via useCategories.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 vi.mock('@context/auth-context', () => ({
   useAuth: () => ({
@@ -84,7 +92,7 @@ const EMPTY_PAGE: PaginatedTransactions = {
 };
 
 const LABELS = [
-  { id: 5, name: 'Groceries', color: '#22c55e', category: '', household_id: 1 },
+  { id: 5, name: 'Groceries', color: '#22c55e', category_id: null, household_id: 1 },
 ];
 
 const PAGE_WITH_A_ROW: PaginatedTransactions = {
@@ -115,6 +123,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(transactionsService, 'listTransactions').mockResolvedValue(EMPTY_PAGE);
   vi.spyOn(labelsService, 'listLabels').mockResolvedValue([]);
+  vi.spyOn(categoriesService, 'listCategories').mockResolvedValue([]);
 });
 
 describe('TransactionsPage import refresh', () => {
@@ -561,4 +570,146 @@ describe('TransactionsPage stale label_id', () => {
       );
     },
   );
+});
+
+// Lets the user create/edit/delete labels from the Transactions page itself
+// (previously only possible from the household card), since relabeling
+// transactions is exactly when a missing or wrong label tends to surface.
+describe('TransactionsPage label management', () => {
+  // Regression: the page's own load() effect calls setLabels(lbls) when its
+  // Promise.all([listTransactions, listLabels]) resolves. If that fetch is
+  // still in flight when a dialog mutation's own setLabels lands first, the
+  // page's later setLabels(lbls) overwrites it with the pre-mutation list —
+  // the created/edited/deleted label vanishes from the filter bar until the
+  // next reload. Disabling the button while that fetch is in flight is the
+  // simplest fix (ruled out: tracking/cancelling the in-flight load).
+  it('disables "Manage labels" while the page\'s own load is in flight', async () => {
+    let resolveTransactions!: (value: PaginatedTransactions) => void;
+    vi.spyOn(transactionsService, 'listTransactions').mockReturnValue(
+      new Promise(resolve => {
+        resolveTransactions = resolve;
+      }),
+    );
+
+    renderPage();
+
+    expect(screen.getByRole('button', { name: /manage labels/i }).hasAttribute('disabled')).toBe(
+      true,
+    );
+
+    resolveTransactions(EMPTY_PAGE);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /manage labels/i }).hasAttribute('disabled')).toBe(
+        false,
+      ),
+    );
+  });
+
+  it('opens the label management dialog when "Manage labels" is clicked', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage labels/i }));
+
+    expect(await screen.findByText('Labels — Test Household')).toBeDefined();
+  });
+
+  it('adds the new label to the label filter bar once created', async () => {
+    const created = { id: 99, name: 'Subscriptions', color: '#7c3aed', category_id: null, household_id: 1 };
+    vi.spyOn(labelsService, 'createLabel').mockResolvedValue(created);
+    // Page's initial fetch and the dialog's own fetch on open both resolve
+    // empty — the new label reaches the page purely via onLabelsChanged,
+    // not a refetch, so listLabels is never called a third time.
+    vi.spyOn(labelsService, 'listLabels').mockResolvedValue([]);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage labels/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /new label/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'Subscriptions');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(labelsService.createLabel).toHaveBeenCalledOnce());
+
+    await userEvent.click(screen.getByRole('button', { name: /^close$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await userEvent.click(screen.getByRole('combobox', { name: /filter by label/i }));
+    expect(await screen.findByRole('option', { name: 'Subscriptions' })).toBeDefined();
+  });
+});
+
+// Mirrors the label management coverage above, for categories. Unlike
+// LabelManagementDialog, CategoryManagementDialog has no onChanged callback —
+// its mutations invalidate the shared ['categories', householdId] TanStack
+// Query key (queries/categories.ts), which is the exact key the page's own
+// categoriesQuery reads, so a created category reaches the page by that
+// query refetching rather than a prop callback.
+describe('TransactionsPage category management', () => {
+  it('opens the category management dialog when "Manage categories" is clicked', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage categories/i }));
+
+    expect(await screen.findByText('Categories — Test Household')).toBeDefined();
+  });
+
+  it('refetches the shared categories query after creating a category', async () => {
+    const created = { id: 42, name: 'Entertainment', type: 'spending' as const, is_active: true, household_id: 1 };
+    vi.spyOn(categoriesService, 'createCategory').mockResolvedValue(created);
+
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledTimes(1));
+
+    await userEvent.click(screen.getByRole('button', { name: /manage categories/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /new category/i }));
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'Entertainment');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(categoriesService.createCategory).toHaveBeenCalledOnce());
+    // The create mutation invalidates the shared query key, which the
+    // page's own categoriesQuery also reads — a second fetch confirms the
+    // page gets the fresh list without any callback wiring.
+    await waitFor(() => expect(categoriesService.listCategories).toHaveBeenCalledTimes(2));
+  });
+});
+
+// A failed categories fetch must not be silently presented as "no
+// categories" — that would render every categorized transaction's Category
+// cell as "—", indistinguishable from a genuinely uncategorized one.
+describe('TransactionsPage categories error', () => {
+  it('shows a warning banner when categories fail to load', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockRejectedValue(
+      new categoriesService.ApiError(500, 'Server error.'),
+    );
+
+    renderPage();
+
+    await screen.findByText(/could not load categories/i);
+  });
+
+  it('does not show the categories warning banner when categories load successfully', async () => {
+    renderPage();
+    await waitFor(() => expect(transactionsService.listTransactions).toHaveBeenCalledTimes(1));
+
+    expect(screen.queryByText(/could not load categories/i)).toBeNull();
+  });
+
+  it('refetches categories when Retry is clicked on the categories banner', async () => {
+    vi.spyOn(categoriesService, 'listCategories').mockRejectedValueOnce(
+      new categoriesService.ApiError(500, 'Server error.'),
+    );
+
+    renderPage();
+    await screen.findByText(/could not load categories/i);
+
+    vi.mocked(categoriesService.listCategories).mockResolvedValueOnce([]);
+    await userEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    await waitFor(() => expect(screen.queryByText(/could not load categories/i)).toBeNull());
+  });
 });

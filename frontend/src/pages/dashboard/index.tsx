@@ -5,6 +5,7 @@ import { Box, Container, Typography } from '@mui/material';
 import { useAuth } from '@context/auth-context';
 import { AppHeader } from '@layout/app-header';
 import { AccountsNavCard } from '@pages/dashboard/accounts-nav-card';
+import { BudgetsNavCard } from '@pages/dashboard/budgets-nav-card';
 import { HouseholdsNavCard } from '@pages/dashboard/households-nav-card';
 import { SummaryNavCard } from '@pages/dashboard/summary-nav-card';
 import { TransactionsNavCard } from '@pages/dashboard/transactions-nav-card';
@@ -29,6 +30,7 @@ export function DashboardPage() {
           <AccountsNavCard />
           <TransactionsNavCard />
           <SummaryNavCard />
+          <BudgetsNavCard />
         </Box>
       </Container>
     </Box>

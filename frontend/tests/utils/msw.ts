@@ -20,11 +20,11 @@ export const mockDetailedHousehold = {
   members: [{ id: 1, email: 'test@example.com', first_name: 'Test', last_name: 'User' }],
 };
 
-export const mockLabel = { id: 1, name: 'Groceries', color: '#6B7280', category: 'Food', household_id: 1 };
+export const mockLabel = { id: 1, name: 'Groceries', color: '#6B7280', category_id: null, household_id: 1 };
 
 export const mockTransaction = {
   id: 1, date: '2026-03-01', concept: 'TRADER JOES', amount: -42.57,
-  label_id: null, label_name: null, label_color: null, category: null,
+  label_id: null, label_name: null, label_color: null,
   additional_labels: null, source: 'import', account_id: 1,
   account_name: 'My Savings', bank_name: 'SoFi', imported_at: '2026-03-10T08:00:00Z',
 };

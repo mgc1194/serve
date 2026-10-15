@@ -11,7 +11,6 @@ export function makeTransaction(overrides: Partial<Transaction> = {}): Transacti
     label_id: null,
     label_name: null,
     label_color: null,
-    category: null,
     additional_labels: null,
     exclude_from_summary: false,
     source: 'csv',

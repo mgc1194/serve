@@ -1,11 +1,14 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
 import { HouseholdDetailCard } from '@pages/households/household-detailed-card';
-import type { User } from '@serve/types/global';
+import { makeLabel } from '@serve/mocks';
+import type { Label, User } from '@serve/types/global';
 import { renameHousehold, deleteHousehold, addMember, ApiError } from '@services/households';
+import { listLabels } from '@services/labels';
 
 vi.mock('@services/households', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@services/households')>();
@@ -13,6 +16,28 @@ vi.mock('@services/households', async (importOriginal) => {
 });
 
 vi.mock('@services/labels', () => ({ listLabels: vi.fn(() => new Promise(() => {})) }));
+// Never resolves — HouseholdCategoriesSection (and, via HouseholdLabelsSection,
+// the label picker) degrade quietly to an empty state while "loading", which
+// is all any test in this file needs; its own behavior is covered by
+// household-categories-section.test.tsx.
+vi.mock('@services/categories', () => ({ listCategories: vi.fn(() => new Promise(() => {})) }));
+
+// HouseholdLabelsSection owns its own management dialog and only ever hands
+// data back up via onLabelsChanged — stubbing it to a button that fires that
+// callback directly lets the race test below trigger "the dialog just
+// reported a mutation" without driving the real dialog UI. (Categories' own
+// version of this used to live here too — see queries/categories.ts's
+// header comment on why that's no longer this component's job at all.)
+vi.mock('@pages/households/household-detailed-card/household-labels-section', () => ({
+  HouseholdLabelsSection: ({ labels, onLabelsChanged }: { labels: Label[]; onLabelsChanged: (labels: Label[]) => void }) => (
+    <>
+      <button type="button" onClick={() => onLabelsChanged([makeLabel({ id: 99, name: 'Mutated Label' })])}>
+        simulate label mutation
+      </button>
+      {labels.map(label => <span key={label.id}>{label.name}</span>)}
+    </>
+  ),
+}));
 
 const mockNavigate = vi.fn();
 vi.mock('react-router', async () => {
@@ -23,6 +48,13 @@ vi.mock('react-router', async () => {
 const mockRenameHousehold = vi.mocked(renameHousehold);
 const mockDeleteHousehold = vi.mocked(deleteHousehold);
 const mockAddMember = vi.mocked(addMember);
+const mockListLabels = vi.mocked(listLabels);
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(res => { resolve = res; });
+  return { promise, resolve };
+}
 
 const household = {
   id: 1,
@@ -48,18 +80,21 @@ function setup(
   const onUpdated = vi.fn();
   const onDeleted = vi.fn();
   const onAddAccount = vi.fn();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <AuthProvider value={{ user: authUser, setUser: vi.fn(), isLoading: false, sessionError: false }}>
-      <ActiveHouseholdProvider>
-        <HouseholdDetailCard
-          household={{ ...household, ...overrides }}
-          onUpdated={onUpdated}
-          onDeleted={onDeleted}
-          accountCount={accountCount}
-          onAddAccount={onAddAccount}
-        />
-      </ActiveHouseholdProvider>
-    </AuthProvider>,
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider value={{ user: authUser, setUser: vi.fn(), isLoading: false, sessionError: false }}>
+        <ActiveHouseholdProvider>
+          <HouseholdDetailCard
+            household={{ ...household, ...overrides }}
+            onUpdated={onUpdated}
+            onDeleted={onDeleted}
+            accountCount={accountCount}
+            onAddAccount={onAddAccount}
+          />
+        </ActiveHouseholdProvider>
+      </AuthProvider>
+    </QueryClientProvider>,
   );
   return { onUpdated, onDeleted, onAddAccount };
 }
@@ -236,5 +271,28 @@ describe('HouseholdDetailCard delete', () => {
     fireEvent.click(screen.getByRole('button', { name: /delete household/i }));
     fireEvent.click(screen.getByRole('button', { name: /yes, delete/i }));
     expect(await screen.findByText('This household still has accounts.')).toBeDefined();
+  });
+});
+
+describe('HouseholdDetailCard stale mount-fetch protection', () => {
+  // Regression test for: a slow mount-time listLabels call resolving AFTER
+  // the dialog reports a mutation via onLabelsChanged must not revert the
+  // fresher, mutated state with its stale pre-mutation snapshot. Categories'
+  // own version of this used to live here too, until TanStack Query took
+  // over owning and caching that data (see queries/categories.ts) — it
+  // guarantees this on its own, for every consumer, not just this card.
+
+  it('does not let a slow labels fetch revert a label mutation that lands first', async () => {
+    const mountFetch = deferred<Label[]>();
+    mockListLabels.mockReturnValueOnce(mountFetch.promise);
+    setup();
+
+    fireEvent.click(screen.getByText('simulate label mutation'));
+    expect(await screen.findByText('Mutated Label')).toBeDefined();
+
+    mountFetch.resolve([makeLabel({ id: 1, name: 'Stale Label' })]);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(screen.queryByText('Stale Label')).toBeNull();
+    expect(screen.getByText('Mutated Label')).toBeDefined();
   });
 });

@@ -24,3 +24,16 @@ export const DEFAULT_COLUMN_ORDER: ColumnKey[] = [
   'label',
   'category',
 ];
+
+// category is derived client-side (from the transaction's label's
+// category_id, looked up against the household's categories — both
+// already fetched for other reasons) rather than sorted/filtered
+// server-side, so it's reorderable like every other column but excluded
+// from the sort system: there's no backend SortField for it yet.
+export const SORTABLE_COLUMNS: ReadonlySet<ColumnKey> = new Set([
+  'date',
+  'concept',
+  'amount',
+  'account',
+  'label',
+]);

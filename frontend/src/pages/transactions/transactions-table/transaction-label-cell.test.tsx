@@ -18,22 +18,20 @@ vi.mock('@services/transactions', async importOriginal => {
 const mockUpdateTransactionLabel = vi.mocked(transactionsService.updateTransactionLabel);
 
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a' }),
+  makeLabel({ id: 2, name: 'Transport', color: '#2563eb' }),
 ];
 
 const TX = makeTransaction({
   label_id: 1,
   label_name: 'Groceries',
   label_color: '#16a34a',
-  category: 'Food',
 });
 
 const TX_NO_LABEL = makeTransaction({
   label_id: null,
   label_name: null,
   label_color: null,
-  category: null,
 });
 
 function setup(props: Partial<React.ComponentProps<typeof TransactionLabelCell>> = {}) {

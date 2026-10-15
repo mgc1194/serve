@@ -5,8 +5,11 @@ Bank, AccountType, and Account tests have moved to
 tests/banking/test_models.py as part of the banking app extraction.
 """
 
+from datetime import timedelta
+
 import pytest
 from django.db.utils import IntegrityError
+from django.utils import timezone
 
 from tests.factories import (
     AccountFactory,
@@ -158,9 +161,6 @@ class TestTransaction:
     def test_label_is_optional(self, transaction):
         assert transaction.label is None
 
-    def test_category_is_optional(self, transaction):
-        assert transaction.category is None
-
     def test_additional_labels_is_optional(self, transaction):
         assert transaction.additional_labels is None
 
@@ -182,3 +182,29 @@ class TestTransaction:
         )
         tx2 = TransactionFactory(dedupe_hash=tx.dedupe_hash, account=second_account)
         assert tx2.pk is not None
+
+    def test_updated_at_is_set_on_creation(self, transaction):
+        assert transaction.updated_at is not None
+
+    def test_updated_at_changes_on_save(self, transaction):
+        # Backdate directly (bypassing auto_now) so the later comparison
+        # can't be flaky against DB timestamp precision or two saves
+        # landing in the same instant.
+        yesterday = timezone.now() - timedelta(days=1)
+        Transaction.objects.filter(pk=transaction.pk).update(updated_at=yesterday)
+        transaction.refresh_from_db()
+        assert transaction.updated_at == yesterday
+
+        transaction.exclude_from_summary = True
+        transaction.save()
+        transaction.refresh_from_db()
+        assert transaction.updated_at > yesterday
+
+    def test_imported_at_is_unaffected_by_later_saves(self, transaction):
+        original_imported_at = transaction.imported_at
+
+        transaction.exclude_from_summary = True
+        transaction.save()
+        transaction.refresh_from_db()
+
+        assert transaction.imported_at == original_imported_at

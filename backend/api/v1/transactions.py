@@ -57,21 +57,19 @@ class SortField(StrEnum):
     amount = 'amount'
     account = 'account'
     label = 'label'
-    category = 'category'
 
 
 # ── Field metadata ────────────────────────────────────────────────────────────
 
 # Maps SortField to the ORM field name used in ORDER BY and WHERE.
-# label and category use annotated fields so Django emits LEFT JOINs
-# rather than INNER JOINs (which would silently drop unlabelled rows).
+# label uses an annotated field so Django emits a LEFT JOIN rather than an
+# INNER JOIN (which would silently drop unlabelled rows).
 _SORT_FIELD = {
     SortField.date: 'date',
     SortField.concept: 'concept',
     SortField.amount: 'amount',
     SortField.account: 'account_name_sort',
     SortField.label: 'label_name_sort',
-    SortField.category: 'category_sort',
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,7 +110,6 @@ def _serialize(t: Transaction) -> dict:
         'label_id': t.label_id,
         'label_name': t.label.name if t.label else None,
         'label_color': t.label.color if t.label else None,
-        'category': t.category,
         'additional_labels': t.additional_labels,
         'exclude_from_summary': t.exclude_from_summary,
         'source': t.source,
@@ -156,13 +153,11 @@ def _apply_sort(qs, sort: str, direction: str):
 def _get_sort_value(row, sort: str) -> str:
     """Extracts the boundary row's sort value for cursor encoding.
 
-    Nullable fields (label, category) are coalesced to '' — matching the
+    Nullable fields (label) are coalesced to '' — matching the
     annotation value so cursor round-trips are consistent.
     """
     if sort == SortField.label:
         return row.label.name if row.label else ''
-    if sort == SortField.category:
-        return row.category if row.category else ''
     if sort == SortField.account:
         return row.account.name
     if sort == SortField.concept:
@@ -176,7 +171,7 @@ def _apply_cursor_filter(qs, sort: SortField, direction: str, sort_value: str, c
     """Filters to rows strictly after the cursor in the given direction.
 
     All nullable fields are coalesced to '' in the annotation, so '' is a
-    valid sort value meaning "no label / no category". The keyset filter
+    valid sort value meaning "no label". The keyset filter
     works uniformly across all fields:
 
         DESC: (field, id) < (sort_value, cursor_id)
@@ -227,8 +222,8 @@ def list_transactions(
     Results are stable across concurrent imports because pagination is
     keyset-based — inserting new transactions does not shift existing pages.
 
-    Nullable sort fields (label, category) are coalesced to empty string,
-    meaning unlabelled/uncategorised rows sort first in ASC and last in DESC.
+    Nullable sort fields (label) are coalesced to empty string,
+    meaning unlabelled rows sort first in ASC and last in DESC.
 
     Pagination:
     - First page:    no cursor params.
@@ -274,16 +269,15 @@ def list_transactions(
         raise HttpError(403, 'You are not a member of this household.')
 
     # Annotate nullable sort fields so ORDER BY uses LEFT JOINs.
-    # label__name and category are nullable — coalescing to '' means:
-    #   - Unlabelled/uncategorised rows sort first in ASC ('' < any label)
-    #   - Unlabelled/uncategorised rows sort last in DESC ('' < any label)
+    # label__name is nullable — coalescing to '' means:
+    #   - Unlabelled rows sort first in ASC ('' < any label)
+    #   - Unlabelled rows sort last in DESC ('' < any label)
     # account__name is non-nullable but annotated for consistency.
     base_qs = (
         Transaction.objects.filter(account__household_id=household_id)
         .select_related('account__account_type__bank', 'label')
         .annotate(
             label_name_sort=Coalesce(F('label__name'), Value('')),
-            category_sort=Coalesce(F('category'), Value('')),
             account_name_sort=F('account__name'),
         )
     )
@@ -509,7 +503,9 @@ def update_transaction(request, transaction_id: int, payload: TransactionUpdateR
     if not update_fields:
         raise HttpError(400, 'At least one field must be provided.')
 
-    transaction.save(update_fields=update_fields)
+    # auto_now fields are silently skipped by save(update_fields=...) unless
+    # explicitly listed — see Label's update endpoint for the same pattern.
+    transaction.save(update_fields=[*update_fields, 'updated_at'])
 
     logger.info(
         f'User {request.user.email} updated transaction '

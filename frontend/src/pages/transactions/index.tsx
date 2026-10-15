@@ -8,11 +8,15 @@
 // Rendering is delegated to TransactionsTable and ImportCsvDialog.
 
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
-import { Box, Button, Container, Typography } from '@mui/material';
+import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
+import { Alert, Box, Button, Container, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
+import { CategoryManagementDialog } from '@components/category-management-dialog';
+import { LabelManagementDialog } from '@components/label-management-dialog';
 import { SwitchHouseholdButton } from '@components/switch-household-button';
 import { useActiveHousehold } from '@context/active-household-context';
 import { AppHeader } from '@layout/app-header';
@@ -20,6 +24,7 @@ import { DateRangeFilter } from '@pages/transactions/date-range-filter';
 import { ImportCsvDialog } from '@pages/transactions/import-csv-dialog';
 import { LabelFilterBar } from '@pages/transactions/label-filter-bar';
 import { TransactionsTable } from '@pages/transactions/transactions-table';
+import { useCategories } from '@serve/queries/categories';
 import type {
   FileImportResult,
   Label,
@@ -45,6 +50,19 @@ export function TransactionsPage() {
   const { activeHousehold } = useActiveHousehold();
 
   const householdId = activeHousehold?.id;
+
+  // Shared with HouseholdCategoriesSection/CategoryManagementDialog/the
+  // label picker (see queries/categories.ts) — reads from the same cache
+  // entry rather than fetching its own copy. householdId can be undefined
+  // (no active household yet); the dummy 0 is never used since enabled
+  // gates the fetch on a real id being present.
+  const categoriesQuery = useCategories(householdId ?? 0, { enabled: householdId !== undefined });
+  // A failed fetch with nothing cached yet falls back to [] here, which
+  // would otherwise render every categorized transaction as "—", identical
+  // to a genuinely uncategorized one — the banner below (keyed off isError)
+  // is what tells the two apart, rather than silently passing off missing
+  // data as an empty category list.
+  const categories = categoriesQuery.data ?? [];
 
   // ── URL-driven state ────────────────────────────────────────────────────────
   const sortKey = (searchParams.get('sort') ?? DEFAULT_SORT) as SortField;
@@ -104,6 +122,8 @@ export function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
+  const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   // Bumped to force a refetch (e.g. after a CSV import) even when none of
   // the URL-driven params below have changed.
   const [refreshToken, setRefreshToken] = useState(0);
@@ -340,7 +360,16 @@ export function TransactionsPage() {
           Dashboard
         </Button>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
           {activeHousehold ? (
             <Typography variant="h4">
               <SwitchHouseholdButton
@@ -360,14 +389,55 @@ export function TransactionsPage() {
           ) : (
             <Typography variant="h4">Transactions</Typography>
           )}
-          <Button
-            variant="outlined"
-            startIcon={<FileUploadOutlinedIcon />}
-            onClick={() => setImportOpen(true)}
-          >
-            Import CSV
-          </Button>
+
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            {activeHousehold && (
+              <>
+                {/* Disabled while the page's own load() is in flight: that
+                    fetch's setLabels(lbls) (below) would otherwise land
+                    after a dialog mutation's setLabels and silently restore
+                    the pre-mutation list — the created/edited/deleted label
+                    would vanish from the filter bar until the next reload. */}
+                <Button
+                  variant="outlined"
+                  startIcon={<LocalOfferOutlinedIcon />}
+                  onClick={() => setLabelDialogOpen(true)}
+                  disabled={isLoading}
+                >
+                  Manage labels
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<CategoryOutlinedIcon />}
+                  onClick={() => setCategoryDialogOpen(true)}
+                >
+                  Manage categories
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<FileUploadOutlinedIcon />}
+              onClick={() => setImportOpen(true)}
+            >
+              Import CSV
+            </Button>
+          </Box>
         </Box>
+
+        {categoriesQuery.isError && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => categoriesQuery.refetch()}>
+                Retry
+              </Button>
+            }
+          >
+            Could not load categories — the Category column may be incomplete.
+          </Alert>
+        )}
 
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
           <LabelFilterBar
@@ -386,6 +456,7 @@ export function TransactionsPage() {
         <TransactionsTable
           transactions={paginated?.results ?? []}
           labels={labels}
+          categories={categories}
           isLoading={isLoading}
           error={error}
           hasActiveFilter={labelId !== undefined || dateFrom !== undefined || dateTo !== undefined}
@@ -411,6 +482,25 @@ export function TransactionsPage() {
           onImported={handleImported}
           onClose={() => setImportOpen(false)}
         />
+
+        {householdId !== undefined && (
+          <LabelManagementDialog
+            open={labelDialogOpen}
+            householdId={householdId}
+            householdName={activeHousehold?.name ?? ''}
+            onClose={() => setLabelDialogOpen(false)}
+            onLabelsChanged={setLabels}
+          />
+        )}
+
+        {householdId !== undefined && (
+          <CategoryManagementDialog
+            open={categoryDialogOpen}
+            householdId={householdId}
+            householdName={activeHousehold?.name ?? ''}
+            onClose={() => setCategoryDialogOpen(false)}
+          />
+        )}
       </Container>
     </Box>
   );

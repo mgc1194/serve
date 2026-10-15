@@ -8,7 +8,7 @@ const __dirname = dirname(__filename);
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.story.tsx'],
-  addons: ['@storybook/addon-a11y', '@storybook/addon-docs'],
+  addons: ['@storybook/addon-a11y', '@storybook/addon-docs', 'msw-storybook-addon'],
   framework: {
     name: '@storybook/react-vite',
     options: {},

@@ -21,8 +21,8 @@ vi.mock('@services/transactions', async importOriginal => {
 });
 
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a' }),
+  makeLabel({ id: 2, name: 'Transport', color: '#2563eb' }),
 ];
 
 const TX = makeTransaction();
@@ -229,5 +229,20 @@ describe('TransactionsTable sorting', () => {
     });
     fireEvent.click(screen.getByRole('columnheader', { name: /description/i }));
     expect(onSortChange).toHaveBeenCalledWith('concept', 'desc');
+  });
+
+  // category is derived client-side — there's no backend SortField for it
+  // yet (see columns.ts's SORTABLE_COLUMNS), so clicking or activating its
+  // header must not attempt to sort by it.
+  it('does not call onSortChange when the category header is clicked', () => {
+    const { onSortChange } = setup({ transactions: [TX] });
+    fireEvent.click(screen.getByRole('columnheader', { name: /category/i }));
+    expect(onSortChange).not.toHaveBeenCalled();
+  });
+
+  it('does not call onSortChange when Enter is pressed on the category header', () => {
+    const { onSortChange } = setup({ transactions: [TX] });
+    fireEvent.keyDown(screen.getByRole('columnheader', { name: /category/i }), { key: 'Enter' });
+    expect(onSortChange).not.toHaveBeenCalled();
   });
 });

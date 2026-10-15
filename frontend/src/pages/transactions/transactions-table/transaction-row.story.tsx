@@ -5,7 +5,7 @@ import type { Decorator, Meta, StoryObj } from '@storybook/react';
 
 import { DEFAULT_COLUMN_ORDER } from '@pages/transactions/transactions-table/columns';
 import { TransactionRow } from '@pages/transactions/transactions-table/transaction-row';
-import { makeLabel, makeTransaction } from '@serve/mocks';
+import { makeCategory, makeLabel, makeTransaction } from '@serve/mocks';
 
 const tableDecorator: Decorator = Story => (
   <Table size="small">
@@ -15,10 +15,15 @@ const tableDecorator: Decorator = Story => (
   </Table>
 );
 
+const CATEGORIES = [
+  makeCategory({ id: 1, name: 'Food', type: 'spending' }),
+  makeCategory({ id: 2, name: 'Subscriptions', type: 'spending' }),
+];
+
 const LABELS = [
-  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category: 'Food' }),
-  makeLabel({ id: 2, name: 'Subscriptions', color: '#7c3aed', category: 'Entertainment' }),
-  makeLabel({ id: 3, name: 'Transport', color: '#2563eb', category: '' }),
+  makeLabel({ id: 1, name: 'Groceries', color: '#16a34a', category_id: 1 }),
+  makeLabel({ id: 2, name: 'Subscriptions', color: '#7c3aed', category_id: 2 }),
+  makeLabel({ id: 3, name: 'Transport', color: '#2563eb', category_id: null }),
 ];
 
 const meta: Meta<typeof TransactionRow> = {
@@ -30,6 +35,7 @@ const meta: Meta<typeof TransactionRow> = {
     transaction: makeTransaction(),
     columnOrder: DEFAULT_COLUMN_ORDER,
     labels: LABELS,
+    categories: CATEGORIES,
     onUpdated: () => {},
     onDeleted: () => {},
   },
@@ -54,7 +60,7 @@ export const Credit: Story = {
   },
 };
 
-// Row with a label and category pre-assigned
+// Row with a label pre-assigned
 export const WithLabel: Story = {
   args: {
     transaction: makeTransaction({
@@ -63,7 +69,6 @@ export const WithLabel: Story = {
       label_id: 2,
       label_name: 'Subscriptions',
       label_color: '#7c3aed',
-      category: 'Entertainment',
     }),
   },
 };

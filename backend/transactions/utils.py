@@ -34,7 +34,7 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
     Insert new transactions from a DataFrame, skipping duplicates.
     Deduplication is scoped to the account via dedupe_hash — preventing
     both accidental duplicates and cross-tenant ID collisions.
-    Labels, category, and additional_labels are never overwritten on re-import.
+    Labels and additional_labels are never overwritten on re-import.
 
     Args:
         df:      Cleaned DataFrame from a handler's process() method.
@@ -73,7 +73,6 @@ def upsert_transactions(df: pd.DataFrame, account: Account) -> dict:
                     concept=row.Concept,
                     amount=row.Amount,
                     label=None,
-                    category=None,
                     additional_labels=None,
                     source=Transaction.Source.IMPORT,
                     account=account,
