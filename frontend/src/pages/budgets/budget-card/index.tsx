@@ -54,9 +54,10 @@ interface BudgetCardProps {
   budget: Budget;
   onUpdated: (budget: Budget) => void;
   onDeactivated: (id: number) => void;
+  onDuplicate: (budget: Budget) => void;
 }
 
-export function BudgetCard({ budget, onUpdated, onDeactivated }: BudgetCardProps) {
+export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: BudgetCardProps) {
   const navigate = useNavigate();
 
   // Rename
@@ -244,6 +245,9 @@ export function BudgetCard({ budget, onUpdated, onDeactivated }: BudgetCardProps
           <>
             <Button size="small" onClick={() => navigate(`/budgets/${budget.id}`)}>
               View budget
+            </Button>
+            <Button size="small" onClick={() => onDuplicate(budget)}>
+              Duplicate
             </Button>
             <Box sx={{ flex: 1 }} />
             <Button

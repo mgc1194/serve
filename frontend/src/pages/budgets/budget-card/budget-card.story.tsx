@@ -10,6 +10,7 @@ const meta: Meta<typeof BudgetCard> = {
   args: {
     onUpdated: () => {},
     onDeactivated: () => {},
+    onDuplicate: () => {},
   },
 };
 

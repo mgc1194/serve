@@ -7,8 +7,8 @@ budgets/conftest.py provides: client.
 
 import pytest
 
-from budgets.models import Budget
-from tests.factories import BudgetFactory
+from budgets.models import Budget, BudgetLine
+from tests.factories import BudgetFactory, BudgetLineFactory, CategoryFactory
 
 
 @pytest.mark.django_db
@@ -172,3 +172,140 @@ class TestCreateBudget:
             json={'name': 'X', 'type': 'project', 'household_id': household.id},
         )
         assert response.status_code == 401
+
+
+@pytest.mark.django_db
+class TestCopyLinesFromBudget:
+    def test_copies_category_planned_amount_and_notes(self, client, alice, household):
+        source = BudgetFactory(household=household, name='August 2026')
+        earning = CategoryFactory(household=household, type='earning', name='Salary')
+        spending = CategoryFactory(household=household, type='spending', name='Rent')
+        BudgetLineFactory(budget=source, category=earning, planned_amount=5000, notes='biweekly')
+        BudgetLineFactory(budget=source, category=spending, planned_amount=1500, notes='')
+
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'September 2026',
+                'type': 'period',
+                'household_id': household.id,
+                'period_start': '2026-09-01',
+                'period_end': '2026-09-30',
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        new_budget_id = response.json()['id']
+
+        copied = list(BudgetLine.objects.filter(budget_id=new_budget_id).order_by('category__name'))
+        assert len(copied) == 2
+        assert [(line.category_id, line.planned_amount, line.notes) for line in copied] == [
+            (spending.id, 1500, ''),
+            (earning.id, 5000, 'biweekly'),
+        ]
+
+    def test_copied_lines_start_with_zero_actual_amount(self, client, alice, household):
+        source = BudgetFactory(household=household)
+        line = BudgetLineFactory(budget=source, planned_amount=200)
+        line.actual_amount = 199
+        line.save(update_fields=['actual_amount'])
+
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        copied = BudgetLine.objects.get(budget_id=response.json()['id'])
+        assert copied.actual_amount == 0
+
+    def test_source_with_no_lines_creates_an_empty_budget(self, client, alice, household):
+        source = BudgetFactory(household=household)
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert not BudgetLine.objects.filter(budget_id=response.json()['id']).exists()
+
+    def test_source_budget_in_different_household_returns_400(
+        self, client, alice, household, other_household
+    ):
+        # alice must belong to BOTH households here — otherwise the 403
+        # membership check on the source budget would fire first, and this
+        # wouldn't be testing the household-mismatch check at all.
+        other_household.users.add(alice)
+        source = BudgetFactory(household=other_household)
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 400
+        assert not Budget.objects.filter(name='Copy').exists()
+
+    def test_source_budget_user_is_not_a_member_of_returns_403(
+        self, client, alice, household, other_household
+    ):
+        source = BudgetFactory(household=other_household)
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 403
+
+    def test_nonexistent_source_budget_returns_404(self, client, alice, household):
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': 999999,
+            },
+            user=alice,
+        )
+        assert response.status_code == 404
+
+    def test_failed_create_does_not_copy_lines(self, client, alice, household):
+        BudgetFactory(household=household, name='September 2026')
+        source = BudgetFactory(household=household)
+        BudgetLineFactory(budget=source)
+
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'September 2026',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 400
+        # Only the original source line exists — nothing copied onto a
+        # budget that was never actually created.
+        assert BudgetLine.objects.count() == 1

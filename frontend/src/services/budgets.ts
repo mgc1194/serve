@@ -15,6 +15,9 @@ export async function createBudget(payload: {
   household_id: number;
   period_start?: string;
   period_end?: string;
+  // Seeds the new budget's lines (category, planned_amount, notes — not
+  // actual_amount) from an existing budget in the same household.
+  copy_lines_from_budget_id?: number;
 }): Promise<Budget> {
   return apiFetch<Budget>('/budgets/', {
     method: 'POST',
