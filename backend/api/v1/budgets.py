@@ -251,10 +251,16 @@ def list_budgets(request, household_id: int):
 
 @router.post('/budgets/', response=BudgetSchema)
 def create_budget(request, payload: BudgetCreateRequest):
-    """Creates a new budget in a household.
+    """Creates a new budget in a household, reactivating a soft-deleted one.
 
     The user must be a member of the target household. Budget names must
-    be unique within a household, regardless of type.
+    be unique within a household, regardless of type. If a soft-deleted
+    budget already exists at (household, name), it is reactivated instead
+    of creating a duplicate row — budgets never free up their (household,
+    name) tuple on deactivation, same as Category. Reactivating replaces
+    its type/period and clears its old lines first, since this is really a
+    brand new budget that just has to reuse the DB row the name is still
+    pinned to.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -263,13 +269,14 @@ def create_budget(request, payload: BudgetCreateRequest):
             copy_lines_from_budget_id to seed the new budget's lines.
 
     Returns:
-        The created BudgetSchema.
+        The created (or reactivated) BudgetSchema.
 
     Raises:
         HttpError: 400 if the name is blank, exceeds the model's max
-            length, already exists in the household, if the period dates
-            are invalid for the given type, or if copy_lines_from_budget_id
-            names a budget in a different household.
+            length, an active budget with that name already exists, if the
+            period dates are invalid for the given type, or if
+            copy_lines_from_budget_id names a budget in a different
+            household.
         HttpError: 403 if the user is not a member of the household (or,
             via _get_budget_for_member, of copy_lines_from_budget_id's own
             household).
@@ -294,15 +301,38 @@ def create_budget(request, payload: BudgetCreateRequest):
         if source_budget.household_id != household.id:
             raise HttpError(400, 'Can only copy budget lines from a budget in the same household.')
 
+    existing = Budget.objects.filter(household=household, name=name).first()
+    if existing is not None and existing.is_active:
+        raise HttpError(400, f'A budget named "{name}" already exists in this household.')
+
     try:
         with atomic():
-            budget = Budget.objects.create(
-                name=name,
-                type=payload.type,
-                period_start=payload.period_start,
-                period_end=payload.period_end,
-                household=household,
-            )
+            if existing is not None:
+                existing.lines.all().delete()
+                existing.type = payload.type
+                existing.period_start = payload.period_start
+                existing.period_end = payload.period_end
+                existing.is_active = True
+                existing.synced_at = None
+                existing.save(
+                    update_fields=[
+                        'type',
+                        'period_start',
+                        'period_end',
+                        'is_active',
+                        'synced_at',
+                        'updated_at',
+                    ]
+                )
+                budget = existing
+            else:
+                budget = Budget.objects.create(
+                    name=name,
+                    type=payload.type,
+                    period_start=payload.period_start,
+                    period_end=payload.period_end,
+                    household=household,
+                )
             if source_budget is not None:
                 source_lines = source_budget.lines.all()
                 BudgetLine.objects.bulk_create(
@@ -317,8 +347,9 @@ def create_budget(request, payload: BudgetCreateRequest):
     except IntegrityError:
         raise HttpError(400, f'A budget named "{name}" already exists in this household.') from None
 
+    verb = 'reactivated' if existing is not None else 'created'
     logger.info(
-        f'User {request.user.email} created budget "{budget.name}" (id={budget.id}) '
+        f'User {request.user.email} {verb} budget "{budget.name}" (id={budget.id}) '
         f'in household "{household.name}" (id={household.id}).'
         + (f' Copied lines from budget (id={source_budget.id}).' if source_budget else '')
     )

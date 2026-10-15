@@ -175,6 +175,77 @@ class TestCreateBudget:
 
 
 @pytest.mark.django_db
+class TestRecreateDeactivatedBudget:
+    def test_reuses_the_name_of_a_deactivated_budget(self, client, alice, household):
+        old = BudgetFactory(
+            household=household,
+            name='August 2026',
+            is_active=False,
+            type='period',
+            period_start='2026-08-01',
+            period_end='2026-08-31',
+        )
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        # Reuses the same row rather than freeing up the name for a brand
+        # new one — the (household, name) tuple never frees up on
+        # deactivation, same as Category.
+        assert body['id'] == old.id
+        assert body['is_active'] is True
+        assert body['type'] == 'project'
+        assert body['period_start'] is None
+        assert body['period_end'] is None
+
+    def test_reactivating_clears_lines_from_the_deactivated_budget(self, client, alice, household):
+        old = BudgetFactory(household=household, name='August 2026', is_active=False)
+        BudgetLineFactory(budget=old)
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert not BudgetLine.objects.filter(budget_id=old.id).exists()
+
+    def test_reactivating_with_copy_lines_only_copies_the_source_budgets_lines(
+        self, client, alice, household
+    ):
+        old = BudgetFactory(household=household, name='August 2026', is_active=False)
+        BudgetLineFactory(budget=old)
+        source = BudgetFactory(household=household)
+        BudgetLineFactory(budget=source, planned_amount=750)
+
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'August 2026',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        copied = BudgetLine.objects.filter(budget_id=old.id)
+        assert copied.count() == 1
+        assert copied.first().planned_amount == 750
+
+    def test_name_of_an_active_budget_is_still_blocked(self, client, alice, household):
+        BudgetFactory(household=household, name='August 2026', is_active=True)
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
 class TestCopyLinesFromBudget:
     def test_copies_category_planned_amount_and_notes(self, client, alice, household):
         source = BudgetFactory(household=household, name='August 2026')
