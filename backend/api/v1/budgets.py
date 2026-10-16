@@ -301,12 +301,18 @@ def create_budget(request, payload: BudgetCreateRequest):
         if source_budget.household_id != household.id:
             raise HttpError(400, 'Can only copy budget lines from a budget in the same household.')
 
-    existing = Budget.objects.filter(household=household, name=name).first()
-    if existing is not None and existing.is_active:
-        raise HttpError(400, f'A budget named "{name}" already exists in this household.')
-
     try:
         with atomic():
+            # Locked before the active check so two concurrent requests for
+            # the same (household, name) can't both see it as inactive and
+            # both reactivate it — the second has to wait for the first's
+            # transaction to commit, then sees it active and is rejected.
+            existing = (
+                Budget.objects.select_for_update().filter(household=household, name=name).first()
+            )
+            if existing is not None and existing.is_active:
+                raise HttpError(400, f'A budget named "{name}" already exists in this household.')
+
             if existing is not None:
                 existing.lines.all().delete()
                 existing.type = payload.type

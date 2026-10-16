@@ -184,6 +184,7 @@ class TestRecreateDeactivatedBudget:
             type='period',
             period_start='2026-08-01',
             period_end='2026-08-31',
+            synced_at='2026-08-15T00:00:00Z',
         )
         response = client.post(
             '/budgets/',
@@ -200,6 +201,11 @@ class TestRecreateDeactivatedBudget:
         assert body['type'] == 'project'
         assert body['period_start'] is None
         assert body['period_end'] is None
+        # The old budget's stale sync is meaningless for what is really a
+        # brand new budget.
+        assert body['synced_at'] is None
+        old.refresh_from_db()
+        assert old.synced_at is None
 
     def test_reactivating_clears_lines_from_the_deactivated_budget(self, client, alice, household):
         old = BudgetFactory(household=household, name='August 2026', is_active=False)
