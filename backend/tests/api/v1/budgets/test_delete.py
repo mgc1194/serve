@@ -7,8 +7,8 @@ budgets/conftest.py provides: client.
 
 import pytest
 
-from budgets.models import Budget
-from tests.factories import BudgetFactory
+from budgets.models import Budget, BudgetLine
+from tests.factories import BudgetFactory, BudgetLineFactory
 
 
 @pytest.mark.django_db
@@ -49,3 +49,60 @@ class TestDeactivateBudget:
         budget = BudgetFactory(household=household, name='January 2026')
         response = client.delete(f'/budgets/{budget.id}/')
         assert response.status_code == 401
+
+
+@pytest.mark.django_db
+class TestRenameOnDeactivate:
+    """Budget's (household, name) uniqueness can't be made conditional on
+    is_active (MySQL has no partial/conditional unique index), so a
+    deactivated budget would otherwise reserve its name forever. These
+    cover the rename that frees it up instead — see Budget's model
+    docstring and deactivate_budget's.
+    """
+
+    def test_renamed_with_a_disambiguating_suffix(self, client, alice, household):
+        budget = BudgetFactory(household=household, name='August 2026')
+        client.delete(f'/budgets/{budget.id}/', user=alice)
+
+        budget.refresh_from_db()
+        assert budget.name == f'August 2026 (deleted #{budget.id})'
+
+    def test_truncates_a_near_max_length_name_so_the_suffix_fits(self, client, alice, household):
+        max_length = Budget._meta.get_field('name').max_length
+        budget = BudgetFactory(household=household, name='X' * max_length)
+        client.delete(f'/budgets/{budget.id}/', user=alice)
+
+        budget.refresh_from_db()
+        assert len(budget.name) == max_length
+        assert budget.name.endswith(f' (deleted #{budget.id})')
+
+    def test_lines_are_preserved_under_the_renamed_budget(self, client, alice, household):
+        budget = BudgetFactory(household=household, name='August 2026')
+        line = BudgetLineFactory(budget=budget, planned_amount=500)
+        client.delete(f'/budgets/{budget.id}/', user=alice)
+
+        assert BudgetLine.objects.filter(pk=line.pk, budget_id=budget.id).exists()
+        line.refresh_from_db()
+        assert line.planned_amount == 500
+
+    def test_frees_up_the_original_name(self, client, alice, household):
+        budget = BudgetFactory(household=household, name='August 2026')
+        client.delete(f'/budgets/{budget.id}/', user=alice)
+
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+
+    def test_repeated_deactivation_does_not_rename_again(self, client, alice, household):
+        budget = BudgetFactory(household=household, name='August 2026')
+        client.delete(f'/budgets/{budget.id}/', user=alice)
+        budget.refresh_from_db()
+        renamed_name = budget.name
+
+        response = client.delete(f'/budgets/{budget.id}/', user=alice)
+        assert response.status_code == 204
+        budget.refresh_from_db()
+        assert budget.name == renamed_name

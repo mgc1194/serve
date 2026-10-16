@@ -109,10 +109,13 @@ class Budget(models.Model):
     Uniqueness is on (household, name) — a period budget and a project
     budget don't need independent name slots the way Category's two types
     do, since a budget's type isn't part of how a household would think of
-    it by name. Same as Category, soft-delete never frees up this tuple —
-    the API layer (not this model) is responsible for reactivating a
-    soft-deleted budget instead of inserting a new one when a household
-    "recreates" a budget with the same name.
+    it by name. Unlike Category, though, a deactivated budget must keep
+    its own BudgetLines queryable for historical reporting under their
+    original planned/actual amounts, so reactivating it to "recreate" a
+    budget with the same name isn't an option (that would discard its
+    history). Instead, the API layer renames a budget as part of
+    deactivating it (api/v1/budgets.py::deactivate_budget), freeing up its
+    name for a genuinely new budget rather than reserving it forever.
 
     The period/type shape (a period budget has both dates in order; a
     project budget has neither) is also enforced by a database

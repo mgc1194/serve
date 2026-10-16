@@ -251,16 +251,13 @@ def list_budgets(request, household_id: int):
 
 @router.post('/budgets/', response=BudgetSchema)
 def create_budget(request, payload: BudgetCreateRequest):
-    """Creates a new budget in a household, reactivating a soft-deleted one.
+    """Creates a new budget in a household.
 
     The user must be a member of the target household. Budget names must
-    be unique within a household, regardless of type. If a soft-deleted
-    budget already exists at (household, name), it is reactivated instead
-    of creating a duplicate row — budgets never free up their (household,
-    name) tuple on deactivation, same as Category. Reactivating replaces
-    its type/period and clears its old lines first, since this is really a
-    brand new budget that just has to reuse the DB row the name is still
-    pinned to.
+    be unique among a household's *active* budgets — a deactivated budget
+    frees up its name (see deactivate_budget) rather than reserving it
+    forever, so this is a plain create, never a reactivation of some other
+    row's history.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -269,7 +266,7 @@ def create_budget(request, payload: BudgetCreateRequest):
             copy_lines_from_budget_id to seed the new budget's lines.
 
     Returns:
-        The created (or reactivated) BudgetSchema.
+        The created BudgetSchema.
 
     Raises:
         HttpError: 400 if the name is blank, exceeds the model's max
@@ -303,42 +300,13 @@ def create_budget(request, payload: BudgetCreateRequest):
 
     try:
         with atomic():
-            # Locked before the active check so two concurrent requests for
-            # the same (household, name) can't both see it as inactive and
-            # both reactivate it — the second has to wait for the first's
-            # transaction to commit, then sees it active and is rejected.
-            existing = (
-                Budget.objects.select_for_update().filter(household=household, name=name).first()
+            budget = Budget.objects.create(
+                name=name,
+                type=payload.type,
+                period_start=payload.period_start,
+                period_end=payload.period_end,
+                household=household,
             )
-            if existing is not None and existing.is_active:
-                raise HttpError(400, f'A budget named "{name}" already exists in this household.')
-
-            if existing is not None:
-                existing.lines.all().delete()
-                existing.type = payload.type
-                existing.period_start = payload.period_start
-                existing.period_end = payload.period_end
-                existing.is_active = True
-                existing.synced_at = None
-                existing.save(
-                    update_fields=[
-                        'type',
-                        'period_start',
-                        'period_end',
-                        'is_active',
-                        'synced_at',
-                        'updated_at',
-                    ]
-                )
-                budget = existing
-            else:
-                budget = Budget.objects.create(
-                    name=name,
-                    type=payload.type,
-                    period_start=payload.period_start,
-                    period_end=payload.period_end,
-                    household=household,
-                )
             if source_budget is not None:
                 source_lines = source_budget.lines.all()
                 BudgetLine.objects.bulk_create(
@@ -353,9 +321,8 @@ def create_budget(request, payload: BudgetCreateRequest):
     except IntegrityError:
         raise HttpError(400, f'A budget named "{name}" already exists in this household.') from None
 
-    verb = 'reactivated' if existing is not None else 'created'
     logger.info(
-        f'User {request.user.email} {verb} budget "{budget.name}" (id={budget.id}) '
+        f'User {request.user.email} created budget "{budget.name}" (id={budget.id}) '
         f'in household "{household.name}" (id={household.id}).'
         + (f' Copied lines from budget (id={source_budget.id}).' if source_budget else '')
     )
@@ -412,8 +379,18 @@ def deactivate_budget(request, budget_id: int):
 
     Soft delete, same rationale as Category: the row is kept (flipping
     is_active to False) rather than removed, so historical reporting can
-    still reference it. The user must be a member of the budget's
-    household.
+    still reference its lines and cached actuals. Unlike Category, the
+    DB's (household, name) uniqueness isn't conditioned on is_active
+    (MySQL has no partial/conditional unique index to express that), so a
+    deactivated budget would otherwise permanently reserve its name. This
+    frees the name up instead of reactivating it later: the row is renamed
+    with an always-unique "(deleted #<id>)" suffix, truncating the
+    original name first so the rename itself can never collide with
+    another budget or overflow the 100-char limit. The renamed row and its
+    lines are otherwise untouched, so history stays fully intact — just
+    under a slightly different name.
+
+    The user must be a member of the budget's household.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -428,11 +405,24 @@ def deactivate_budget(request, budget_id: int):
     """
     budget = _get_budget_for_member(budget_id, request.user)
 
+    if not budget.is_active:
+        return
+
+    original_name = budget.name
+    suffix = f' (deleted #{budget.id})'
+    budget.name = f'{original_name[: NAME_MAX_LENGTH - len(suffix)]}{suffix}'
     budget.is_active = False
-    budget.save(update_fields=['is_active', 'updated_at'])
+
+    try:
+        budget.save(update_fields=['name', 'is_active', 'updated_at'])
+    except IntegrityError:
+        # Astronomically unlikely (would need another budget already named
+        # exactly this budget's own "(deleted #<id>)" form), but the name
+        # change must not silently fail to apply.
+        raise HttpError(400, 'Could not deactivate this budget — please try again.') from None
 
     logger.info(
-        f'User {request.user.email} deactivated budget "{budget.name}" (id={budget.id}) '
+        f'User {request.user.email} deactivated budget "{original_name}" (id={budget.id}) '
         f'in household (id={budget.household_id}).'
     )
 

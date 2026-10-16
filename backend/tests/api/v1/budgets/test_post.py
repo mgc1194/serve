@@ -175,17 +175,18 @@ class TestCreateBudget:
 
 
 @pytest.mark.django_db
-class TestRecreateDeactivatedBudget:
-    def test_reuses_the_name_of_a_deactivated_budget(self, client, alice, household):
-        old = BudgetFactory(
-            household=household,
-            name='August 2026',
-            is_active=False,
-            type='period',
-            period_start='2026-08-01',
-            period_end='2026-08-31',
-            synced_at='2026-08-15T00:00:00Z',
-        )
+class TestCreateAfterDeactivation:
+    """DELETE /budgets/{id}/ renames a budget as it deactivates it (see
+    TestRenameOnDeactivate in test_delete.py), freeing up its name — these
+    cover the create side of that: a brand new budget can reuse a name
+    that way, without disturbing the deactivated budget's own history.
+    """
+
+    def test_name_freed_by_deactivation_can_be_reused(self, client, alice, household):
+        old = BudgetFactory(household=household, name='August 2026')
+        old_line = BudgetLineFactory(budget=old, planned_amount=750)
+        client.delete(f'/budgets/{old.id}/', user=alice)
+
         response = client.post(
             '/budgets/',
             json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
@@ -193,53 +194,17 @@ class TestRecreateDeactivatedBudget:
         )
         assert response.status_code == 200
         body = response.json()
-        # Reuses the same row rather than freeing up the name for a brand
-        # new one — the (household, name) tuple never frees up on
-        # deactivation, same as Category.
-        assert body['id'] == old.id
-        assert body['is_active'] is True
-        assert body['type'] == 'project'
-        assert body['period_start'] is None
-        assert body['period_end'] is None
-        # The old budget's stale sync is meaningless for what is really a
-        # brand new budget.
-        assert body['synced_at'] is None
+        # A genuinely new row, not the old one reused.
+        assert body['id'] != old.id
+        assert body['name'] == 'August 2026'
+
+        # The deactivated budget's own history is untouched.
         old.refresh_from_db()
-        assert old.synced_at is None
-
-    def test_reactivating_clears_lines_from_the_deactivated_budget(self, client, alice, household):
-        old = BudgetFactory(household=household, name='August 2026', is_active=False)
-        BudgetLineFactory(budget=old)
-        response = client.post(
-            '/budgets/',
-            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
-            user=alice,
-        )
-        assert response.status_code == 200
-        assert not BudgetLine.objects.filter(budget_id=old.id).exists()
-
-    def test_reactivating_with_copy_lines_only_copies_the_source_budgets_lines(
-        self, client, alice, household
-    ):
-        old = BudgetFactory(household=household, name='August 2026', is_active=False)
-        BudgetLineFactory(budget=old)
-        source = BudgetFactory(household=household)
-        BudgetLineFactory(budget=source, planned_amount=750)
-
-        response = client.post(
-            '/budgets/',
-            json={
-                'name': 'August 2026',
-                'type': 'project',
-                'household_id': household.id,
-                'copy_lines_from_budget_id': source.id,
-            },
-            user=alice,
-        )
-        assert response.status_code == 200
-        copied = BudgetLine.objects.filter(budget_id=old.id)
-        assert copied.count() == 1
-        assert copied.first().planned_amount == 750
+        assert old.is_active is False
+        assert old.name != 'August 2026'
+        old_line.refresh_from_db()
+        assert old_line.budget_id == old.id
+        assert old_line.planned_amount == 750
 
     def test_name_of_an_active_budget_is_still_blocked(self, client, alice, household):
         BudgetFactory(household=household, name='August 2026', is_active=True)
