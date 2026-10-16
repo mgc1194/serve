@@ -24,8 +24,9 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
-import type { Budget } from '@serve/types/global';
-import { deleteBudget, updateBudget, ApiError } from '@services/budgets';
+import type { Budget, BudgetLine } from '@serve/types/global';
+import { deleteBudget, listBudgetLines, updateBudget, ApiError } from '@services/budgets';
+import { formatCurrency, signPrefix, sumCurrency } from '@utils/currency';
 
 const TYPE_LABELS: Record<Budget['type'], string> = {
   period: 'Period',
@@ -78,6 +79,25 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
   const [isDeactivating, setIsDeactivating] = useState(false);
   const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
+  // Balance (earnings' actual total minus spendings' — same computation as
+  // budget-detail's "Net"), fetched on mount. Failure is non-fatal: the
+  // card just doesn't show a balance, same pattern as e.g.
+  // HouseholdDetailCard's labels/categories sections.
+  const [lines, setLines] = useState<BudgetLine[] | null>(null);
+  useEffect(() => {
+    let ignore = false;
+    listBudgetLines(budget.id)
+      .then(result => {
+        if (!ignore) setLines(result);
+      })
+      .catch(() => {
+        /* non-fatal — balance just doesn't show */
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [budget.id]);
+
   function startEditing() {
     setEditName(budget.name);
     setRenameError(null);
@@ -125,6 +145,12 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
   }
 
   const period = formatPeriod(budget);
+  const balance =
+    lines === null
+      ? null
+      : sumCurrency(
+          lines.map(line => (line.category_type === 'earning' ? 1 : -1) * Number(line.actual_amount)),
+        );
 
   return (
     <Paper
@@ -210,6 +236,19 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
             <Typography variant="body2" color="text.secondary">
               {period}
             </Typography>
+          )}
+          {balance !== null && (
+            <>
+              <Box sx={{ flex: 1 }} />
+              <Typography
+                variant="body2"
+                fontWeight={600}
+                color={balance >= 0 ? 'success.main' : 'error.main'}
+              >
+                Balance: {signPrefix(balance)}
+                {formatCurrency(balance)}
+              </Typography>
+            </>
           )}
         </Box>
       </Box>
