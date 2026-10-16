@@ -82,7 +82,11 @@ class TestListBudgetsBalance:
             budget = BudgetFactory(household=household)
             BudgetLineFactory(budget=budget, actual_amount='100.00')
 
-        with django_assert_max_num_queries(10):
+        # 4 queries regardless of budget count: household + membership
+        # check, the budget list, and one batched balances query. 5 (not
+        # 10) leaves a little headroom without being loose enough for a
+        # per-budget balance query (5 budgets) to sneak under it.
+        with django_assert_max_num_queries(5):
             response = client.get(f'/budgets/?household_id={household.id}', user=alice)
         assert response.status_code == 200
         assert len(response.json()) == 5
