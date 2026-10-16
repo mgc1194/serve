@@ -1,5 +1,6 @@
 // pages/budgets/budget-card/budget-card.test.tsx
 
+import { Typography } from '@mui/material';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -193,5 +194,45 @@ describe('BudgetCard duplicate', () => {
     const { onDuplicate } = setup();
     fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
     expect(onDuplicate).toHaveBeenCalledWith(BUDGET);
+  });
+});
+
+describe('BudgetCard balance', () => {
+  it('shows a positive balance', () => {
+    setup({ budget: makeBudget({ balance: '1500.00' }) });
+
+    // "Balance: " and the amount are siblings within the same element
+    // (unlike budget-detail's "Net", there's no separate inner span around
+    // just the amount), so the element's own text content is the whole
+    // "Balance: +$1,500.00" string, not just the amount.
+    expect(screen.getByText(/^Balance:/).textContent).toBe('Balance: +$1,500.00');
+  });
+
+  it('shows a positive balance in the theme success color', () => {
+    setup({ budget: makeBudget({ balance: '1500.00' }) });
+    render(<Typography color="success.main">reference</Typography>);
+
+    // Compares against a plain Typography using the same color="success.main"
+    // mechanism, rather than a hardcoded theme color (fragile) or just
+    // checking *some* computed color is set — which would also pass for
+    // the default or error color, the actual gap this closes. Mirrors
+    // budget-detail's equivalent "Net" color test.
+    expect(getComputedStyle(screen.getByText(/^Balance:/)).color).toBe(
+      getComputedStyle(screen.getByText('reference')).color,
+    );
+  });
+
+  it('shows a negative balance', () => {
+    setup({ budget: makeBudget({ balance: '-300.00' }) });
+    expect(screen.getByText(/^Balance:/).textContent).toBe('Balance: −$300.00');
+  });
+
+  it('shows a negative balance in the theme error color', () => {
+    setup({ budget: makeBudget({ balance: '-300.00' }) });
+    render(<Typography color="error.main">reference</Typography>);
+
+    expect(getComputedStyle(screen.getByText(/^Balance:/)).color).toBe(
+      getComputedStyle(screen.getByText('reference')).color,
+    );
   });
 });

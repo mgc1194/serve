@@ -349,6 +349,26 @@ class TestSyncBudget:
         assert amounts[groceries.id] == '40.00'
         assert amounts[paycheck.id] == '2000.00'
 
+    def test_balance_is_earnings_actual_minus_spendings_actual(
+        self, client, alice, household, account
+    ):
+        budget = BudgetFactory(household=household)
+        groceries = CategoryFactory(name='Groceries', type='spending', household=household)
+        paycheck = CategoryFactory(name='Paycheck', type='earning', household=household)
+        BudgetLineFactory(budget=budget, category=groceries)
+        BudgetLineFactory(budget=budget, category=paycheck)
+        groceries_label = LabelFactory(name='Trader Joes', category=groceries, household=household)
+        paycheck_label = LabelFactory(name='Paycheck', category=paycheck, household=household)
+        TransactionFactory(account=account, label=groceries_label, amount=-40, date='2026-01-05')
+        TransactionFactory(account=account, label=paycheck_label, amount=2000, date='2026-01-01')
+
+        response = client.post(f'/budgets/{budget.id}/sync/', user=alice)
+        # 2000 (paycheck, earning) - 40 (groceries, spending) — matches
+        # list_budgets' own balance computation (_balances_for_budgets),
+        # just via the lines this call already refreshed in memory rather
+        # than a second query for the same figure.
+        assert response.json()['budget']['balance'] == '1960.00'
+
     def test_sets_budget_synced_at(self, client, alice, household):
         budget = BudgetFactory(household=household)
         category = CategoryFactory(household=household)
