@@ -1,7 +1,7 @@
 // pages/budgets/budgets.test.tsx — Unit tests for BudgetsPage.
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,6 +55,7 @@ function renderPage() {
           <Routes>
             <Route path="/" element={<div>Dashboard page</div>} />
             <Route path="/budgets" element={<BudgetsPage />} />
+            <Route path="/budgets/:id" element={<div>Budget detail page</div>} />
           </Routes>
         </ActiveHouseholdProvider>
       </MemoryRouter>
@@ -435,5 +436,94 @@ describe('BudgetsPage create budget', () => {
     listDeferred.resolve([makeBudget({ id: 1, name: 'August 2026' })]);
     await screen.findByText(/no budgets yet/i);
     expect(screen.queryByText('August 2026')).toBeNull();
+  });
+});
+
+describe('BudgetsPage duplicate budget', () => {
+  it('opens CreateBudgetDialog pre-filled for the clicked budget when Duplicate is clicked', async () => {
+    mockUser([HOUSEHOLD]);
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([
+      makeBudget({
+        id: 1,
+        name: 'Iceland Trip',
+        type: 'project',
+        period_start: null,
+        period_end: null,
+      }),
+    ]);
+
+    renderPage();
+    await screen.findByText('Iceland Trip');
+
+    // The card's own "Duplicate" action and the dialog's submit button
+    // (also labeled "Duplicate" once it opens) share a name — the card's
+    // is the only one on the page before the dialog exists.
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    expect(screen.getByText('Duplicate "Iceland Trip"')).toBeDefined();
+    expect(screen.getByDisplayValue('Iceland Trip copy')).toBeDefined();
+  });
+
+  it("navigates to the new budget's detail page after a successful duplicate, instead of staying on the list", async () => {
+    mockUser([HOUSEHOLD]);
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([
+      makeBudget({
+        id: 1,
+        name: 'Iceland Trip',
+        type: 'project',
+        period_start: null,
+        period_end: null,
+      }),
+    ]);
+    vi.spyOn(budgetsService, 'createBudget').mockResolvedValue(
+      makeBudget({ id: 2, name: 'Iceland Trip copy', type: 'project' }),
+    );
+
+    renderPage();
+    await screen.findByText('Iceland Trip');
+
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /^duplicate$/i }));
+
+    // Not a waitFor on the createBudget mock itself: vitest records a mock
+    // call synchronously, before the mocked promise it returns resolves —
+    // so that would be satisfied before the dialog's own post-await code
+    // (reset(); onCreate(created)) has actually run. Waiting on the
+    // navigation's own visible effect is the real signal.
+    await screen.findByText('Budget detail page');
+    expect(budgetsService.createBudget).toHaveBeenCalledWith(
+      expect.objectContaining({ copy_lines_from_budget_id: 1 }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('does not leave a stale duplicate source behind for a plain Create budget afterward', async () => {
+    mockUser([HOUSEHOLD]);
+    vi.spyOn(budgetsService, 'listBudgets').mockResolvedValue([
+      makeBudget({
+        id: 1,
+        name: 'Iceland Trip',
+        type: 'project',
+        period_start: null,
+        period_end: null,
+      }),
+    ]);
+
+    renderPage();
+    await screen.findByText('Iceland Trip');
+
+    // Open via Duplicate, then back out — this must not leave the source
+    // wired up for the next, unrelated "Create budget" click.
+    fireEvent.click(screen.getByRole('button', { name: /^duplicate$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    // MUI's Modal keeps the rest of the page aria-hidden until the dialog
+    // has actually closed (not just started its exit transition), so the
+    // page's own "Create budget" button isn't an accessible match until
+    // this resolves.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: /^create budget$/i }));
+    expect(screen.getByText('New budget')).toBeDefined();
+    expect(screen.queryByText(/^Duplicate /)).toBeNull();
   });
 });

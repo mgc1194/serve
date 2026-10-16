@@ -258,18 +258,23 @@ def create_budget(request, payload: BudgetCreateRequest):
 
     Args:
         request: The HTTP request object. Must be authenticated.
-        payload: BudgetCreateRequest with name, type, household_id, and
-            (for a period budget) period_start/period_end.
+        payload: BudgetCreateRequest with name, type, household_id, (for a
+            period budget) period_start/period_end, and optionally
+            copy_lines_from_budget_id to seed the new budget's lines.
 
     Returns:
         The created BudgetSchema.
 
     Raises:
         HttpError: 400 if the name is blank, exceeds the model's max
-            length, already exists in the household, or if the period
-            dates are invalid for the given type.
-        HttpError: 403 if the user is not a member of the household.
-        HttpError: 404 if the household does not exist.
+            length, already exists in the household, if the period dates
+            are invalid for the given type, or if copy_lines_from_budget_id
+            names a budget in a different household.
+        HttpError: 403 if the user is not a member of the household (or,
+            via _get_budget_for_member, of copy_lines_from_budget_id's own
+            household).
+        HttpError: 404 if the household does not exist, or
+            copy_lines_from_budget_id doesn't match any budget.
     """
     name = payload.name.strip()
     if not name:
@@ -280,20 +285,42 @@ def create_budget(request, payload: BudgetCreateRequest):
     household = _get_household_for_member(payload.household_id, request.user)
     _validate_period(payload)
 
+    # Resolved (and household-checked) before creating anything, so a bad
+    # copy_lines_from_budget_id fails the request outright rather than
+    # leaving behind an empty budget the client never asked for on its own.
+    source_budget = None
+    if payload.copy_lines_from_budget_id is not None:
+        source_budget = _get_budget_for_member(payload.copy_lines_from_budget_id, request.user)
+        if source_budget.household_id != household.id:
+            raise HttpError(400, 'Can only copy budget lines from a budget in the same household.')
+
     try:
-        budget = Budget.objects.create(
-            name=name,
-            type=payload.type,
-            period_start=payload.period_start,
-            period_end=payload.period_end,
-            household=household,
-        )
+        with atomic():
+            budget = Budget.objects.create(
+                name=name,
+                type=payload.type,
+                period_start=payload.period_start,
+                period_end=payload.period_end,
+                household=household,
+            )
+            if source_budget is not None:
+                source_lines = source_budget.lines.all()
+                BudgetLine.objects.bulk_create(
+                    BudgetLine(
+                        budget=budget,
+                        category_id=line.category_id,
+                        planned_amount=line.planned_amount,
+                        notes=line.notes,
+                    )
+                    for line in source_lines
+                )
     except IntegrityError:
         raise HttpError(400, f'A budget named "{name}" already exists in this household.') from None
 
     logger.info(
         f'User {request.user.email} created budget "{budget.name}" (id={budget.id}) '
         f'in household "{household.name}" (id={household.id}).'
+        + (f' Copied lines from budget (id={source_budget.id}).' if source_budget else '')
     )
 
     return _serialize(budget)

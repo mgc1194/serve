@@ -12,6 +12,13 @@
 // picker; Period keeps the manual range for anything else (a custom or
 // weekly window). Weekly isn't offered yet — deferred until there's an
 // actual use case for it.
+//
+// copyFromBudget turns this into "Duplicate": the type/dates/project-name
+// defaults shift to the source's next period (see deriveDuplicateDefaults),
+// and submitting also copies that budget's lines (category, planned_amount,
+// notes) onto the new one server-side — the form itself doesn't fetch or
+// show those lines, since the only thing being edited here is the new
+// budget's own shape.
 
 import {
   Alert,
@@ -24,7 +31,7 @@ import {
   Typography,
 } from '@mui/material';
 import dayjs from 'dayjs';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { BudgetTypeField } from '@pages/budgets/create-budget-dialog/budget-type-field';
 import { MonthlyPeriodField } from '@pages/budgets/create-budget-dialog/monthly-period-field';
@@ -35,6 +42,14 @@ import type { Budget } from '@serve/types/global';
 import { createBudget, ApiError } from '@services/budgets';
 
 const DATE_FORMAT = 'YYYY-MM-DD';
+
+// Mirrors Budget.name's max_length (backend/budgets/models.py) — the
+// duplicate-project default below must respect it too, not just manual
+// typing: a source name already near the limit would otherwise overflow
+// once " copy" is appended, and canCreate only checks non-emptiness, so
+// that overflowing default would submit as-is and the backend would
+// reject it.
+const NAME_MAX_LENGTH = 100;
 
 /**
  * "August 2026" for Monthly, "Aug 15, 2026 – Sep 15, 2026" for Period —
@@ -58,9 +73,63 @@ function deriveBudgetName(uiType: UiBudgetType, periodStart?: string, periodEnd?
   return '';
 }
 
+interface DuplicateDefaults {
+  uiType: UiBudgetType;
+  periodStart?: string;
+  periodEnd?: string;
+  projectName?: string;
+}
+
+/**
+ * Defaults for "duplicate this budget": same shape, shifted to the next
+ * period immediately following the source's — a whole-calendar-month
+ * source (start on the 1st, end on that month's last day) advances by a
+ * calendar month so the picker shows e.g. "September 2026" rather than a
+ * 30-ish-day window starting mid-month; any other period range (including
+ * one that merely happens to span a whole month some other way) just
+ * slides forward by its own length instead, which generalizes to a
+ * source that was never month-aligned to begin with. A project has no
+ * period to shift, only a name that can't be reused verbatim (budget
+ * names are unique per household) — offered as a starting point to edit,
+ * not a value the user has to type from scratch.
+ */
+function deriveDuplicateDefaults(source: Budget): DuplicateDefaults {
+  if (source.type === 'project') {
+    const suffix = ' copy';
+    const truncatedName = source.name.slice(0, NAME_MAX_LENGTH - suffix.length);
+    return { uiType: 'project', projectName: `${truncatedName}${suffix}` };
+  }
+
+  const start = source.period_start ? dayjs(source.period_start, DATE_FORMAT, true) : null;
+  const end = source.period_end ? dayjs(source.period_end, DATE_FORMAT, true) : null;
+  if (!start?.isValid() || !end?.isValid()) return { uiType: 'period' };
+
+  const isWholeCalendarMonth = start.date() === 1 && end.isSame(start.endOf('month'), 'day');
+  if (isWholeCalendarMonth) {
+    const nextMonth = start.add(1, 'month');
+    return {
+      uiType: 'monthly',
+      periodStart: nextMonth.startOf('month').format(DATE_FORMAT),
+      periodEnd: nextMonth.endOf('month').format(DATE_FORMAT),
+    };
+  }
+
+  const durationDays = end.diff(start, 'day');
+  const nextStart = end.add(1, 'day');
+  return {
+    uiType: 'period',
+    periodStart: nextStart.format(DATE_FORMAT),
+    periodEnd: nextStart.add(durationDays, 'day').format(DATE_FORMAT),
+  };
+}
+
 interface CreateBudgetDialogProps {
   open: boolean;
   householdId: number;
+  // When set, prefills the dialog to duplicate this budget's lines
+  // (category, planned_amount, notes) into the new one — see
+  // deriveDuplicateDefaults for how its type/dates seed the form.
+  copyFromBudget?: Budget | null;
   onClose: () => void;
   onCreate: (budget: Budget) => void;
 }
@@ -68,6 +137,7 @@ interface CreateBudgetDialogProps {
 export function CreateBudgetDialog({
   open,
   householdId,
+  copyFromBudget,
   onClose,
   onCreate,
 }: CreateBudgetDialogProps) {
@@ -79,12 +149,25 @@ export function CreateBudgetDialog({
   const [error, setError] = useState<string | null>(null);
 
   function reset() {
-    setUiType('monthly');
-    setPeriodStart(undefined);
-    setPeriodEnd(undefined);
-    setProjectName('');
+    const defaults = copyFromBudget ? deriveDuplicateDefaults(copyFromBudget) : { uiType: 'monthly' as const };
+    setUiType(defaults.uiType);
+    setPeriodStart(defaults.periodStart);
+    setPeriodEnd(defaults.periodEnd);
+    setProjectName(defaults.projectName ?? '');
     setError(null);
   }
+
+  // Re-derives the form's defaults whenever the dialog opens, or while
+  // already open the parent swaps in a different source budget to copy
+  // (clicking "Duplicate" on another card without this one having closed
+  // in between) — handleClose/handleCreate's own reset() only covers the
+  // next *open*, not a mid-session source change.
+  useEffect(() => {
+    if (!open) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, copyFromBudget]);
 
   function handleClose() {
     if (isCreating) return;
@@ -118,6 +201,7 @@ export function CreateBudgetDialog({
         household_id: householdId,
         period_start: uiType === 'project' ? undefined : periodStart,
         period_end: uiType === 'project' ? undefined : periodEnd,
+        copy_lines_from_budget_id: copyFromBudget?.id,
       });
       reset();
       onCreate(created);
@@ -130,11 +214,20 @@ export function CreateBudgetDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ pb: 2 }}>New budget</DialogTitle>
+      <DialogTitle sx={{ pb: 2 }}>
+        {copyFromBudget ? `Duplicate "${copyFromBudget.name}"` : 'New budget'}
+      </DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {error && (
           <Alert severity="error" onClose={() => setError(null)}>
             {error}
+          </Alert>
+        )}
+
+        {copyFromBudget && (
+          <Alert severity="info">
+            Categories and planned amounts will be copied from &quot;{copyFromBudget.name}
+            &quot; — edit any amounts afterward.
           </Alert>
         )}
 
@@ -186,7 +279,7 @@ export function CreateBudgetDialog({
           disabled={!canCreate}
           startIcon={isCreating ? <CircularProgress size={14} color="inherit" /> : null}
         >
-          Create
+          {copyFromBudget ? 'Duplicate' : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>
