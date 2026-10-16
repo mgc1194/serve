@@ -1,20 +1,16 @@
 // pages/budgets/budget-card/budget-card.test.tsx
 
+import { Typography } from '@mui/material';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BudgetCard } from '@pages/budgets/budget-card';
-import { makeBudget, makeBudgetLine } from '@serve/mocks';
-import { deleteBudget, listBudgetLines, updateBudget, ApiError } from '@services/budgets';
+import { makeBudget } from '@serve/mocks';
+import { deleteBudget, updateBudget, ApiError } from '@services/budgets';
 
 vi.mock('@services/budgets', async importOriginal => {
   const actual = await importOriginal<typeof import('@services/budgets')>();
-  return {
-    ...actual,
-    updateBudget: vi.fn(),
-    deleteBudget: vi.fn(),
-    listBudgetLines: vi.fn(),
-  };
+  return { ...actual, updateBudget: vi.fn(), deleteBudget: vi.fn() };
 });
 
 const mockNavigate = vi.fn();
@@ -25,7 +21,6 @@ vi.mock('react-router', async () => {
 
 const mockUpdateBudget = vi.mocked(updateBudget);
 const mockDeleteBudget = vi.mocked(deleteBudget);
-const mockListBudgetLines = vi.mocked(listBudgetLines);
 
 const BUDGET = makeBudget({ id: 1, name: 'January 2026' });
 
@@ -45,13 +40,7 @@ function setup(overrides: Partial<React.ComponentProps<typeof BudgetCard>> = {})
   return { onUpdated, onDeactivated, onDuplicate };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  // Never resolves by default — tests that don't care about the balance
-  // don't have to deal with it settling (and updating state) after their
-  // own assertions. Balance tests below override this per-case.
-  mockListBudgetLines.mockReturnValue(new Promise(() => {}));
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe('BudgetCard rendering', () => {
   it('renders the budget name', () => {
@@ -209,44 +198,41 @@ describe('BudgetCard duplicate', () => {
 });
 
 describe('BudgetCard balance', () => {
-  it('shows the balance as earnings minus spendings actual totals', async () => {
-    mockListBudgetLines.mockResolvedValueOnce([
-      makeBudgetLine({ category_type: 'earning', actual_amount: '2000.00' }),
-      makeBudgetLine({ category_type: 'spending', actual_amount: '500.00' }),
-    ]);
-    setup();
+  it('shows a positive balance', () => {
+    setup({ budget: makeBudget({ balance: '1500.00' }) });
 
     // "Balance: " and the amount are siblings within the same element
     // (unlike budget-detail's "Net", there's no separate inner span around
     // just the amount), so the element's own text content is the whole
     // "Balance: +$1,500.00" string, not just the amount.
-    await waitFor(() =>
-      expect(screen.getByText(/^Balance:/).textContent).toBe('Balance: +$1,500.00'),
+    expect(screen.getByText(/^Balance:/).textContent).toBe('Balance: +$1,500.00');
+  });
+
+  it('shows a positive balance in the theme success color', () => {
+    setup({ budget: makeBudget({ balance: '1500.00' }) });
+    render(<Typography color="success.main">reference</Typography>);
+
+    // Compares against a plain Typography using the same color="success.main"
+    // mechanism, rather than a hardcoded theme color (fragile) or just
+    // checking *some* computed color is set — which would also pass for
+    // the default or error color, the actual gap this closes. Mirrors
+    // budget-detail's equivalent "Net" color test.
+    expect(getComputedStyle(screen.getByText(/^Balance:/)).color).toBe(
+      getComputedStyle(screen.getByText('reference')).color,
     );
   });
 
-  it('shows a negative balance when spendings exceed earnings', async () => {
-    mockListBudgetLines.mockResolvedValueOnce([
-      makeBudgetLine({ category_type: 'earning', actual_amount: '100.00' }),
-      makeBudgetLine({ category_type: 'spending', actual_amount: '400.00' }),
-    ]);
-    setup();
+  it('shows a negative balance', () => {
+    setup({ budget: makeBudget({ balance: '-300.00' }) });
+    expect(screen.getByText(/^Balance:/).textContent).toBe('Balance: −$300.00');
+  });
 
-    await waitFor(() =>
-      expect(screen.getByText(/^Balance:/).textContent).toBe('Balance: −$300.00'),
+  it('shows a negative balance in the theme error color', () => {
+    setup({ budget: makeBudget({ balance: '-300.00' }) });
+    render(<Typography color="error.main">reference</Typography>);
+
+    expect(getComputedStyle(screen.getByText(/^Balance:/)).color).toBe(
+      getComputedStyle(screen.getByText('reference')).color,
     );
-  });
-
-  it('does not show a balance while the lines fetch is pending', () => {
-    setup();
-    expect(screen.queryByText(/balance:/i)).toBeNull();
-  });
-
-  it('does not show a balance when the lines fetch fails', async () => {
-    mockListBudgetLines.mockRejectedValueOnce(new ApiError(500, 'Server error.'));
-    setup();
-
-    await waitFor(() => expect(mockListBudgetLines).toHaveBeenCalledWith(1));
-    expect(screen.queryByText(/balance:/i)).toBeNull();
   });
 });

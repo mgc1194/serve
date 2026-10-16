@@ -7,7 +7,8 @@ budgets/conftest.py provides: client.
 
 import pytest
 
-from tests.factories import BudgetFactory
+from budgets.models import Category
+from tests.factories import BudgetFactory, BudgetLineFactory, CategoryFactory
 
 
 @pytest.mark.django_db
@@ -49,3 +50,39 @@ class TestListBudgets:
     def test_unauthenticated_returns_401(self, client, household):
         response = client.get(f'/budgets/?household_id={household.id}')
         assert response.status_code == 401
+
+
+@pytest.mark.django_db
+class TestListBudgetsBalance:
+    def test_balance_is_earnings_actual_minus_spendings_actual(self, client, alice, household):
+        budget = BudgetFactory(household=household)
+        earning = CategoryFactory(household=household, type=Category.Type.EARNING)
+        spending = CategoryFactory(household=household, type=Category.Type.SPENDING)
+        BudgetLineFactory(budget=budget, category=earning, actual_amount='2000.00')
+        BudgetLineFactory(budget=budget, category=spending, actual_amount='500.00')
+
+        response = client.get(f'/budgets/?household_id={household.id}', user=alice)
+        body = next(b for b in response.json() if b['id'] == budget.id)
+        assert body['balance'] == '1500.00'
+
+    def test_balance_is_zero_for_a_budget_with_no_lines(self, client, alice, household):
+        budget = BudgetFactory(household=household)
+        response = client.get(f'/budgets/?household_id={household.id}', user=alice)
+        body = next(b for b in response.json() if b['id'] == budget.id)
+        assert body['balance'] == '0.00'
+
+    def test_listing_many_budgets_does_not_grow_query_count(
+        self, client, alice, household, django_assert_max_num_queries
+    ):
+        # Each budget has its own lines — if list_budgets queried a
+        # budget's balance one at a time (the N+1 an earlier version of
+        # this feature had, just moved server-side), this would scale
+        # with the number of budgets instead of staying constant.
+        for _ in range(5):
+            budget = BudgetFactory(household=household)
+            BudgetLineFactory(budget=budget, actual_amount='100.00')
+
+        with django_assert_max_num_queries(10):
+            response = client.get(f'/budgets/?household_id={household.id}', user=alice)
+        assert response.status_code == 200
+        assert len(response.json()) == 5
