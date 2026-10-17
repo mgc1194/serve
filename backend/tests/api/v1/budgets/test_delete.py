@@ -5,7 +5,10 @@ Root conftest provides: alice, seth, household, other_household.
 budgets/conftest.py provides: client.
 """
 
+import uuid
+
 import pytest
+from django.utils import timezone
 
 from budgets.models import Budget, BudgetLine
 from tests.factories import BudgetFactory, BudgetLineFactory
@@ -106,3 +109,50 @@ class TestRenameOnDeactivate:
         assert response.status_code == 204
         budget.refresh_from_db()
         assert budget.name == renamed_name
+
+    def test_falls_back_to_a_disambiguated_name_when_the_first_candidate_collides(
+        self, client, alice, household
+    ):
+        budget = BudgetFactory(household=household, name='August 2026')
+        # An unrelated ACTIVE budget that happens to already be named
+        # exactly what this one's first-choice tombstone name would be —
+        # budget_id alone doesn't rule this out, since nothing stops a
+        # household from naming a budget that way themselves.
+        BudgetFactory(household=household, name=f'August 2026 (deleted #{budget.id})')
+
+        response = client.delete(f'/budgets/{budget.id}/', user=alice)
+        assert response.status_code == 204
+
+        budget.refresh_from_db()
+        assert budget.is_active is False
+        assert budget.name != f'August 2026 (deleted #{budget.id})'
+        assert budget.name.startswith(f'August 2026 (deleted #{budget.id}-')
+
+    def test_deactivates_without_renaming_when_every_candidate_collides(
+        self, client, alice, household, monkeypatch
+    ):
+        fixed_now = timezone.now()
+        monkeypatch.setattr('django.utils.timezone.now', lambda: fixed_now)
+        monkeypatch.setattr('uuid.uuid4', lambda: uuid.UUID(int=0))
+
+        budget = BudgetFactory(household=household, name='August 2026')
+        # Occupies all three candidates _tombstone_name_candidates would
+        # produce for this budget, now that timezone.now() and uuid.uuid4()
+        # are both frozen — the astronomically-unlikely case where none of
+        # them are free.
+        BudgetFactory(household=household, name=f'August 2026 (deleted #{budget.id})')
+        BudgetFactory(
+            household=household,
+            name=f'August 2026 (deleted #{budget.id}-{int(fixed_now.timestamp())})',
+        )
+        BudgetFactory(
+            household=household,
+            name=f'August 2026 (deleted #{budget.id}-{uuid.UUID(int=0).hex[:8]})',
+        )
+
+        response = client.delete(f'/budgets/{budget.id}/', user=alice)
+        assert response.status_code == 204
+
+        budget.refresh_from_db()
+        assert budget.is_active is False
+        assert budget.name == 'August 2026'

@@ -14,6 +14,7 @@ Endpoints:
 """
 
 import logging
+import uuid
 from decimal import Decimal
 
 from django.db import IntegrityError
@@ -43,6 +44,34 @@ logger = logging.getLogger(__name__)
 router = Router(tags=['Budgets'], auth=django_auth)
 
 NAME_MAX_LENGTH = Budget._meta.get_field('name').max_length
+
+
+def _tombstone_name_candidates(original_name: str, budget_id: int) -> list[str]:
+    """Builds bounded, likely-unique names for a budget being deactivated,
+    in order of preference — see deactivate_budget.
+
+    budget_id alone (globally unique, not just per-household) already
+    makes the first candidate distinct from every other budget's own
+    tombstone name, but not from an unrelated ACTIVE budget that happens
+    to already be named exactly that literal string — astronomically
+    unlikely, but possible, since nothing stops a household from naming
+    a budget that way themselves. The later candidates add a further
+    disambiguator for that case; deactivate_budget tries each in order
+    and falls back to not renaming at all if every one collides.
+
+    Args:
+        original_name: The budget's name before deactivation.
+        budget_id: The budget's own primary key.
+
+    Returns:
+        Candidate names, each within NAME_MAX_LENGTH, most-preferred first.
+    """
+    suffixes = [
+        f' (deleted #{budget_id})',
+        f' (deleted #{budget_id}-{int(timezone.now().timestamp())})',
+        f' (deleted #{budget_id}-{uuid.uuid4().hex[:8]})',
+    ]
+    return [f'{original_name[: NAME_MAX_LENGTH - len(suffix)]}{suffix}' for suffix in suffixes]
 
 
 def _get_household_for_member(household_id: int, user) -> Household:
@@ -384,11 +413,14 @@ def deactivate_budget(request, budget_id: int):
     (MySQL has no partial/conditional unique index to express that), so a
     deactivated budget would otherwise permanently reserve its name. This
     frees the name up instead of reactivating it later: the row is renamed
-    with an always-unique "(deleted #<id>)" suffix, truncating the
-    original name first so the rename itself can never collide with
-    another budget or overflow the 100-char limit. The renamed row and its
-    lines are otherwise untouched, so history stays fully intact — just
-    under a slightly different name.
+    with a disambiguating "(deleted #<id>)" suffix, truncating the
+    original name first so the rename itself can't overflow the 100-char
+    limit — see _tombstone_name_candidates for how a (vanishingly
+    unlikely) collision with that exact name is handled. The renamed row
+    and its lines are otherwise untouched, so history stays fully intact —
+    just under a slightly different name. Deactivating is idempotent: a
+    budget that's already inactive is left exactly as it is, never
+    renamed a second time.
 
     The user must be a member of the budget's household.
 
@@ -409,17 +441,27 @@ def deactivate_budget(request, budget_id: int):
         return
 
     original_name = budget.name
-    suffix = f' (deleted #{budget.id})'
-    budget.name = f'{original_name[: NAME_MAX_LENGTH - len(suffix)]}{suffix}'
     budget.is_active = False
 
-    try:
-        budget.save(update_fields=['name', 'is_active', 'updated_at'])
-    except IntegrityError:
-        # Astronomically unlikely (would need another budget already named
-        # exactly this budget's own "(deleted #<id>)" form), but the name
-        # change must not silently fail to apply.
-        raise HttpError(400, 'Could not deactivate this budget — please try again.') from None
+    for candidate_name in _tombstone_name_candidates(original_name, budget.id):
+        budget.name = candidate_name
+        try:
+            # Each attempt gets its own savepoint (nested atomic) — a
+            # caught IntegrityError otherwise poisons the whole request's
+            # transaction, blocking every later query (including the
+            # fallback save below, or the next candidate) until rollback.
+            with atomic():
+                budget.save(update_fields=['name', 'is_active', 'updated_at'])
+            break
+        except IntegrityError:
+            continue
+    else:
+        # Every candidate collided with some other budget's literal name
+        # (vanishingly unlikely — see _tombstone_name_candidates) — still
+        # deactivate rather than block the user's action over a naming
+        # edge case; the name just doesn't get freed up this time.
+        budget.name = original_name
+        budget.save(update_fields=['is_active', 'updated_at'])
 
     logger.info(
         f'User {request.user.email} deactivated budget "{original_name}" (id={budget.id}) '
