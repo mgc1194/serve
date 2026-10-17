@@ -1,3 +1,4 @@
+import re
 import time
 import uuid
 
@@ -24,11 +25,12 @@ def backfill_deactivated_budget_names(apps, schema_editor):
 
     for budget in Budget.objects.filter(is_active=False).iterator():
         # Already renamed by this backfill (or by deactivate_budget
-        # itself, if this is somehow re-run after the fix shipped) — the
-        # marker is a substring of every candidate form (plain or
-        # timestamp/uuid-disambiguated), so this alone makes a re-run a
-        # no-op rather than re-appending another suffix.
-        if f' (deleted #{budget.id}' in budget.name:
+        # itself, if this is somehow re-run after the fix shipped) —
+        # anchored at the end so a legacy budget that legitimately
+        # contains this text elsewhere in its name isn't mistaken for an
+        # already-generated suffix and skipped. Matches all three
+        # candidate forms (plain, timestamp-suffixed, uuid-suffixed).
+        if re.search(rf' \(deleted #{budget.id}(-[0-9a-f]+)?\)$', budget.name):
             continue
 
         suffixes = [

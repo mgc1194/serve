@@ -82,3 +82,21 @@ class TestBackfillDeactivatedBudgetNames:
         budget.refresh_from_db()
         assert budget.name != f'August 2026 (deleted #{budget.id})'
         assert budget.name.startswith(f'August 2026 (deleted #{budget.id}-')
+
+    def test_renames_a_legacy_budget_whose_own_name_contains_the_suffix_text_midstring(
+        self, household
+    ):
+        """A user-chosen name that happens to contain "(deleted #<id>)" text
+        in the middle, rather than as a trailing generated suffix, must
+        still get backfilled — only a trailing match should be treated as
+        already-processed.
+        """
+        budget = BudgetFactory(
+            household=household,
+            name=f'Report (deleted #{1234}) notes',
+            is_active=False,
+        )
+        run_backfill()
+
+        budget.refresh_from_db()
+        assert budget.name == f'Report (deleted #{1234}) notes (deleted #{budget.id})'
