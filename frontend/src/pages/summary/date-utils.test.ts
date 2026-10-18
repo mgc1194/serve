@@ -6,6 +6,7 @@ import {
   availableMonths,
   currentMonthStr,
   formatMonthLabel,
+  monthDateRange,
   parseMonthStr,
   toMonthStr,
   yearRange,
@@ -191,5 +192,29 @@ describe('availableMonths', () => {
   it('returns all months when no earliest and year is in the past', () => {
     const months = availableMonths(2025, null);
     expect(months).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  });
+});
+
+// ── monthDateRange ────────────────────────────────────────────────────────────
+
+describe('monthDateRange', () => {
+  it('returns the first and last day of a 31-day month', () => {
+    expect(monthDateRange(2026, 1)).toEqual({ from: '2026-01-01', to: '2026-01-31' });
+  });
+
+  it('returns the first and last day of a 30-day month', () => {
+    expect(monthDateRange(2026, 4)).toEqual({ from: '2026-04-01', to: '2026-04-30' });
+  });
+
+  it('handles a non-leap-year February', () => {
+    expect(monthDateRange(2026, 2)).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+  });
+
+  it('handles a leap-year February', () => {
+    expect(monthDateRange(2024, 2)).toEqual({ from: '2024-02-01', to: '2024-02-29' });
+  });
+
+  it('handles December', () => {
+    expect(monthDateRange(2026, 12)).toEqual({ from: '2026-12-01', to: '2026-12-31' });
   });
 });

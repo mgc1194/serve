@@ -14,16 +14,17 @@ import {
   Typography,
 } from '@mui/material';
 
-import type { CategorySummary, Summary } from '@serve/types/global';
+import type { CategorySummary, LabelSummary, Summary } from '@serve/types/global';
 import { formatCurrency, signPrefix } from '@utils/currency';
 
 // ── CategoryRow ───────────────────────────────────────────────────────────────
 
 interface CategoryRowProps {
   row: CategorySummary;
+  onLabelClick: (label: LabelSummary) => void;
 }
 
-function CategoryRow({ row }: CategoryRowProps) {
+function CategoryRow({ row, onLabelClick }: CategoryRowProps) {
   const categoryLabel = row.category_name || 'Uncategorised';
 
   return (
@@ -46,7 +47,12 @@ function CategoryRow({ row }: CategoryRowProps) {
       </TableRow>
 
       {row.labels.map(label => (
-        <TableRow key={label.label_id} hover>
+        <TableRow
+          key={label.label_id}
+          hover
+          onClick={() => onLabelClick(label)}
+          sx={{ cursor: 'pointer' }}
+        >
           <TableCell sx={{ pl: 4 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
@@ -75,9 +81,10 @@ function CategoryRow({ row }: CategoryRowProps) {
 interface CategoryTableProps {
   categories: CategorySummary[];
   emptyMessage: string;
+  onLabelClick: (label: LabelSummary) => void;
 }
 
-function CategoryTable({ categories, emptyMessage }: CategoryTableProps) {
+function CategoryTable({ categories, emptyMessage, onLabelClick }: CategoryTableProps) {
   if (categories.length === 0) {
     return (
       <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
@@ -104,7 +111,11 @@ function CategoryTable({ categories, emptyMessage }: CategoryTableProps) {
         </TableHead>
         <TableBody>
           {categories.map(cat => (
-            <CategoryRow key={cat.category_id ?? 'uncategorised'} row={cat} />
+            <CategoryRow
+              key={cat.category_id ?? 'uncategorised'}
+              row={cat}
+              onLabelClick={onLabelClick}
+            />
           ))}
         </TableBody>
       </Table>
@@ -119,6 +130,7 @@ interface SummarySectionProps {
   activeTab: 'spending' | 'earnings';
   onTabChange: (tab: 'spending' | 'earnings') => void;
   monthLabel: string;
+  onLabelClick: (label: LabelSummary) => void;
 }
 
 export function SummarySection({
@@ -126,6 +138,7 @@ export function SummarySection({
   activeTab,
   onTabChange,
   monthLabel,
+  onLabelClick,
 }: SummarySectionProps) {
   return (
     <>
@@ -144,12 +157,14 @@ export function SummarySection({
         <CategoryTable
           categories={summary.spending}
           emptyMessage={`No spending transactions for ${monthLabel}.`}
+          onLabelClick={onLabelClick}
         />
       )}
       {activeTab === 'earnings' && (
         <CategoryTable
           categories={summary.earnings}
           emptyMessage={`No earnings transactions for ${monthLabel}.`}
+          onLabelClick={onLabelClick}
         />
       )}
     </>
