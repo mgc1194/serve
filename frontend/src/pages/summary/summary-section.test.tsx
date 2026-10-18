@@ -261,4 +261,34 @@ describe('SummarySection label row clicks', () => {
 
     expect(onLabelClick).not.toHaveBeenCalled();
   });
+
+  it('calls onLabelClick on Enter for keyboard users', () => {
+    const onLabelClick = vi.fn();
+    setup(summaryWithOneLabel(), 'spending', onLabelClick);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /view transactions for groceries/i }), {
+      key: 'Enter',
+    });
+
+    expect(onLabelClick).toHaveBeenCalledWith(LABEL);
+  });
+
+  it('calls onLabelClick on Space for keyboard users', () => {
+    const onLabelClick = vi.fn();
+    setup(summaryWithOneLabel(), 'spending', onLabelClick);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /view transactions for groceries/i }), {
+      key: ' ',
+    });
+
+    expect(onLabelClick).toHaveBeenCalledWith(LABEL);
+  });
+
+  it('is focusable via tab order', () => {
+    setup(summaryWithOneLabel());
+
+    expect(
+      screen.getByRole('button', { name: /view transactions for groceries/i }),
+    ).toHaveProperty('tabIndex', 0);
+  });
 });

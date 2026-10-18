@@ -51,6 +51,15 @@ function CategoryRow({ row, onLabelClick }: CategoryRowProps) {
           key={label.label_id}
           hover
           onClick={() => onLabelClick(label)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onLabelClick(label);
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label={`View transactions for ${label.label_name}`}
           sx={{ cursor: 'pointer' }}
         >
           <TableCell sx={{ pl: 4 }}>
