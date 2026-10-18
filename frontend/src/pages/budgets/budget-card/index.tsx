@@ -26,6 +26,7 @@ import { useNavigate } from 'react-router';
 
 import type { Budget } from '@serve/types/global';
 import { deleteBudget, updateBudget, ApiError } from '@services/budgets';
+import { formatCurrency, signPrefix } from '@utils/currency';
 
 const TYPE_LABELS: Record<Budget['type'], string> = {
   period: 'Period',
@@ -125,6 +126,9 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
   }
 
   const period = formatPeriod(budget);
+  // A Decimal on the backend, so it arrives as a numeric string (e.g.
+  // "50.00"), not a number — same as BudgetLine.actual_amount.
+  const balance = Number(budget.balance);
 
   return (
     <Paper
@@ -187,10 +191,19 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
             <Typography
               variant="h6"
               component="h4"
-              sx={{ fontFamily: '"DM Serif Display", Georgia, serif', flex: 1 }}
+              sx={{ fontFamily: '"DM Serif Display", Georgia, serif' }}
             >
               {budget.name}
             </Typography>
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              color={balance >= 0 ? 'success.main' : 'error.main'}
+            >
+              Balance: {signPrefix(balance)}
+              {formatCurrency(balance)}
+            </Typography>
+            <Box sx={{ flex: 1 }} />
             <Tooltip title="Rename">
               <IconButton
                 onClick={startEditing}

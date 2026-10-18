@@ -12,6 +12,7 @@ export function makeBudget(overrides: Partial<Budget> = {}): Budget {
     is_active: true,
     household_id: 1,
     synced_at: null,
+    balance: '0.00',
     ...overrides,
   };
 }

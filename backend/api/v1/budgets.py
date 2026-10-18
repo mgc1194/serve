@@ -14,10 +14,11 @@ Endpoints:
 """
 
 import logging
+import uuid
 from decimal import Decimal
 
 from django.db import IntegrityError
-from django.db.models import Sum
+from django.db.models import Case, DecimalField, F, Sum, When
 from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -43,6 +44,34 @@ logger = logging.getLogger(__name__)
 router = Router(tags=['Budgets'], auth=django_auth)
 
 NAME_MAX_LENGTH = Budget._meta.get_field('name').max_length
+
+
+def _tombstone_name_candidates(original_name: str, budget_id: int) -> list[str]:
+    """Builds bounded, likely-unique names for a budget being deactivated,
+    in order of preference — see deactivate_budget.
+
+    budget_id alone (globally unique, not just per-household) already
+    makes the first candidate distinct from every other budget's own
+    tombstone name, but not from an unrelated ACTIVE budget that happens
+    to already be named exactly that literal string — astronomically
+    unlikely, but possible, since nothing stops a household from naming
+    a budget that way themselves. The later candidates add a further
+    disambiguator for that case; deactivate_budget tries each in order
+    and falls back to not renaming at all if every one collides.
+
+    Args:
+        original_name: The budget's name before deactivation.
+        budget_id: The budget's own primary key.
+
+    Returns:
+        Candidate names, each within NAME_MAX_LENGTH, most-preferred first.
+    """
+    suffixes = [
+        f' (deleted #{budget_id})',
+        f' (deleted #{budget_id}-{int(timezone.now().timestamp())})',
+        f' (deleted #{budget_id}-{uuid.uuid4().hex[:8]})',
+    ]
+    return [f'{original_name[: NAME_MAX_LENGTH - len(suffix)]}{suffix}' for suffix in suffixes]
 
 
 def _get_household_for_member(household_id: int, user) -> Household:
@@ -127,11 +156,15 @@ def _validate_period(payload: BudgetCreateRequest) -> None:
         raise HttpError(400, 'Project budgets cannot have period_start or period_end.')
 
 
-def _serialize(budget: Budget) -> dict:
+def _serialize(budget: Budget, balance: Decimal) -> dict:
     """Serializes a Budget into a dict matching BudgetSchema.
 
     Args:
         budget: The Budget instance to serialize.
+        balance: The budget's balance (see _balances_for_budgets), supplied
+            by the caller rather than queried here so a list of budgets can
+            compute every one's balance in a single batched query instead
+            of once per call to this function.
 
     Returns:
         A dict with the budget's fields.
@@ -145,7 +178,41 @@ def _serialize(budget: Budget) -> dict:
         'is_active': budget.is_active,
         'household_id': budget.household_id,
         'synced_at': budget.synced_at,
+        'balance': balance,
     }
+
+
+def _balances_for_budgets(budget_ids: list[int]) -> dict[int, Decimal]:
+    """Computes each budget's balance — the sum of its lines'
+    actual_amount, earnings positive and spendings negative — for every
+    id in budget_ids in a single query, regardless of how many there are.
+
+    Mirrors budget-detail's client-side "Net" computation, just batched
+    server-side: an earlier version of this had each budget card fetch its
+    own lines to compute this itself, which meant a list of N budgets
+    issued N extra requests (and N extra line queries) just to show one
+    scalar each.
+
+    Args:
+        budget_ids: The budgets to compute a balance for.
+
+    Returns:
+        A dict of budget_id -> balance. A budget with no lines is simply
+        absent — callers should default to Decimal('0.00').
+    """
+    rows = (
+        BudgetLine.objects.filter(budget_id__in=budget_ids)
+        .annotate(
+            signed_actual=Case(
+                When(category__type=Category.Type.EARNING, then=F('actual_amount')),
+                default=-F('actual_amount'),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
+        .values('budget_id')
+        .annotate(total=Sum('signed_actual'))
+    )
+    return {row['budget_id']: row['total'] for row in rows}
 
 
 def _serialize_line(line: BudgetLine) -> dict:
@@ -245,8 +312,9 @@ def list_budgets(request, household_id: int):
         HttpError: 404 if the household does not exist.
     """
     household = _get_household_for_member(household_id, request.user)
-    budgets = Budget.objects.filter(household=household, is_active=True)
-    return [_serialize(b) for b in budgets]
+    budgets = list(Budget.objects.filter(household=household, is_active=True))
+    balances = _balances_for_budgets([b.id for b in budgets])
+    return [_serialize(b, balances.get(b.id, Decimal('0.00'))) for b in budgets]
 
 
 @router.post('/budgets/', response=BudgetSchema)
@@ -254,7 +322,10 @@ def create_budget(request, payload: BudgetCreateRequest):
     """Creates a new budget in a household.
 
     The user must be a member of the target household. Budget names must
-    be unique within a household, regardless of type.
+    be unique among a household's *active* budgets — a deactivated budget
+    frees up its name (see deactivate_budget) rather than reserving it
+    forever, so this is a plain create, never a reactivation of some other
+    row's history.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -267,9 +338,10 @@ def create_budget(request, payload: BudgetCreateRequest):
 
     Raises:
         HttpError: 400 if the name is blank, exceeds the model's max
-            length, already exists in the household, if the period dates
-            are invalid for the given type, or if copy_lines_from_budget_id
-            names a budget in a different household.
+            length, an active budget with that name already exists, if the
+            period dates are invalid for the given type, or if
+            copy_lines_from_budget_id names a budget in a different
+            household.
         HttpError: 403 if the user is not a member of the household (or,
             via _get_budget_for_member, of copy_lines_from_budget_id's own
             household).
@@ -323,7 +395,10 @@ def create_budget(request, payload: BudgetCreateRequest):
         + (f' Copied lines from budget (id={source_budget.id}).' if source_budget else '')
     )
 
-    return _serialize(budget)
+    # Always zero: a freshly created budget's lines (if any, via
+    # copy_lines_from_budget_id) always start with actual_amount 0 — no
+    # query needed to know that.
+    return _serialize(budget, Decimal('0.00'))
 
 
 @router.patch('/budgets/{budget_id}/', response=BudgetSchema)
@@ -366,7 +441,8 @@ def rename_budget(request, budget_id: int, payload: BudgetRenameRequest):
         f'in household (id={budget.household_id}).'
     )
 
-    return _serialize(budget)
+    balance = _balances_for_budgets([budget.id]).get(budget.id, Decimal('0.00'))
+    return _serialize(budget, balance)
 
 
 @router.delete('/budgets/{budget_id}/', response={204: None})
@@ -375,8 +451,21 @@ def deactivate_budget(request, budget_id: int):
 
     Soft delete, same rationale as Category: the row is kept (flipping
     is_active to False) rather than removed, so historical reporting can
-    still reference it. The user must be a member of the budget's
-    household.
+    still reference its lines and cached actuals. Unlike Category, the
+    DB's (household, name) uniqueness isn't conditioned on is_active
+    (MySQL has no partial/conditional unique index to express that), so a
+    deactivated budget would otherwise permanently reserve its name. This
+    frees the name up instead of reactivating it later: the row is renamed
+    with a disambiguating "(deleted #<id>)" suffix, truncating the
+    original name first so the rename itself can't overflow the 100-char
+    limit — see _tombstone_name_candidates for how a (vanishingly
+    unlikely) collision with that exact name is handled. The renamed row
+    and its lines are otherwise untouched, so history stays fully intact —
+    just under a slightly different name. Deactivating is idempotent: a
+    budget that's already inactive is left exactly as it is, never
+    renamed a second time.
+
+    The user must be a member of the budget's household.
 
     Args:
         request: The HTTP request object. Must be authenticated.
@@ -391,11 +480,34 @@ def deactivate_budget(request, budget_id: int):
     """
     budget = _get_budget_for_member(budget_id, request.user)
 
+    if not budget.is_active:
+        return
+
+    original_name = budget.name
     budget.is_active = False
-    budget.save(update_fields=['is_active', 'updated_at'])
+
+    for candidate_name in _tombstone_name_candidates(original_name, budget.id):
+        budget.name = candidate_name
+        try:
+            # Each attempt gets its own savepoint (nested atomic) — a
+            # caught IntegrityError otherwise poisons the whole request's
+            # transaction, blocking every later query (including the
+            # fallback save below, or the next candidate) until rollback.
+            with atomic():
+                budget.save(update_fields=['name', 'is_active', 'updated_at'])
+            break
+        except IntegrityError:
+            continue
+    else:
+        # Every candidate collided with some other budget's literal name
+        # (vanishingly unlikely — see _tombstone_name_candidates) — still
+        # deactivate rather than block the user's action over a naming
+        # edge case; the name just doesn't get freed up this time.
+        budget.name = original_name
+        budget.save(update_fields=['is_active', 'updated_at'])
 
     logger.info(
-        f'User {request.user.email} deactivated budget "{budget.name}" (id={budget.id}) '
+        f'User {request.user.email} deactivated budget "{original_name}" (id={budget.id}) '
         f'in household (id={budget.household_id}).'
     )
 
@@ -522,8 +634,25 @@ def sync_budget(request, budget_id: int):
         f'User {request.user.email} recomputed actuals for budget "{budget.name}" (id={budget.id}).'
     )
 
+    # Computed from `lines` directly (already refreshed above, with
+    # category preloaded) instead of _balances_for_budgets — this just
+    # recomputed actual_amount for every line in one pass, so re-querying
+    # it back out of the DB would be redundant.
+    balance = (
+        sum(
+            (
+                line.actual_amount
+                if line.category.type == Category.Type.EARNING
+                else -line.actual_amount
+            )
+            for line in lines
+        )
+        if lines
+        else Decimal('0.00')
+    )
+
     return {
-        'budget': _serialize(budget),
+        'budget': _serialize(budget, balance),
         'lines': [_serialize_line(line) for line in lines],
     }
 

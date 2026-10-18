@@ -159,6 +159,88 @@ class TestDateRangeFilter:
         assert response.status_code == 400
 
 
+# ── GET /transactions/ — exclude_from_summary filter ─────────────────────────
+
+
+@pytest.mark.django_db
+class TestExcludeFromSummaryFilter:
+    """api/v1/summary.py's aggregation only ever includes
+    exclude_from_summary=False rows — this filter lets a caller that needs
+    to match a summary figure exactly (e.g. the Summary page's
+    label-transactions modal) ask for the same subset, rather than getting
+    every transaction for a label/date range regardless of its summary
+    visibility.
+    """
+
+    def test_exclude_from_summary_false_omits_excluded_transactions(
+        self, client, alice, account, household
+    ):
+        TransactionFactory(
+            account=account,
+            date='2026-01-01',
+            concept='INCLUDED',
+            amount=-5.00,
+            exclude_from_summary=False,
+        )
+        TransactionFactory(
+            account=account,
+            date='2026-01-02',
+            concept='EXCLUDED',
+            amount=-10.00,
+            exclude_from_summary=True,
+        )
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&exclude_from_summary=false', user=alice
+        )
+        concepts = {t['concept'] for t in response.json()['results']}
+        assert concepts == {'INCLUDED'}
+
+    def test_exclude_from_summary_true_returns_only_excluded_transactions(
+        self, client, alice, account, household
+    ):
+        TransactionFactory(
+            account=account,
+            date='2026-01-01',
+            concept='INCLUDED',
+            amount=-5.00,
+            exclude_from_summary=False,
+        )
+        TransactionFactory(
+            account=account,
+            date='2026-01-02',
+            concept='EXCLUDED',
+            amount=-10.00,
+            exclude_from_summary=True,
+        )
+
+        response = client.get(
+            f'/transactions/?household_id={household.id}&exclude_from_summary=true', user=alice
+        )
+        concepts = {t['concept'] for t in response.json()['results']}
+        assert concepts == {'EXCLUDED'}
+
+    def test_omitting_the_filter_returns_both(self, client, alice, account, household):
+        TransactionFactory(
+            account=account,
+            date='2026-01-01',
+            concept='INCLUDED',
+            amount=-5.00,
+            exclude_from_summary=False,
+        )
+        TransactionFactory(
+            account=account,
+            date='2026-01-02',
+            concept='EXCLUDED',
+            amount=-10.00,
+            exclude_from_summary=True,
+        )
+
+        response = client.get(f'/transactions/?household_id={household.id}', user=alice)
+        concepts = {t['concept'] for t in response.json()['results']}
+        assert concepts == {'INCLUDED', 'EXCLUDED'}
+
+
 # ── GET /transactions/ — pagination ──────────────────────────────────────────
 
 

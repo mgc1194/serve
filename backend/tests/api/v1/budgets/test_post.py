@@ -33,6 +33,7 @@ class TestCreateBudget:
         assert body['period_end'] == '2026-08-31'
         assert body['is_active'] is True
         assert body['household_id'] == household.id
+        assert body['balance'] == '0.00'
 
     def test_creates_a_project_budget_with_no_period(self, client, alice, household):
         response = client.post(
@@ -175,6 +176,48 @@ class TestCreateBudget:
 
 
 @pytest.mark.django_db
+class TestCreateAfterDeactivation:
+    """DELETE /budgets/{id}/ renames a budget as it deactivates it (see
+    TestRenameOnDeactivate in test_delete.py), freeing up its name — these
+    cover the create side of that: a brand new budget can reuse a name
+    that way, without disturbing the deactivated budget's own history.
+    """
+
+    def test_name_freed_by_deactivation_can_be_reused(self, client, alice, household):
+        old = BudgetFactory(household=household, name='August 2026')
+        old_line = BudgetLineFactory(budget=old, planned_amount=750)
+        client.delete(f'/budgets/{old.id}/', user=alice)
+
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        # A genuinely new row, not the old one reused.
+        assert body['id'] != old.id
+        assert body['name'] == 'August 2026'
+
+        # The deactivated budget's own history is untouched.
+        old.refresh_from_db()
+        assert old.is_active is False
+        assert old.name != 'August 2026'
+        old_line.refresh_from_db()
+        assert old_line.budget_id == old.id
+        assert old_line.planned_amount == 750
+
+    def test_name_of_an_active_budget_is_still_blocked(self, client, alice, household):
+        BudgetFactory(household=household, name='August 2026', is_active=True)
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
 class TestCopyLinesFromBudget:
     def test_copies_category_planned_amount_and_notes(self, client, alice, household):
         source = BudgetFactory(household=household, name='August 2026')
@@ -204,6 +247,31 @@ class TestCopyLinesFromBudget:
             (spending.id, 1500, ''),
             (earning.id, 5000, 'biweekly'),
         ]
+
+    def test_response_balance_is_zero_even_when_the_source_has_a_nonzero_balance(
+        self, client, alice, household
+    ):
+        # Lines are copied with actual_amount reset to zero (see
+        # test_copied_lines_start_with_zero_actual_amount below), so the
+        # new budget's own balance must be zero too — not the source's.
+        source = BudgetFactory(household=household, name='August 2026')
+        earning = CategoryFactory(household=household, type='earning')
+        spending = CategoryFactory(household=household, type='spending')
+        BudgetLineFactory(budget=source, category=earning, actual_amount='2000.00')
+        BudgetLineFactory(budget=source, category=spending, actual_amount='500.00')
+
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert response.json()['balance'] == '0.00'
 
     def test_copied_lines_start_with_zero_actual_amount(self, client, alice, household):
         source = BudgetFactory(household=household)
