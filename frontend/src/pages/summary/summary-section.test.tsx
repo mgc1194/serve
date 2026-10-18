@@ -7,11 +7,11 @@
 // row silently fell back to the "Uncategorised" label regardless of its
 // actual category.
 
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
 import { SummarySection } from '@pages/summary/summary-section';
-import type { Summary } from '@serve/types/global';
+import type { LabelSummary, Summary } from '@serve/types/global';
 
 function makeSummary(overrides: Partial<Summary> = {}): Summary {
   return {
@@ -25,13 +25,18 @@ function makeSummary(overrides: Partial<Summary> = {}): Summary {
   };
 }
 
-function setup(summary: Summary, activeTab: 'spending' | 'earnings' = 'spending') {
+function setup(
+  summary: Summary,
+  activeTab: 'spending' | 'earnings' = 'spending',
+  onLabelClick: (label: LabelSummary) => void = () => {},
+) {
   render(
     <SummarySection
       summary={summary}
       activeTab={activeTab}
       onTabChange={() => {}}
       monthLabel="March 2026"
+      onLabelClick={onLabelClick}
     />,
   );
 }
@@ -217,5 +222,73 @@ describe('SummarySection signed totals', () => {
     );
 
     expect(screen.getAllByText('−$42.57')).toHaveLength(2);
+  });
+});
+
+// Issue #338: clicking a label row should open the transactions-for-this-
+// label modal; the category header row aggregates multiple labels and
+// isn't clickable, since the backend filter only takes one label_id.
+describe('SummarySection label row clicks', () => {
+  const LABEL: LabelSummary = {
+    label_id: 2,
+    label_name: 'Groceries',
+    label_color: '#16a34a',
+    category_id: 2,
+    category_name: 'Food',
+    total: -42.57,
+  };
+
+  function summaryWithOneLabel(): Summary {
+    return makeSummary({
+      spending: [{ category_id: 2, category_name: 'Food', total: -42.57, labels: [LABEL] }],
+    });
+  }
+
+  it('calls onLabelClick with the clicked label when its row is clicked', () => {
+    const onLabelClick = vi.fn();
+    setup(summaryWithOneLabel(), 'spending', onLabelClick);
+
+    fireEvent.click(screen.getByText('Groceries'));
+
+    expect(onLabelClick).toHaveBeenCalledWith(LABEL);
+  });
+
+  it('does not call onLabelClick when the category header row is clicked', () => {
+    const onLabelClick = vi.fn();
+    setup(summaryWithOneLabel(), 'spending', onLabelClick);
+
+    fireEvent.click(screen.getByText('Food'));
+
+    expect(onLabelClick).not.toHaveBeenCalled();
+  });
+
+  it('calls onLabelClick on Enter for keyboard users', () => {
+    const onLabelClick = vi.fn();
+    setup(summaryWithOneLabel(), 'spending', onLabelClick);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /view transactions for groceries/i }), {
+      key: 'Enter',
+    });
+
+    expect(onLabelClick).toHaveBeenCalledWith(LABEL);
+  });
+
+  it('calls onLabelClick on Space for keyboard users', () => {
+    const onLabelClick = vi.fn();
+    setup(summaryWithOneLabel(), 'spending', onLabelClick);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: /view transactions for groceries/i }), {
+      key: ' ',
+    });
+
+    expect(onLabelClick).toHaveBeenCalledWith(LABEL);
+  });
+
+  it('is focusable via tab order', () => {
+    setup(summaryWithOneLabel());
+
+    expect(
+      screen.getByRole('button', { name: /view transactions for groceries/i }),
+    ).toHaveProperty('tabIndex', 0);
   });
 });

@@ -212,6 +212,7 @@ def list_transactions(
     label_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    exclude_from_summary: bool | None = None,
     cursor: str | None = None,
     previous_cursor: str | None = None,
     sort: SortField = SortField.date,
@@ -238,6 +239,11 @@ def list_transactions(
                          to filter to transactions with no label.
         date_from:       Optional inclusive lower bound on transaction date.
         date_to:         Optional inclusive upper bound on transaction date.
+        exclude_from_summary: Optional filter on the field of the same name.
+                         Omit to return both; pass False to match what
+                         api/v1/summary.py's aggregation includes (e.g. the
+                         Summary page's label-transactions modal, which
+                         must agree with the label total it drills into).
         cursor:          Opaque forward-pagination cursor. Mutually exclusive
                          with previous_cursor.
         previous_cursor: Opaque backward-pagination cursor. Mutually exclusive
@@ -295,6 +301,8 @@ def list_transactions(
         base_qs = base_qs.filter(date__gte=date_from)
     if date_to is not None:
         base_qs = base_qs.filter(date__lte=date_to)
+    if exclude_from_summary is not None:
+        base_qs = base_qs.filter(exclude_from_summary=exclude_from_summary)
 
     count = base_qs.count()
 

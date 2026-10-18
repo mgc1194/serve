@@ -40,6 +40,20 @@ export function formatMonthLabel(iso: string): string {
   return `${MONTH_NAMES[month - 1]} ${year}`;
 }
 
+/**
+ * The inclusive "YYYY-MM-DD" bounds of a given calendar month, for passing
+ * to listTransactions' date_from/date_to filter (e.g. the label-transactions
+ * modal on the Summary page). `new Date(year, month, 0)` is the last day of
+ * `month` (1-indexed) since day 0 rolls back into the previous month —
+ * read only via getDate(), so the local-time construction is fine here
+ * (unlike parsing an ISO string, there's no UTC/local ambiguity to avoid).
+ */
+export function monthDateRange(year: number, month: number): { from: string; to: string } {
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthStr = toMonthStr(year, month);
+  return { from: `${monthStr}-01`, to: `${monthStr}-${String(lastDay).padStart(2, '0')}` };
+}
+
 /** Years from earliest transaction year → current year, descending. */
 export function yearRange(earliestIso: string | null): number[] {
   const start = earliestIso ? Number(earliestIso.slice(0, 4)) : currentYear();
