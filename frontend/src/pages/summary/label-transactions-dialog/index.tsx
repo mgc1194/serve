@@ -83,15 +83,24 @@ export function LabelTransactionsDialog({
     let ignore = false;
     // Synchronizes with the fetch kicked off right below — same
     // intentional pattern as pages/summary/index.tsx's own fetch effect.
+    // Clearing transactions/totalCount here too (not just on a successful
+    // response) matters if this request fails and the user dismisses the
+    // error: without this, the *previous* label's rows would otherwise
+    // still be sitting in state and render under the new label's title.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoading(true);
     setError(null);
+    setTransactions([]);
+    setTotalCount(0);
 
     listTransactions({
       household_id: householdId,
       label_id: label.label_id,
       date_from: dateFrom,
       date_to: dateTo,
+      // Must match api/v1/summary.py::get_summary's own filter so this
+      // modal's rows actually sum to the label total the user clicked.
+      exclude_from_summary: false,
     })
       .then(page => {
         if (ignore) return;

@@ -1,6 +1,6 @@
 // pages/summary/label-transactions-dialog/label-transactions-dialog.test.tsx
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LabelTransactionsDialog } from '@pages/summary/label-transactions-dialog';
@@ -56,6 +56,7 @@ describe('LabelTransactionsDialog fetching', () => {
       label_id: 2,
       date_from: '2026-03-01',
       date_to: '2026-03-31',
+      exclude_from_summary: false,
     });
     await waitFor(() => expect(screen.getByText(/no transactions/i)).toBeDefined());
   });
@@ -152,6 +153,50 @@ describe('LabelTransactionsDialog results', () => {
     setup();
 
     expect(await screen.findByText('Could not load transactions.')).toBeDefined();
+  });
+
+  // Regresses to a bug where a failed request left the *previous* label's
+  // rows in state. The loading/error guards hide the table while the new
+  // request is in flight or has an error showing, so the stale rows only
+  // resurface once the user dismisses the error alert — which is exactly
+  // what this test does, rather than asserting right after the rejection.
+  it('does not resurrect a previous label’s rows after a failed request once the error is dismissed', async () => {
+    mockListTransactions.mockResolvedValueOnce({
+      ...EMPTY_PAGE,
+      results: [makeTransaction({ concept: 'OLD LABEL TRANSACTION' })],
+      count: 1,
+    });
+    const { rerender } = render(
+      <LabelTransactionsDialog
+        open
+        onClose={() => {}}
+        householdId={1}
+        label={LABEL}
+        dateFrom="2026-03-01"
+        dateTo="2026-03-31"
+        monthLabel="March 2026"
+      />,
+    );
+    await screen.findByText('OLD LABEL TRANSACTION');
+
+    mockListTransactions.mockRejectedValueOnce(
+      new ApiError(500, 'Could not load transactions.'),
+    );
+    rerender(
+      <LabelTransactionsDialog
+        open
+        onClose={() => {}}
+        householdId={1}
+        label={{ label_id: 3, label_name: 'Restaurants', label_color: '#ca8a04' }}
+        dateFrom="2026-03-01"
+        dateTo="2026-03-31"
+        monthLabel="March 2026"
+      />,
+    );
+    const alert = await screen.findByRole('alert');
+    fireEvent.click(within(alert).getByRole('button', { name: /close/i }));
+
+    expect(screen.queryByText('OLD LABEL TRANSACTION')).toBeNull();
   });
 });
 
