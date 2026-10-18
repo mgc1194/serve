@@ -21,6 +21,13 @@ class BudgetSchema(Schema):
     about freshness. Whether that counts as "stale" (and anything like a
     dismissable warning) is a client concern, not computed here — see
     Budget's docstring.
+
+    balance is the sum of this budget's lines' actual_amount, earnings
+    positive and spendings negative — the same figure budget-detail's
+    "Net" shows, computed here too so a list of budgets (e.g. the
+    Budgets page's cards) can show it without an N+1 lines fetch per
+    budget. Like actual_amount, it's whatever was last synced — never
+    computed live from transactions.
     """
 
     id: int
@@ -31,6 +38,7 @@ class BudgetSchema(Schema):
     is_active: bool
     household_id: int
     synced_at: datetime | None
+    balance: Decimal
 
 
 class BudgetCreateRequest(Schema):

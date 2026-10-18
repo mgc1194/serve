@@ -33,6 +33,7 @@ class TestCreateBudget:
         assert body['period_end'] == '2026-08-31'
         assert body['is_active'] is True
         assert body['household_id'] == household.id
+        assert body['balance'] == '0.00'
 
     def test_creates_a_project_budget_with_no_period(self, client, alice, household):
         response = client.post(
@@ -246,6 +247,31 @@ class TestCopyLinesFromBudget:
             (spending.id, 1500, ''),
             (earning.id, 5000, 'biweekly'),
         ]
+
+    def test_response_balance_is_zero_even_when_the_source_has_a_nonzero_balance(
+        self, client, alice, household
+    ):
+        # Lines are copied with actual_amount reset to zero (see
+        # test_copied_lines_start_with_zero_actual_amount below), so the
+        # new budget's own balance must be zero too — not the source's.
+        source = BudgetFactory(household=household, name='August 2026')
+        earning = CategoryFactory(household=household, type='earning')
+        spending = CategoryFactory(household=household, type='spending')
+        BudgetLineFactory(budget=source, category=earning, actual_amount='2000.00')
+        BudgetLineFactory(budget=source, category=spending, actual_amount='500.00')
+
+        response = client.post(
+            '/budgets/',
+            json={
+                'name': 'Copy',
+                'type': 'project',
+                'household_id': household.id,
+                'copy_lines_from_budget_id': source.id,
+            },
+            user=alice,
+        )
+        assert response.status_code == 200
+        assert response.json()['balance'] == '0.00'
 
     def test_copied_lines_start_with_zero_actual_amount(self, client, alice, household):
         source = BudgetFactory(household=household)

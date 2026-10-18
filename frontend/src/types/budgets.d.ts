@@ -13,6 +13,12 @@ export interface Budget {
   // this raw timestamp — whether that counts as "stale" and whether to
   // warn about it is a client-side concern (see backend Budget docstring).
   synced_at: string | null;
+  // Earnings' actual total minus spendings' — same figure budget-detail's
+  // "Net" shows, computed server-side (see backend BudgetSchema) so a
+  // list of budgets doesn't need a lines fetch per budget to show it. A
+  // Decimal on the backend, so it arrives as a numeric string (e.g.
+  // "50.00"), not a number.
+  balance: string;
 }
 
 export interface BudgetLine {

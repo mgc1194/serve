@@ -18,7 +18,7 @@ import uuid
 from decimal import Decimal
 
 from django.db import IntegrityError
-from django.db.models import Sum
+from django.db.models import Case, DecimalField, F, Sum, When
 from django.db.transaction import atomic
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -156,11 +156,15 @@ def _validate_period(payload: BudgetCreateRequest) -> None:
         raise HttpError(400, 'Project budgets cannot have period_start or period_end.')
 
 
-def _serialize(budget: Budget) -> dict:
+def _serialize(budget: Budget, balance: Decimal) -> dict:
     """Serializes a Budget into a dict matching BudgetSchema.
 
     Args:
         budget: The Budget instance to serialize.
+        balance: The budget's balance (see _balances_for_budgets), supplied
+            by the caller rather than queried here so a list of budgets can
+            compute every one's balance in a single batched query instead
+            of once per call to this function.
 
     Returns:
         A dict with the budget's fields.
@@ -174,7 +178,41 @@ def _serialize(budget: Budget) -> dict:
         'is_active': budget.is_active,
         'household_id': budget.household_id,
         'synced_at': budget.synced_at,
+        'balance': balance,
     }
+
+
+def _balances_for_budgets(budget_ids: list[int]) -> dict[int, Decimal]:
+    """Computes each budget's balance — the sum of its lines'
+    actual_amount, earnings positive and spendings negative — for every
+    id in budget_ids in a single query, regardless of how many there are.
+
+    Mirrors budget-detail's client-side "Net" computation, just batched
+    server-side: an earlier version of this had each budget card fetch its
+    own lines to compute this itself, which meant a list of N budgets
+    issued N extra requests (and N extra line queries) just to show one
+    scalar each.
+
+    Args:
+        budget_ids: The budgets to compute a balance for.
+
+    Returns:
+        A dict of budget_id -> balance. A budget with no lines is simply
+        absent — callers should default to Decimal('0.00').
+    """
+    rows = (
+        BudgetLine.objects.filter(budget_id__in=budget_ids)
+        .annotate(
+            signed_actual=Case(
+                When(category__type=Category.Type.EARNING, then=F('actual_amount')),
+                default=-F('actual_amount'),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
+        )
+        .values('budget_id')
+        .annotate(total=Sum('signed_actual'))
+    )
+    return {row['budget_id']: row['total'] for row in rows}
 
 
 def _serialize_line(line: BudgetLine) -> dict:
@@ -274,8 +312,9 @@ def list_budgets(request, household_id: int):
         HttpError: 404 if the household does not exist.
     """
     household = _get_household_for_member(household_id, request.user)
-    budgets = Budget.objects.filter(household=household, is_active=True)
-    return [_serialize(b) for b in budgets]
+    budgets = list(Budget.objects.filter(household=household, is_active=True))
+    balances = _balances_for_budgets([b.id for b in budgets])
+    return [_serialize(b, balances.get(b.id, Decimal('0.00'))) for b in budgets]
 
 
 @router.post('/budgets/', response=BudgetSchema)
@@ -356,7 +395,10 @@ def create_budget(request, payload: BudgetCreateRequest):
         + (f' Copied lines from budget (id={source_budget.id}).' if source_budget else '')
     )
 
-    return _serialize(budget)
+    # Always zero: a freshly created budget's lines (if any, via
+    # copy_lines_from_budget_id) always start with actual_amount 0 — no
+    # query needed to know that.
+    return _serialize(budget, Decimal('0.00'))
 
 
 @router.patch('/budgets/{budget_id}/', response=BudgetSchema)
@@ -399,7 +441,8 @@ def rename_budget(request, budget_id: int, payload: BudgetRenameRequest):
         f'in household (id={budget.household_id}).'
     )
 
-    return _serialize(budget)
+    balance = _balances_for_budgets([budget.id]).get(budget.id, Decimal('0.00'))
+    return _serialize(budget, balance)
 
 
 @router.delete('/budgets/{budget_id}/', response={204: None})
@@ -591,8 +634,25 @@ def sync_budget(request, budget_id: int):
         f'User {request.user.email} recomputed actuals for budget "{budget.name}" (id={budget.id}).'
     )
 
+    # Computed from `lines` directly (already refreshed above, with
+    # category preloaded) instead of _balances_for_budgets — this just
+    # recomputed actual_amount for every line in one pass, so re-querying
+    # it back out of the DB would be redundant.
+    balance = (
+        sum(
+            (
+                line.actual_amount
+                if line.category.type == Category.Type.EARNING
+                else -line.actual_amount
+            )
+            for line in lines
+        )
+        if lines
+        else Decimal('0.00')
+    )
+
     return {
-        'budget': _serialize(budget),
+        'budget': _serialize(budget, balance),
         'lines': [_serialize_line(line) for line in lines],
     }
 

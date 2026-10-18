@@ -8,7 +8,7 @@ budgets/conftest.py provides: client.
 import pytest
 
 from budgets.models import Budget
-from tests.factories import BudgetFactory
+from tests.factories import BudgetFactory, BudgetLineFactory, CategoryFactory
 
 
 @pytest.mark.django_db
@@ -18,6 +18,17 @@ class TestRenameBudget:
         response = client.patch(f'/budgets/{budget.id}/', json={'name': 'Renamed'}, user=alice)
         assert response.status_code == 200
         assert response.json()['name'] == 'Renamed'
+
+    def test_response_includes_the_budgets_balance(self, client, alice, household):
+        budget = BudgetFactory(household=household, name='January 2026')
+        earning = CategoryFactory(household=household, type='earning')
+        spending = CategoryFactory(household=household, type='spending')
+        BudgetLineFactory(budget=budget, category=earning, actual_amount='2000.00')
+        BudgetLineFactory(budget=budget, category=spending, actual_amount='500.00')
+
+        response = client.patch(f'/budgets/{budget.id}/', json={'name': 'Renamed'}, user=alice)
+        assert response.status_code == 200
+        assert response.json()['balance'] == '1500.00'
 
     def test_blank_name_returns_400(self, client, alice, household):
         budget = BudgetFactory(household=household, name='January 2026')
