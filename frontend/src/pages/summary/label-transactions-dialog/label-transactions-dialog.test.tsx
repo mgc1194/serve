@@ -155,6 +155,52 @@ describe('LabelTransactionsDialog results', () => {
     expect(await screen.findByText('Could not load transactions.')).toBeDefined();
   });
 
+  // Regresses to a bug where dismissing the error alert cleared `error`
+  // alone, leaving transactions still empty and isLoading false — which
+  // the render logic couldn't tell apart from a genuinely empty result,
+  // so it showed "No transactions for this label" for a request that
+  // actually failed. Dismissing now retries instead, so the very next
+  // thing shown is the loading state, never a fabricated empty result.
+  it('shows loading, not a false empty state, right after dismissing a failed request', async () => {
+    mockListTransactions.mockRejectedValueOnce(new ApiError(500, 'Could not load transactions.'));
+    setup();
+    const alert = await screen.findByRole('alert');
+
+    let resolveRetry!: (page: PaginatedTransactions) => void;
+    mockListTransactions.mockReturnValueOnce(
+      new Promise<PaginatedTransactions>(resolve => {
+        resolveRetry = resolve;
+      }),
+    );
+    fireEvent.click(within(alert).getByRole('button', { name: /close/i }));
+
+    expect(screen.getByRole('progressbar')).toBeDefined();
+    expect(screen.queryByText(/no transactions for this label/i)).toBeNull();
+
+    resolveRetry(EMPTY_PAGE);
+    await waitFor(() =>
+      expect(screen.getByText(/no transactions for this label/i)).toBeDefined(),
+    );
+  });
+
+  it('retries with the same parameters when the error is dismissed', async () => {
+    mockListTransactions.mockRejectedValueOnce(new ApiError(500, 'Could not load transactions.'));
+    setup();
+    const alert = await screen.findByRole('alert');
+
+    mockListTransactions.mockResolvedValueOnce(EMPTY_PAGE);
+    fireEvent.click(within(alert).getByRole('button', { name: /close/i }));
+
+    await waitFor(() => expect(mockListTransactions).toHaveBeenCalledTimes(2));
+    expect(mockListTransactions).toHaveBeenNthCalledWith(2, {
+      household_id: 1,
+      label_id: 2,
+      date_from: '2026-03-01',
+      date_to: '2026-03-31',
+      exclude_from_summary: false,
+    });
+  });
+
   // Regresses to a bug where a failed request left the *previous* label's
   // rows in state. The loading/error guards hide the table while the new
   // request is in flight or has an error showing, so the stale rows only
@@ -194,8 +240,17 @@ describe('LabelTransactionsDialog results', () => {
       />,
     );
     const alert = await screen.findByRole('alert');
+
+    // The dismiss-triggered retry (see the two tests above) needs its own
+    // mock value too, or this dismiss click would leave a dangling
+    // unresolved request.
+    mockListTransactions.mockResolvedValueOnce(EMPTY_PAGE);
     fireEvent.click(within(alert).getByRole('button', { name: /close/i }));
 
+    expect(screen.queryByText('OLD LABEL TRANSACTION')).toBeNull();
+    await waitFor(() =>
+      expect(screen.getByText(/no transactions for this label/i)).toBeDefined(),
+    );
     expect(screen.queryByText('OLD LABEL TRANSACTION')).toBeNull();
   });
 });

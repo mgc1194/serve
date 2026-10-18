@@ -76,6 +76,9 @@ export function LabelTransactionsDialog({
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by the error Alert's onClose to retry the same fetch — see the
+  // comment on that Alert for why dismissing can't just clear `error`.
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     if (!open || !label) return;
@@ -118,7 +121,7 @@ export function LabelTransactionsDialog({
     return () => {
       ignore = true;
     };
-  }, [open, label, householdId, dateFrom, dateTo]);
+  }, [open, label, householdId, dateFrom, dateTo, retryCount]);
 
   const hasMore = totalCount > transactions.length;
 
@@ -148,7 +151,16 @@ export function LabelTransactionsDialog({
       </DialogTitle>
       <DialogContent>
         {error && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          // Dismissing retries rather than just clearing `error` — clearing
+          // it alone would leave transactions/totalCount at their
+          // just-failed (empty) values, which the branch below can't tell
+          // apart from a genuinely empty result, and would wrongly show
+          // "No transactions" for a request that actually failed.
+          <Alert
+            severity="error"
+            sx={{ mb: 2 }}
+            onClose={() => setRetryCount(count => count + 1)}
+          >
             {error}
           </Alert>
         )}
