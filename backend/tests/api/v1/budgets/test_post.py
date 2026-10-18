@@ -176,6 +176,48 @@ class TestCreateBudget:
 
 
 @pytest.mark.django_db
+class TestCreateAfterDeactivation:
+    """DELETE /budgets/{id}/ renames a budget as it deactivates it (see
+    TestRenameOnDeactivate in test_delete.py), freeing up its name — these
+    cover the create side of that: a brand new budget can reuse a name
+    that way, without disturbing the deactivated budget's own history.
+    """
+
+    def test_name_freed_by_deactivation_can_be_reused(self, client, alice, household):
+        old = BudgetFactory(household=household, name='August 2026')
+        old_line = BudgetLineFactory(budget=old, planned_amount=750)
+        client.delete(f'/budgets/{old.id}/', user=alice)
+
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 200
+        body = response.json()
+        # A genuinely new row, not the old one reused.
+        assert body['id'] != old.id
+        assert body['name'] == 'August 2026'
+
+        # The deactivated budget's own history is untouched.
+        old.refresh_from_db()
+        assert old.is_active is False
+        assert old.name != 'August 2026'
+        old_line.refresh_from_db()
+        assert old_line.budget_id == old.id
+        assert old_line.planned_amount == 750
+
+    def test_name_of_an_active_budget_is_still_blocked(self, client, alice, household):
+        BudgetFactory(household=household, name='August 2026', is_active=True)
+        response = client.post(
+            '/budgets/',
+            json={'name': 'August 2026', 'type': 'project', 'household_id': household.id},
+            user=alice,
+        )
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
 class TestCopyLinesFromBudget:
     def test_copies_category_planned_amount_and_notes(self, client, alice, household):
         source = BudgetFactory(household=household, name='August 2026')
