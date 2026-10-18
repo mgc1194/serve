@@ -19,6 +19,13 @@ export interface ListTransactionsParams {
   date_from?: string;
   /** Inclusive upper bound, "YYYY-MM-DD". */
   date_to?: string;
+  /**
+   * Filters to transactions with this exact exclude_from_summary value.
+   * Omit to get both. Pass false to match what the Summary page's own
+   * aggregation includes (api/v1/summary.py::get_summary) — e.g. the
+   * label-transactions dialog, whose rows must agree with the label total
+   * it drills into.
+   */
   exclude_from_summary?: boolean;
   cursor?: string;
   previous_cursor?: string;
