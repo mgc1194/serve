@@ -191,10 +191,19 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
             <Typography
               variant="h6"
               component="h4"
-              sx={{ fontFamily: '"DM Serif Display", Georgia, serif', flex: 1 }}
+              sx={{ fontFamily: '"DM Serif Display", Georgia, serif' }}
             >
               {budget.name}
             </Typography>
+            <Typography
+              variant="body2"
+              fontWeight={600}
+              color={balance >= 0 ? 'success.main' : 'error.main'}
+            >
+              Balance: {signPrefix(balance)}
+              {formatCurrency(balance)}
+            </Typography>
+            <Box sx={{ flex: 1 }} />
             <Tooltip title="Rename">
               <IconButton
                 onClick={startEditing}
@@ -215,15 +224,6 @@ export function BudgetCard({ budget, onUpdated, onDeactivated, onDuplicate }: Bu
               {period}
             </Typography>
           )}
-          <Box sx={{ flex: 1 }} />
-          <Typography
-            variant="body2"
-            fontWeight={600}
-            color={balance >= 0 ? 'success.main' : 'error.main'}
-          >
-            Balance: {signPrefix(balance)}
-            {formatCurrency(balance)}
-          </Typography>
         </Box>
       </Box>
 
