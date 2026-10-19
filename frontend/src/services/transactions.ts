@@ -19,6 +19,14 @@ export interface ListTransactionsParams {
   date_from?: string;
   /** Inclusive upper bound, "YYYY-MM-DD". */
   date_to?: string;
+  /**
+   * Filters to transactions with this exact exclude_from_summary value.
+   * Omit to get both. Pass false to match what the Summary page's own
+   * aggregation includes (api/v1/summary.py::get_summary) — e.g. the
+   * label-transactions dialog, whose rows must agree with the label total
+   * it drills into.
+   */
+  exclude_from_summary?: boolean;
   cursor?: string;
   previous_cursor?: string;
   sort?: SortField;
@@ -34,6 +42,9 @@ export async function listTransactions(
   if (params.label_id != null) query.set('label_id', String(params.label_id));
   if (params.date_from != null) query.set('date_from', params.date_from);
   if (params.date_to != null) query.set('date_to', params.date_to);
+  if (params.exclude_from_summary != null) {
+    query.set('exclude_from_summary', String(params.exclude_from_summary));
+  }
   if (params.cursor != null) query.set('cursor', params.cursor);
   if (params.previous_cursor != null) query.set('previous_cursor', params.previous_cursor);
   if (params.sort != null) query.set('sort', params.sort);
