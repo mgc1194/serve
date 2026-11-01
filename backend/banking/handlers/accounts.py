@@ -194,9 +194,16 @@ class CitiCostcoHandler(BaseHandler):
         # Description must keep hashing as "0" (not "nan") to match dedupe_hash
         # values already stored from prior imports of the same rows.
         df = df.fillna(0)
-        df['Debit'] = df['Debit'].apply(CitiCostcoHandler._clean_currency)
-        df['Credit'] = df['Credit'].apply(CitiCostcoHandler._clean_currency)
-        df['Amount'] = df['Debit'] + df['Credit']
+        # Compute Amount from cleaned copies rather than overwriting Debit/Credit
+        # in place — _clean_currency always returns a float, which would
+        # otherwise coerce an all-integer column (e.g. 500, read as int64 when
+        # the column has no blanks) to 500.0. raw_data/_generate_dedupe_hash
+        # (base.py) hash Debit/Credit's original values, and raw_data is the
+        # audit copy of the row (see transactions/models.py), so both must
+        # keep the untouched CSV values rather than the normalized ones.
+        df['Amount'] = df['Debit'].apply(CitiCostcoHandler._clean_currency) + df['Credit'].apply(
+            CitiCostcoHandler._clean_currency
+        )
         return df
 
 

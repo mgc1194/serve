@@ -378,6 +378,22 @@ class TestCitiCostcoHandlerDollarFormattedCsv:
         raw = json.loads(result['raw_data'].iloc[1])
         assert raw['Member Name'] == '0'
 
+    # pandas reads an all-integer Debit/Credit column (no blanks) as int64,
+    # e.g. 500 rather than 500.00. If _apply_amount_logic overwrote Debit with
+    # a normalized float, raw_data/dedupe_hash would hash "500.0" instead of
+    # "500" — a different hash than what prior imports of this same row
+    # already stored — and raw_data would no longer be the untouched audit
+    # copy of the CSV row (transactions/models.py).
+    def test_integer_debit_is_not_coerced_to_a_float_in_raw_data(self, mocker):
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,10/12/2026,COSTCO WHSE #1120 WASHINGTON DC,500,,MARIO GIL CORREA\n'
+        )
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(csv)))
+        result = CitiCostcoHandler().process('fake.csv')
+        raw = json.loads(result['raw_data'].iloc[0])
+        assert raw['Debit'] == '500'
+
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
 
