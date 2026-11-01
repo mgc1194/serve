@@ -189,6 +189,11 @@ class CitiCostcoHandler(BaseHandler):
 
     @staticmethod
     def _apply_amount_logic(df):
+        # fillna(0) covers every column, not just Debit/Credit — _generate_dedupe_hash
+        # and raw_data (base.py) hash every raw cell, so a blank Member Name or
+        # Description must keep hashing as "0" (not "nan") to match dedupe_hash
+        # values already stored from prior imports of the same rows.
+        df = df.fillna(0)
         df['Debit'] = df['Debit'].apply(CitiCostcoHandler._clean_currency)
         df['Credit'] = df['Credit'].apply(CitiCostcoHandler._clean_currency)
         df['Amount'] = df['Debit'] + df['Credit']

@@ -2,6 +2,7 @@
 tests/banking/handlers/test_accounts.py — Unit tests for each account handler.
 """
 
+import json
 from io import StringIO
 
 import pandas as pd
@@ -355,6 +356,27 @@ class TestCitiCostcoHandlerDollarFormattedCsv:
 
     def test_empty_debit_credit_cells_do_not_produce_nan(self, purchase):
         assert not purchase['Amount'].isna().any()
+
+    # dedupe_hash and raw_data (base.py) hash every raw cell, including
+    # non-amount ones. If a blank Member Name hashed as "nan" instead of the
+    # "0" previously produced by df.fillna(0), re-importing a CSV with rows
+    # already stored under the old hash would miss the (account, dedupe_hash)
+    # unique-constraint match and insert duplicates.
+    def test_blank_member_name_hashes_as_zero_not_nan(self, mocker):
+        # A second, populated Member Name row matters here: pandas only infers
+        # an object (mixed-type) dtype for the column — matching the real CSV,
+        # where some rows carry a name and others don't — when at least one
+        # entry is a string; an all-blank column would be float64 and
+        # fillna(0) would yield 0.0 regardless of this fix.
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,10/12/2026,COSTCO WHSE #1120 WASHINGTON DC,$ 291.80,,MARIO GIL CORREA\n'
+            'Cleared,10/11/2026,SHELL OIL 57544201403 STRASBURG VA,$ 40.03,,\n'
+        )
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(csv)))
+        result = CitiCostcoHandler().process('fake.csv')
+        raw = json.loads(result['raw_data'].iloc[1])
+        assert raw['Member Name'] == '0'
 
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
