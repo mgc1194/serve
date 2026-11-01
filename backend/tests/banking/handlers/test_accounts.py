@@ -318,6 +318,45 @@ class TestCitiCostcoHandler:
         assert purchase['Concept'].iloc[0] == 'COSTCO WHSE'
 
 
+# Citi has changed this export to dollar-format Debit/Credit (e.g. "$ 291.80",
+# " -$ 500.00") instead of bare numbers, without any notice. Debit/Credit
+# then read in as strings, and fillna(0) on an otherwise-empty cell left an
+# int 0 sitting next to those strings, so summing the two columns raised
+# "unsupported operand type(s) for +: 'int' and 'str'" and every CitiCostco
+# import failed.
+class TestCitiCostcoHandlerDollarFormattedCsv:
+    PURCHASE_CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,10/12/2026,COSTCO WHSE #1120 WASHINGTON DC,$ 291.80,,MARIO GIL CORREA\n'
+    )
+    PAYMENT_CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,10/19/2026,"ONLINE PAYMENT, THANK YOU",, -$ 500.00,MARIO GIL CORREA\n'
+    )
+
+    @pytest.fixture
+    def purchase(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV)))
+        return CitiCostcoHandler().process('fake.csv')
+
+    @pytest.fixture
+    def payment(self, mocker):
+        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PAYMENT_CSV)))
+        return CitiCostcoHandler().process('fake.csv')
+
+    def test_returns_a_dataframe(self, purchase):
+        assert purchase is not None
+
+    def test_purchase_amount_is_negative(self, purchase):
+        assert purchase['Amount'].iloc[0] == pytest.approx(-291.80)
+
+    def test_payment_amount_is_positive(self, payment):
+        assert payment['Amount'].iloc[0] == pytest.approx(500.00)
+
+    def test_empty_debit_credit_cells_do_not_produce_nan(self, purchase):
+        assert not purchase['Amount'].isna().any()
+
+
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
 
 

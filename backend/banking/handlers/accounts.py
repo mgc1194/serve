@@ -24,6 +24,10 @@ requires both a new handler implementation and a corresponding data
 migration.
 """
 
+import re
+
+import pandas as pd
+
 from banking.constants import HandlerKeys
 
 from .base import BaseHandler
@@ -170,8 +174,23 @@ class CitiCostcoHandler(BaseHandler):
     negate_amount = True
 
     @staticmethod
+    def _clean_currency(value) -> float:
+        """Strip '$', thousands commas, and stray whitespace (e.g. "-$ 500.00",
+        "$ 291.80") down to a plain float. Citi has changed this export's
+        formatting before without notice, so this tolerates either a bare
+        number or a dollar-formatted one rather than assuming one or the
+        other."""
+        if pd.isna(value):
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        cleaned = re.sub(r'[^0-9.\-]', '', str(value))
+        return float(cleaned) if cleaned else 0.0
+
+    @staticmethod
     def _apply_amount_logic(df):
-        df = df.fillna(0)
+        df['Debit'] = df['Debit'].apply(CitiCostcoHandler._clean_currency)
+        df['Credit'] = df['Credit'].apply(CitiCostcoHandler._clean_currency)
         df['Amount'] = df['Debit'] + df['Credit']
         return df
 
