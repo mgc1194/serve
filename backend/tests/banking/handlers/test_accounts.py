@@ -2,7 +2,8 @@
 tests/banking/handlers/test_accounts.py — Unit tests for each account handler.
 """
 
-from io import StringIO
+import json
+from io import BytesIO, StringIO
 
 import pandas as pd
 import pytest
@@ -276,6 +277,16 @@ class TestDiscoverHandler:
 # ── Citi Costco ───────────────────────────────────────────────────────────────
 
 
+# CitiCostcoHandler overrides _read_and_process to fix up raw CSV text before
+# pandas ever tokenizes it (see base.py's docstring and accounts.py), so
+# these tests feed it a real file-like buffer — the same io.BytesIO shape
+# the import endpoint hands every handler (api/v1/transactions.py) — rather
+# than mocking pandas.read_csv and a fake path, which that override would
+# never reach (it reads file_path itself, before any read_csv call).
+def _process_citi_costco_csv(csv_text: str):
+    return CitiCostcoHandler().process(BytesIO(csv_text.encode('latin1')))
+
+
 class TestCitiCostcoHandler:
     PURCHASE_CSV = (
         'Status,Date,Description,Debit,Credit,Member Name\n'
@@ -287,14 +298,12 @@ class TestCitiCostcoHandler:
     )
 
     @pytest.fixture
-    def purchase(self, mocker):
-        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PURCHASE_CSV)))
-        return CitiCostcoHandler().process('fake.csv')
+    def purchase(self):
+        return _process_citi_costco_csv(self.PURCHASE_CSV)
 
     @pytest.fixture
-    def payment(self, mocker):
-        mocker.patch('pandas.read_csv', return_value=pd.read_csv(StringIO(self.PAYMENT_CSV)))
-        return CitiCostcoHandler().process('fake.csv')
+    def payment(self):
+        return _process_citi_costco_csv(self.PAYMENT_CSV)
 
     def test_returns_a_dataframe(self, purchase):
         assert purchase is not None
@@ -316,6 +325,133 @@ class TestCitiCostcoHandler:
 
     def test_concept(self, purchase):
         assert purchase['Concept'].iloc[0] == 'COSTCO WHSE'
+
+
+# Citi has changed this export to dollar-format Debit/Credit (e.g. "$ 291.80",
+# " -$ 500.00") instead of bare numbers, without any notice. Debit/Credit
+# then read in as strings, and fillna(0) on an otherwise-empty cell left an
+# int 0 sitting next to those strings, so summing the two columns raised
+# "unsupported operand type(s) for +: 'int' and 'str'" and every CitiCostco
+# import failed.
+class TestCitiCostcoHandlerDollarFormattedCsv:
+    PURCHASE_CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,10/12/2026,COSTCO WHSE #1120 WASHINGTON DC,$ 291.80,,MARIO GIL CORREA\n'
+    )
+    PAYMENT_CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,10/19/2026,"ONLINE PAYMENT, THANK YOU",, -$ 500.00,MARIO GIL CORREA\n'
+    )
+
+    @pytest.fixture
+    def purchase(self):
+        return _process_citi_costco_csv(self.PURCHASE_CSV)
+
+    @pytest.fixture
+    def payment(self):
+        return _process_citi_costco_csv(self.PAYMENT_CSV)
+
+    def test_returns_a_dataframe(self, purchase):
+        assert purchase is not None
+
+    def test_purchase_amount_is_negative(self, purchase):
+        assert purchase['Amount'].iloc[0] == pytest.approx(-291.80)
+
+    def test_payment_amount_is_positive(self, payment):
+        assert payment['Amount'].iloc[0] == pytest.approx(500.00)
+
+    def test_empty_debit_credit_cells_do_not_produce_nan(self, purchase):
+        assert not purchase['Amount'].isna().any()
+
+    # dedupe_hash and raw_data (base.py) hash every raw cell, including
+    # non-amount ones. If a blank Member Name hashed as "nan" instead of the
+    # "0" previously produced by df.fillna(0), re-importing a CSV with rows
+    # already stored under the old hash would miss the (account, dedupe_hash)
+    # unique-constraint match and insert duplicates.
+    def test_blank_member_name_hashes_as_zero_not_nan(self):
+        # A second, populated Member Name row matters here: pandas only infers
+        # an object (mixed-type) dtype for the column — matching the real CSV,
+        # where some rows carry a name and others don't — when at least one
+        # entry is a string; an all-blank column would be float64 and
+        # fillna(0) would yield 0.0 regardless of this fix.
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,10/12/2026,COSTCO WHSE #1120 WASHINGTON DC,$ 291.80,,MARIO GIL CORREA\n'
+            'Cleared,10/11/2026,SHELL OIL 57544201403 STRASBURG VA,$ 40.03,,\n'
+        )
+        result = _process_citi_costco_csv(csv)
+        raw = json.loads(result['raw_data'].iloc[1])
+        assert raw['Member Name'] == '0'
+
+    # pandas reads an all-integer Debit/Credit column (no blanks) as int64,
+    # e.g. 500 rather than 500.00. If _apply_amount_logic overwrote Debit with
+    # a normalized float, raw_data/dedupe_hash would hash "500.0" instead of
+    # "500" — a different hash than what prior imports of this same row
+    # already stored — and raw_data would no longer be the untouched audit
+    # copy of the CSV row (transactions/models.py).
+    def test_integer_debit_is_not_coerced_to_a_float_in_raw_data(self):
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,10/12/2026,COSTCO WHSE #1120 WASHINGTON DC,500,,MARIO GIL CORREA\n'
+        )
+        result = _process_citi_costco_csv(csv)
+        raw = json.loads(result['raw_data'].iloc[0])
+        assert raw['Debit'] == '500'
+
+    # _generate_dedupe_hash/raw_data (base.py) hash the derived Amount column
+    # too, not just Debit/Credit — _apply_amount_logic adds it to the same
+    # raw_df they're computed from. When neither Debit nor Credit has a
+    # blank cell anywhere in the file, pandas reads both as int64 and their
+    # sum stays int64 (e.g. 500 + -500 = 0, not 0.0). If cleaning coerced
+    # that to a float, "0" would become "0.0" in the hash and miss the
+    # (account, dedupe_hash) match already stored from a prior import.
+    def test_fully_populated_integer_columns_keep_an_integer_amount(self):
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,10/12/2026,ROW A,500,0,MARIO GIL CORREA\n'
+            'Cleared,10/11/2026,ROW B,0,500,MARIO GIL CORREA\n'
+        )
+        result = _process_citi_costco_csv(csv)
+        raw = json.loads(result['raw_data'].iloc[0])
+        assert raw['Amount'] == '500'
+
+
+# Citi's export doesn't quote Debit/Credit, so a thousands-separator comma in
+# an amount (e.g. "$ 2,910.60") was otherwise indistinguishable from a column
+# delimiter: pandas silently split that one field into two and shifted every
+# column after it for that row, corrupting Concept/Member Name/Amount alike
+# without raising any error.
+class TestCitiCostcoHandlerThousandsSeparator:
+    CSV = (
+        'Status,Date,Description,Debit,Credit,Member Name\n'
+        'Cleared,07/02/2026,"ONLINE PAYMENT, THANK YOU",, -$ 4,242.86,MARIO GIL CORREA\n'
+        'Cleared,06/17/2026,"WWW COSTCO COM 800-955-2292 WA",$ 841.76,,MARIO GIL CORREA\n'
+        'Cleared,06/13/2026,"WWW COSTCO COM 800-955-2292 WA",$ 2,910.60,,MARIO GIL CORREA\n'
+    )
+
+    @pytest.fixture
+    def result(self):
+        return _process_citi_costco_csv(self.CSV)
+
+    def test_returns_a_dataframe(self, result):
+        assert result is not None
+
+    def test_payment_amount_with_thousands_separator_is_positive(self, result):
+        assert result['Amount'].iloc[0] == pytest.approx(4242.86)
+
+    def test_purchase_amount_without_thousands_separator_is_unaffected(self, result):
+        assert result['Amount'].iloc[1] == pytest.approx(-841.76)
+
+    def test_purchase_amount_with_thousands_separator_is_negative(self, result):
+        assert result['Amount'].iloc[2] == pytest.approx(-2910.60)
+
+    def test_member_name_is_not_shifted_into_the_wrong_column(self, result):
+        member_names = result['raw_data'].apply(lambda r: json.loads(r)['Member Name'])
+        assert (member_names == 'MARIO GIL CORREA').all()
+
+    def test_concept_is_not_corrupted(self, result):
+        assert result['Concept'].iloc[0] == 'ONLINE PAYMENT, THANK YOU'
+        assert result['Concept'].iloc[2] == 'WWW COSTCO COM 800-955-2292 WA'
 
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
