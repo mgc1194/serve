@@ -24,6 +24,7 @@ requires both a new handler implementation and a corresponding data
 migration.
 """
 
+import io
 import re
 
 import pandas as pd
@@ -172,6 +173,23 @@ class CitiCostcoHandler(BaseHandler):
     col_concept = 'Description'
     col_amount = 'Amount'  # Derived in _apply_amount_logic
     negate_amount = True
+
+    # Matches a dollar-formatted amount with a thousands separator, e.g.
+    # "$ 4,242.86" — but not "$ 841.76", which has no comma to strip.
+    _THOUSANDS_IN_DOLLAR_AMOUNT_RE = re.compile(r'\$\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?')
+
+    def _read_and_process(self, file_path):
+        # Debit/Credit aren't quoted in this export, so a thousands comma in
+        # an amount (e.g. "$ 4,242.86") is otherwise indistinguishable from a
+        # column delimiter to the CSV parser: it silently splits that one
+        # field into two, shifting every column after it for that row. Fix
+        # up the raw text before pandas ever tokenizes it into columns,
+        # rather than trying to recover from already-misaligned columns.
+        text = self._THOUSANDS_IN_DOLLAR_AMOUNT_RE.sub(
+            lambda m: m.group(0).replace(',', ''), self._read_raw_text(file_path)
+        )
+        raw_df = pd.read_csv(io.StringIO(text), names=self.csv_names, header=self.csv_header)
+        return self._build_clean_df(raw_df)
 
     @staticmethod
     def _clean_currency(value) -> float:
