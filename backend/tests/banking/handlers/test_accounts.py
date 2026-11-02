@@ -453,6 +453,21 @@ class TestCitiCostcoHandlerThousandsSeparator:
         assert result['Concept'].iloc[0] == 'ONLINE PAYMENT, THANK YOU'
         assert result['Concept'].iloc[2] == 'WWW COSTCO COM 800-955-2292 WA'
 
+    # The thousands-separator cleanup is anchored to a whole CSV field (a
+    # preceding comma, a following comma or line end) specifically so it
+    # can't reach into a quoted Description that happens to contain its own
+    # dollar-formatted, comma'd amount — stripping that comma would corrupt
+    # Concept/raw_data instead of fixing a real column-delimiter ambiguity.
+    def test_a_dollar_amount_inside_the_description_is_left_alone(self):
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,06/14/2026,"COSTCO $1,200 REFUND",$ 50.00,,MARIO GIL CORREA\n'
+        )
+        result = _process_citi_costco_csv(csv)
+        assert result['Concept'].iloc[0] == 'COSTCO $1,200 REFUND'
+        raw = json.loads(result['raw_data'].iloc[0])
+        assert raw['Description'] == 'COSTCO $1,200 REFUND'
+
 
 # ── Wells Fargo Checking ──────────────────────────────────────────────────────
 

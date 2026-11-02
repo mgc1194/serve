@@ -175,8 +175,15 @@ class CitiCostcoHandler(BaseHandler):
     negate_amount = True
 
     # Matches a dollar-formatted amount with a thousands separator, e.g.
-    # "$ 4,242.86" — but not "$ 841.76", which has no comma to strip.
-    _THOUSANDS_IN_DOLLAR_AMOUNT_RE = re.compile(r'\$\s*\d{1,3}(?:,\d{3})+(?:\.\d+)?')
+    # "$ 4,242.86" — but not "$ 841.76", which has no comma to strip. Anchored
+    # to a whole CSV field (a preceding comma, and a following comma or line
+    # end) so this can only match Debit/Credit — not, say, a dollar amount
+    # that happens to appear inside a quoted Description like
+    # "COSTCO $1,200 REFUND", where stripping the comma would corrupt
+    # Concept/raw_data instead of fixing anything.
+    _THOUSANDS_IN_DOLLAR_AMOUNT_RE = re.compile(
+        r'(?<=,)[ \t]*-?[ \t]*\$[ \t]*\d{1,3}(?:,\d{3})+(?:\.\d+)?(?=[ \t]*(?:,|\r?\n|$))'
+    )
 
     def _read_and_process(self, file_path):
         # Debit/Credit aren't quoted in this export, so a thousands comma in
