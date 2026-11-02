@@ -10,20 +10,32 @@
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActiveHouseholdProvider } from '@context/active-household-context';
 import { AuthProvider } from '@context/auth-context';
 import { SummaryPage } from '@pages/summary';
 import { makeHousehold, makeUser } from '@serve/mocks';
-import type { Summary } from '@serve/types/global';
+import type { PaginatedTransactions, Summary } from '@serve/types/global';
 import * as summaryService from '@services/summary';
+import * as transactionsService from '@services/transactions';
 
 vi.mock('@services/summary');
+vi.mock('@services/transactions', async importOriginal => {
+  const actual = await importOriginal<typeof import('@services/transactions')>();
+  return { ...actual, listTransactions: vi.fn() };
+});
 vi.mock('@layout/app-header', () => ({ AppHeader: () => <header /> }));
 
 const HOUSEHOLD_A = makeHousehold({ id: 1, name: 'Alpha Household' });
 const HOUSEHOLD_B = makeHousehold({ id: 2, name: 'Beta Household' });
+
+// ActiveHouseholdProvider persists the chosen household in localStorage,
+// keyed by user id (see active-household-context.tsx) — every test here
+// uses the same mock user id, so without this a switch made in one test
+// (the stale-request regression below) would leak into the next test's
+// default active household.
+beforeEach(() => localStorage.clear());
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -45,9 +57,9 @@ function makeSummary(overrides: Partial<Summary> = {}): Summary {
   };
 }
 
-function renderPage() {
+function renderPage(initialEntries: string[] = ['/']) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <AuthProvider
         value={{
           user: makeUser({ households: [HOUSEHOLD_A, HOUSEHOLD_B] }),
@@ -63,6 +75,16 @@ function renderPage() {
     </MemoryRouter>,
   );
 }
+
+const EMPTY_TRANSACTIONS_PAGE: PaginatedTransactions = {
+  results: [],
+  count: 0,
+  offset: 0,
+  next_cursor: null,
+  previous_cursor: null,
+  sort: 'date',
+  sort_dir: 'desc',
+};
 
 describe('SummaryPage stale request regression', () => {
   it('ignores a stale response for the previous household after switching', async () => {
@@ -95,5 +117,54 @@ describe('SummaryPage stale request regression', () => {
 
     expect(screen.getByText(/\$222\.00/)).toBeDefined();
     expect(screen.queryByText(/\$111\.00/)).toBeNull();
+  });
+});
+
+// Issue #338 follow-up (PR review): the dialog and row unit tests each
+// cover their own half of this feature in isolation — neither would catch
+// a regression in the wiring between them (e.g. a prop renamed or dropped
+// in pages/summary/index.tsx). This exercises the real path: a click on a
+// SummarySection label row must open LabelTransactionsDialog and fetch with
+// that label's id and the selected month's actual date_from/date_to, not
+// just "some" params.
+describe('SummaryPage label-transactions dialog wiring', () => {
+  it('opens the dialog and fetches transactions for the clicked label within the selected month', async () => {
+    vi.mocked(summaryService.getSummary).mockResolvedValue(
+      makeSummary({
+        spending: [
+          {
+            category_id: 2,
+            category_name: 'Food',
+            total: -42.57,
+            labels: [
+              {
+                label_id: 2,
+                label_name: 'Groceries',
+                label_color: '#16a34a',
+                category_id: 2,
+                category_name: 'Food',
+                total: -42.57,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const listTransactions = vi.mocked(transactionsService.listTransactions);
+    listTransactions.mockResolvedValue(EMPTY_TRANSACTIONS_PAGE);
+
+    renderPage(['/?month=2026-03']);
+
+    fireEvent.click(await screen.findByText('Groceries'));
+
+    await waitFor(() =>
+      expect(listTransactions).toHaveBeenCalledWith({
+        household_id: HOUSEHOLD_A.id,
+        label_id: 2,
+        date_from: '2026-03-01',
+        date_to: '2026-03-31',
+        exclude_from_summary: false,
+      }),
+    );
   });
 });

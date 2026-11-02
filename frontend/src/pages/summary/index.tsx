@@ -16,10 +16,13 @@ import {
   availableMonths,
   currentMonthStr,
   formatMonthLabel,
+  monthDateRange,
   parseMonthStr,
   toMonthStr,
   yearRange,
 } from '@pages/summary/date-utils';
+import { LabelTransactionsDialog } from '@pages/summary/label-transactions-dialog';
+import type { LabelTransactionsDialogLabel } from '@pages/summary/label-transactions-dialog';
 import { SummaryFilters } from '@pages/summary/summary-filters';
 import { SummarySection } from '@pages/summary/summary-section';
 import { SummaryTotalsBar } from '@pages/summary/summary-totals-bar';
@@ -39,11 +42,13 @@ export function SummaryPage() {
   const rawMonthParam = searchParams.get('month') ?? currentMonthStr();
   const { year: selectedYear, month: selectedMonth } = parseMonthStr(rawMonthParam);
   const monthParam = toMonthStr(selectedYear, selectedMonth);
+  const { from: monthDateFrom, to: monthDateTo } = monthDateRange(selectedYear, selectedMonth);
 
   const [summary, setSummary] = useState<Summary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'spending' | 'earnings'>('spending');
+  const [selectedLabel, setSelectedLabel] = useState<LabelTransactionsDialogLabel | null>(null);
 
   // Earliest date comes from the last successful fetch — always household-wide,
   // unaffected by the month filter. Used to bound the year/month pickers.
@@ -158,6 +163,7 @@ export function SummaryPage() {
               activeTab={activeTab}
               onTabChange={setActiveTab}
               monthLabel={formatMonthLabel(monthParam)}
+              onLabelClick={setSelectedLabel}
             />
 
             {activeHousehold && (
@@ -171,6 +177,18 @@ export function SummaryPage() {
               </Typography>
             )}
           </>
+        )}
+
+        {householdId !== undefined && (
+          <LabelTransactionsDialog
+            open={selectedLabel !== null}
+            onClose={() => setSelectedLabel(null)}
+            householdId={householdId}
+            label={selectedLabel}
+            dateFrom={monthDateFrom}
+            dateTo={monthDateTo}
+            monthLabel={formatMonthLabel(monthParam)}
+          />
         )}
       </Container>
     </Box>

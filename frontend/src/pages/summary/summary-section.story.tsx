@@ -98,6 +98,7 @@ const interactiveDecorator: Decorator = (_, context) => (
     activeTab={(context.args.activeTab as 'spending' | 'earnings') ?? 'spending'}
     onTabChange={() => {}}
     monthLabel={(context.args.monthLabel as string) ?? ''}
+    onLabelClick={() => {}}
   />
 );
 
@@ -111,6 +112,7 @@ const meta: Meta<typeof SummarySection> = {
     activeTab: 'spending',
     onTabChange: () => {},
     monthLabel: 'March 2026',
+    onLabelClick: () => {},
   },
 };
 

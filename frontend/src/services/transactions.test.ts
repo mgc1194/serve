@@ -116,6 +116,27 @@ describe('listTransactions', () => {
     expect(url).not.toContain('date_to');
   });
 
+  it('includes exclude_from_summary=false when explicitly provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1, exclude_from_summary: false });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).toContain('exclude_from_summary=false');
+  });
+
+  it('includes exclude_from_summary=true when explicitly provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1, exclude_from_summary: true });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).toContain('exclude_from_summary=true');
+  });
+
+  it('omits exclude_from_summary when not provided', async () => {
+    const spy = mockFetch(200, []);
+    await listTransactions({ household_id: 1 });
+    const url = (spy.mock.calls[0] as [string])[0];
+    expect(url).not.toContain('exclude_from_summary');
+  });
+
   it('uses GET', async () => {
     const spy = mockFetch(200, []);
     await listTransactions({ household_id: 1 });
