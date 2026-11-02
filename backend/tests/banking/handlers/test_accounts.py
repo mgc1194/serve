@@ -398,6 +398,23 @@ class TestCitiCostcoHandlerDollarFormattedCsv:
         raw = json.loads(result['raw_data'].iloc[0])
         assert raw['Debit'] == '500'
 
+    # _generate_dedupe_hash/raw_data (base.py) hash the derived Amount column
+    # too, not just Debit/Credit — _apply_amount_logic adds it to the same
+    # raw_df they're computed from. When neither Debit nor Credit has a
+    # blank cell anywhere in the file, pandas reads both as int64 and their
+    # sum stays int64 (e.g. 500 + -500 = 0, not 0.0). If cleaning coerced
+    # that to a float, "0" would become "0.0" in the hash and miss the
+    # (account, dedupe_hash) match already stored from a prior import.
+    def test_fully_populated_integer_columns_keep_an_integer_amount(self):
+        csv = (
+            'Status,Date,Description,Debit,Credit,Member Name\n'
+            'Cleared,10/12/2026,ROW A,500,0,MARIO GIL CORREA\n'
+            'Cleared,10/11/2026,ROW B,0,500,MARIO GIL CORREA\n'
+        )
+        result = _process_citi_costco_csv(csv)
+        raw = json.loads(result['raw_data'].iloc[0])
+        assert raw['Amount'] == '500'
+
 
 # Citi's export doesn't quote Debit/Credit, so a thousands-separator comma in
 # an amount (e.g. "$ 2,910.60") was otherwise indistinguishable from a column

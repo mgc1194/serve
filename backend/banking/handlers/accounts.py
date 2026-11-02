@@ -192,16 +192,23 @@ class CitiCostcoHandler(BaseHandler):
         return self._build_clean_df(raw_df)
 
     @staticmethod
-    def _clean_currency(value) -> float:
+    def _clean_currency(value) -> int | float:
         """Strip '$', thousands commas, and stray whitespace (e.g. "-$ 500.00",
-        "$ 291.80") down to a plain float. Citi has changed this export's
+        "$ 291.80") down to a plain number. Citi has changed this export's
         formatting before without notice, so this tolerates either a bare
         number or a dollar-formatted one rather than assuming one or the
-        other."""
+        other.
+
+        Passes already-numeric values through unchanged (not coerced to
+        float): Debit + Credit contributes to _generate_dedupe_hash
+        (base.py), and when neither column has a blank cell for the whole
+        file, pandas reads them as int64 — coercing to float would turn an
+        already-hashed "0" into "0.0" and miss the (account, dedupe_hash)
+        match on re-import (transactions/models.py)."""
         if pd.isna(value):
             return 0.0
         if isinstance(value, (int, float)):
-            return float(value)
+            return value
         cleaned = re.sub(r'[^0-9.\-]', '', str(value))
         return float(cleaned) if cleaned else 0.0
 
