@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "@storybook/addon-a11y": "^10.6.0",
+    "@storybook/addon-a11y": "^10.6.1",
     "@storybook/addon-docs": "^10.6.0",
     "@storybook/react": "^10.4.6",
     "@storybook/react-vite": "^10.6.0",
